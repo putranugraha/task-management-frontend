@@ -13,6 +13,9 @@ BUILDKIT="${BUILDKIT:-0}"
 USE_BUILDX="${USE_BUILDX:-false}"
 PRUNE_BEFORE_BUILD="${PRUNE_BEFORE_BUILD:-false}"
 PROGRESS="${PROGRESS:-auto}" # auto|plain|tty
+MOUNT_SRC="${MOUNT_SRC:-false}"
+NODE_MODULES_VOLUME="${NODE_MODULES_VOLUME:-fe-task-management_node_modules}"
+NEXT_CACHE_VOLUME="${NEXT_CACHE_VOLUME:-fe-task-management_next}"
 
 DOCKERFILE_ABS_PATH="$SCRIPT_DIR/$DOCKERFILE_PATH"
 if [[ ! -f "$DOCKERFILE_ABS_PATH" ]]; then
@@ -23,6 +26,11 @@ fi
 BUILD_FLAGS=("--pull" "--file" "$DOCKERFILE_ABS_PATH" "--tag" "$IMAGE_NAME")
 if [[ "${NO_CACHE,,}" == "true" ]]; then
   BUILD_FLAGS+=("--no-cache")
+fi
+
+# When mounting source for HMR, skip npm install during build to avoid network failures
+if [[ "${MOUNT_SRC,,}" == "true" ]]; then
+  BUILD_FLAGS+=("--build-arg" "SKIP_INSTALL=true")
 fi
 
 if [[ -n "${DOCKER_BUILD_ARGS:-}" ]]; then
@@ -78,6 +86,22 @@ if [[ -z "${INTERNAL_API_BASE_URL:-}" ]]; then
   RUN_FLAGS+=("-e" "INTERNAL_API_BASE_URL=http://host.docker.internal:8000")
 fi
 
+# Optional: mount source code and persistent caches for hot reload without rebuild
+if [[ "${MOUNT_SRC,,}" == "true" ]]; then
+  echo "Mounting source for HMR (MOUNT_SRC=true) ..."
+  # Bind-mount project into /app
+  RUN_FLAGS+=("-v" "${SCRIPT_DIR}:/app")
+  # Named volumes for node_modules and .next to avoid permission issues
+  docker volume inspect "${NODE_MODULES_VOLUME}" >/dev/null 2>&1 || docker volume create "${NODE_MODULES_VOLUME}" >/dev/null
+  RUN_FLAGS+=("-v" "${NODE_MODULES_VOLUME}:/app/node_modules")
+  docker volume inspect "${NEXT_CACHE_VOLUME}" >/dev/null 2>&1 || docker volume create "${NEXT_CACHE_VOLUME}" >/dev/null
+  RUN_FLAGS+=("-v" "${NEXT_CACHE_VOLUME}:/app/.next")
+  # Polling helps file watching on some host filesystems
+  RUN_FLAGS+=("-e" "CHOKIDAR_USEPOLLING=1")
+  RUN_FLAGS+=("-e" "WATCHPACK_POLLING=true")
+  RUN_FLAGS+=("-e" "WATCHPACK_POLLING_INTERVAL=1000")
+fi
+
 if [[ -n "${DOCKER_RUN_ARGS:-}" ]]; then
   # shellcheck disable=SC2206
   EXTRA_RUN_ARGS=(${DOCKER_RUN_ARGS})
@@ -90,11 +114,21 @@ elif [[ -t 0 || -t 1 ]]; then
   RUN_FLAGS+=("-i")
 fi
 
+# When mounting source, run container as root to avoid host volume permission issues
+if [[ "${MOUNT_SRC,,}" == "true" ]]; then
+  RUN_FLAGS+=("--user" "0:0")
+fi
+
 if [[ $# -gt 0 ]]; then
   CMD=("$@")
 else
-  # Bind to 0.0.0.0 and use APP_PORT; pass flags after -- to npm
-  CMD=("npm" "run" "dev" "--" "-p" "${APP_PORT}" "-H" "0.0.0.0")
+  # If mounting source, install deps at runtime when node_modules is empty, then start dev
+  if [[ "${MOUNT_SRC,,}" == "true" ]]; then
+    CMD=("sh" "-lc" "mkdir -p .next && ([ -d node_modules ] && [ \"\$(ls -A node_modules || true)\" ] || npm install) && npx next dev -p ${APP_PORT} -H 0.0.0.0")
+  else
+    # Run Next directly (default webpack dev)
+    CMD=("sh" "-lc" "mkdir -p .next && npx next dev -p ${APP_PORT} -H 0.0.0.0")
+  fi
 fi
 
 echo "Menjalankan container '$CONTAINER_NAME'..."

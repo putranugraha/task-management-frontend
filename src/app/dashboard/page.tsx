@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { autoLoginIfEnabled } from "@/lib/auth";
+import Sidebar from "@/components/dashboard/Sidebar";
 
 type ProfileShape = {
   user?: unknown;

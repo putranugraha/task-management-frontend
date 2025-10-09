@@ -44,7 +44,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex md:flex-col w-64 shrink-0 border-r bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-neutral-950/70 dark:supports-[backdrop-filter]:bg-neutral-950/50 sticky top-0 h-screen"
+      className="hidden md:flex md:flex-col w-64 shrink-0 border-r bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50 dark:bg-neutral-950/50 dark:supports-[backdrop-filter]:bg-neutral-950/30 sticky top-0 h-screen"
     >
       <div className="h-14 px-4 flex items-center border-b">
         <div className="flex items-center gap-2 text-sm font-semibold tracking-wide">
@@ -65,7 +65,7 @@ export default function Sidebar() {
                   className={[
                     "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                     active
-                      ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-50"
+                      ? "bg-neutral-100 text-neutral-900 shadow-sm dark:bg-neutral-800 dark:text-neutral-50"
                       : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-50",
                   ].join(" ")}
                 >
@@ -117,4 +117,3 @@ function UserQuickPanel() {
     </div>
   );
 }
-

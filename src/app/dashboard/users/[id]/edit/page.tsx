@@ -102,8 +102,36 @@ export default function EditUserPage() {
         } catch {}
       }
       try {
-        const ds = await apiRequest<Division[] | { data: Division[] }>("GET", "/api/divisions");
-        setDivisions(Array.isArray(ds) ? ds : (ds as any).data ?? []);
+        // Robust divisions loader: tries multiple endpoints and shapes
+        const tryPaths = [
+          "/api/divisions?status=1",
+          "/api/divisions?status=Aktif",
+          "/api/divisions",
+          "/api/division",
+        ];
+        let items: any[] = [];
+        for (const path of tryPaths) {
+          try {
+            const rs = await apiRequest<any>("GET", path);
+            if (Array.isArray(rs)) { items = rs; break; }
+            if (rs?.data) {
+              if (Array.isArray(rs.data)) { items = rs.data; break; }
+              if (Array.isArray(rs.data?.data)) { items = rs.data.data; break; }
+            }
+            if (Array.isArray(rs?.divisions)) { items = rs.divisions; break; }
+            if (Array.isArray(rs?.items)) { items = rs.items; break; }
+          } catch {}
+        }
+        const normalized: Division[] = items.map((d: any) => ({
+          id: Number(d.id),
+          code: d.code ?? String(d.code ?? ""),
+          name: d.name ?? d.division_name ?? d.title ?? d.label ?? String(d.code ?? ""),
+          description: d.description ?? null,
+          created_at: d.created_at ?? "",
+          updated_at: d.updated_at ?? "",
+          users_count: typeof d.users_count === 'number' ? d.users_count : undefined,
+        }));
+        setDivisions(normalized);
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

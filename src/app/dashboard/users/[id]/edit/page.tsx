@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+import type { Division } from "@/types/division";
+import type { Role } from "@/types/role";
 
 type UserDetail = {
   id: number;
@@ -11,6 +13,8 @@ type UserDetail = {
   job_title: string | null;
   is_active: boolean;
   status: string;
+  role?: string | null;
+  division?: { id: number; name: string } | null;
 };
 
 export default function EditUserPage() {
@@ -23,6 +27,10 @@ export default function EditUserPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [roleNames, setRoleNames] = useState<string[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [roleName, setRoleName] = useState<string>("");
+  const [divisionId, setDivisionId] = useState<number | "">("");
 
   useEffect(() => {
     let mounted = true;
@@ -31,7 +39,9 @@ export default function EditUserPage() {
       setError(null);
       try {
         const data = await apiRequest<any>("GET", `/api/users/${id}`);
-        const u = Array.isArray(data) ? data[0] : data;
+        // Unwrap Laravel JsonResource shape if present
+        const payload = (data && typeof data === 'object' && 'data' in data) ? (data as any).data : data;
+        const u = Array.isArray(payload) ? payload[0] : payload;
         if (mounted) {
           setForm({
             id: u.id,
@@ -41,6 +51,9 @@ export default function EditUserPage() {
             is_active: Boolean(u.is_active ?? true),
             status: u.status ?? "Aktif",
           });
+          // preselect division and role if available
+          setDivisionId((u.division?.id as number) ?? "");
+          setRoleName(u.role ?? "");
         }
       } catch (e: any) {
         setError(e?.message ?? "Gagal memuat data user");
@@ -51,6 +64,28 @@ export default function EditUserPage() {
     if (id) run();
     return () => { mounted = false; };
   }, [id]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const rs = await apiRequest<any>("GET", "/api/roles?status=1");
+        const items = Array.isArray(rs) ? rs : (rs as any).data ?? [];
+        setRoleNames(items.map((r: any) => r.name).filter(Boolean));
+      } catch {
+        try {
+          const us = await apiRequest<any>("GET", "/api/users");
+          const list = Array.isArray(us) ? us : (us?.data ?? []);
+          const names = Array.from(new Set(list.map((u: any) => u.role).filter(Boolean)));
+          setRoleNames(names);
+        } catch {}
+      }
+      try {
+        const ds = await apiRequest<Division[] | { data: Division[] }>("GET", "/api/divisions");
+        setDivisions(Array.isArray(ds) ? ds : (ds as any).data ?? []);
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.id]);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type, checked } = e.target as any;
@@ -71,6 +106,8 @@ export default function EditUserPage() {
         status: form.status,
       };
       if (password) payload.password = password;
+      if (roleName) payload.role = roleName;
+      payload.division_id = divisionId || null;
       await apiRequest("PUT", `/api/users/${form.id}`, payload);
       router.push("/dashboard/users");
     } catch (e: any) {
@@ -91,6 +128,24 @@ export default function EditUserPage() {
         <div>
           <label className="block text-sm mb-1">Name</label>
           <input name="name" value={form.name} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Role</label>
+          <select value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full border rounded-md px-3 py-2">
+            <option value="">Pilih role</option>
+            {roleNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Division</label>
+          <select value={divisionId} onChange={(e) => setDivisionId(e.target.value ? Number(e.target.value) : "")} className="w-full border rounded-md px-3 py-2">
+            <option value="">(Optional) Pilih division</option>
+            {divisions.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm mb-1">Email</label>
@@ -120,4 +175,3 @@ export default function EditUserPage() {
     </div>
   );
 }
-

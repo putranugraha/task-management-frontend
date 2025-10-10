@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+import type { Division } from "@/types/division";
 
 type FormState = {
   name: string;
   email: string;
   password: string;
+  password_confirmation: string;
   job_title: string;
   is_active: boolean;
   status: string;
+  division_id: number | "";
+  role_name: string;
 };
 
 export default function CreateUserPage() {
@@ -19,10 +23,15 @@ export default function CreateUserPage() {
     name: "",
     email: "",
     password: "",
+    password_confirmation: "",
     job_title: "",
     is_active: true,
     status: "Aktif",
+    division_id: "",
+    role_name: "",
   });
+  const [roleNames, setRoleNames] = useState<string[]>([]);
+  const [divisions, setDivisions] = useState<Division[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,9 +49,12 @@ export default function CreateUserPage() {
         name: form.name,
         email: form.email,
         password: form.password || undefined,
+        password_confirmation: form.password ? form.password_confirmation : undefined,
+        role: form.role_name || undefined, // BE expects role name
         job_title: form.job_title || null,
         is_active: form.is_active,
         status: form.status,
+        division_id: form.division_id || null,
       };
       await apiRequest("POST", "/api/users", payload);
       router.push("/dashboard/users");
@@ -52,6 +64,31 @@ export default function CreateUserPage() {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    // Prefetch dropdown data; ignore errors (dropdowns optional)
+    (async () => {
+      try {
+        // Try official roles endpoint first
+        const rs = await apiRequest<any>("GET", "/api/roles?status=1");
+        const items = Array.isArray(rs) ? rs : (rs?.data ?? []);
+        const names: string[] = items.map((r: any) => r.name).filter(Boolean);
+        setRoleNames(names);
+      } catch {
+        // Fallback: derive role names from existing users (UserResource includes role?)
+        try {
+          const us = await apiRequest<any>("GET", "/api/users");
+          const list = Array.isArray(us) ? us : (us?.data ?? []);
+          const names = Array.from(new Set(list.map((u: any) => u.role).filter(Boolean)));
+          setRoleNames(names);
+        } catch {}
+      }
+      try {
+        const ds = await apiRequest<Division[] | { data: Division[] }>("GET", "/api/divisions");
+        setDivisions(Array.isArray(ds) ? ds : (ds as any).data ?? []);
+      } catch {}
+    })();
+  }, []);
 
   return (
     <div className="max-w-xl">
@@ -68,12 +105,36 @@ export default function CreateUserPage() {
         </div>
         <div>
           <label className="block text-sm mb-1">Password</label>
-          <input type="password" name="password" value={form.password} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
-          <p className="text-xs text-neutral-500 mt-1">Kosongkan untuk generate via endpoint jika didukung.</p>
+          <input type="password" name="password" value={form.password} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
+        </div>
+        {form.password !== undefined && (
+          <div>
+            <label className="block text-sm mb-1">Confirm Password</label>
+            <input type="password" name="password_confirmation" value={form.password_confirmation} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
+          </div>
+        )}
+        <div>
+          <label className="block text-sm mb-1">Role</label>
+          <select name="role_name" value={form.role_name} onChange={onChange} required className="w-full border rounded-md px-3 py-2">
+            <option value="">Pilih role</option>
+            {roleNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-neutral-500 mt-1">Role diperlukan. (akan dikirim sebagai nama role)</p>
         </div>
         <div>
           <label className="block text-sm mb-1">Job Title</label>
           <input name="job_title" value={form.job_title} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Division</label>
+          <select name="division_id" value={form.division_id} onChange={onChange} className="w-full border rounded-md px-3 py-2">
+            <option value="">(Optional) Pilih division</option>
+            {divisions.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" checked={form.is_active} onChange={onChange} /> Active</label>
@@ -91,4 +152,3 @@ export default function CreateUserPage() {
     </div>
   );
 }
-

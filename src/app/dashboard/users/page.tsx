@@ -20,7 +20,7 @@ export default function UsersPage() {
       setError(null);
       const res = await apiRequest<MaybePaginated<UserType>>("GET", "/api/users");
       const list = Array.isArray(res) ? res : (res as any).data ?? [];
-      const mapped: UserRow[] = list.map((u) => ({
+      const mapped: UserRow[] = list.map((u: any) => ({
         id: u.id,
         name: u.name,
         email: u.email,
@@ -28,6 +28,7 @@ export default function UsersPage() {
         is_active: (u as any).is_active ?? true,
         status: (u as any).status ?? "Aktif",
         role: (u as any).role ?? null,
+        division: u.division ? { id: u.division.id, name: u.division.name } : null,
         created_at: (u as any).created_at,
       }));
       setRows(mapped);
@@ -66,4 +67,3 @@ export default function UsersPage() {
     </div>
   );
 }
-

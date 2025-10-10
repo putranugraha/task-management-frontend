@@ -28,7 +28,7 @@ const navItems: NavItem[] = [
   { label: "Milestones", href: "/dashboard/milestones", icon: Flag },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart2 },
   { label: "Users", href: "/dashboard/users", icon: Users },
-  { label: "Roles & Permissions", href: "/dashboard/access", icon: ShieldCheck },
+  { label: "Roles", href: "/dashboard/roles", icon: ShieldCheck },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

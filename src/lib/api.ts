@@ -20,8 +20,8 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
+    // Intentionally do NOT set 'Content-Type' or 'X-Requested-With' globally
+    // to avoid CORS preflights for simple GET requests.
   },
   withCredentials: USE_SANCTUM, // include cookies for Sanctum when proxying
   xsrfCookieName: 'XSRF-TOKEN',
@@ -32,6 +32,9 @@ const api = axios.create({
 
 // 2. Interceptor: tambahkan Bearer token jika ada
 api.interceptors.request.use((config: InternalAxiosRequestConfig<unknown>) => {
+  // Normalize method
+  const method = (config.method || 'get').toUpperCase();
+
   if (typeof window !== "undefined") {
     const token = localStorage.getItem('access_token');
     if (token && config.headers) {
@@ -45,11 +48,26 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig<unknown>) => {
       }
     }
   }
-  // If sending FormData, let the browser set the Content-Type (with boundary)
-  if (config.data && typeof FormData !== 'undefined' && config.data instanceof FormData) {
-    if (config.headers) {
+  // Header strategy to minimize preflights:
+  // - For GET: ensure no Content-Type and no X-Requested-With.
+  // - For non-GET with JSON body: set Content-Type application/json (unless FormData).
+  if (config.headers) {
+    if (method === 'GET') {
       delete (config.headers as any)['Content-Type'];
       delete (config.headers as any)['content-type'];
+      delete (config.headers as any)['X-Requested-With'];
+    } else {
+      // If sending FormData, let the browser set the Content-Type (with boundary)
+      const isFormData = typeof FormData !== 'undefined' && (config.data instanceof FormData);
+      if (isFormData) {
+        delete (config.headers as any)['Content-Type'];
+        delete (config.headers as any)['content-type'];
+      } else if (config.data && (typeof config.data === 'object')) {
+        // set json content-type only when a JSON body exists
+        (config.headers as any)['Content-Type'] = 'application/json';
+      }
+      // Avoid adding X-Requested-With by default to reduce preflights; Laravel doesn't require it.
+      delete (config.headers as any)['X-Requested-With'];
     }
   }
   return config;

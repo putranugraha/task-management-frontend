@@ -90,13 +90,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white dark:bg-neutral-950">
-      {/* Sidebar */}
-      <Sidebar />
-
-      {/* Main */}
-      <main className="flex-1 px-5 md:px-8 py-6 font-[system-ui]">
-        <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Dashboard</h1>
           <p className="text-sm text-neutral-500 mb-4">Cek auto-login dan Authorization header.</p>
 
@@ -129,8 +123,6 @@ export default function DashboardPage() {
             <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(profile, null, 2)}</pre>
           )}
         </section>
-        </div>
-      </main>
     </div>
   );
 }

@@ -11,6 +11,7 @@ export type UserRow = {
   is_active: boolean;
   status: string;
   role?: string | null;
+  division?: { id: number; name: string } | null;
   created_at?: string;
 };
 
@@ -30,6 +31,7 @@ export function useUserColumns(onDelete?: (row: UserRow) => void): Column<UserRo
     { key: "name", header: "Name" },
     { key: "email", header: "Email" },
     { key: "role", header: "Role" },
+    { key: "division", header: "Division", render: (r) => r.division?.name ?? "-" },
     { key: "job_title", header: "Job Title", render: (r) => r.job_title ?? "-" },
     { key: "status", header: "Status" },
     { key: "is_active", header: "Active", render: (r) => r.is_active ? "Yes" : "No" },
@@ -45,4 +47,3 @@ export function useUserColumns(onDelete?: (row: UserRow) => void): Column<UserRo
     },
   ];
 }
-

@@ -20,17 +20,25 @@ export default function UsersPage() {
       setError(null);
       const res = await apiRequest<MaybePaginated<UserType>>("GET", "/api/users");
       const list = Array.isArray(res) ? res : (res as any).data ?? [];
-      const mapped: UserRow[] = list.map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        job_title: (u as any).job_title ?? null,
-        is_active: (u as any).is_active ?? true,
-        status: (u as any).status ?? "Aktif",
-        role: (u as any).role ?? null,
-        division: u.division ? { id: u.division.id, name: u.division.name } : null,
-        created_at: (u as any).created_at,
-      }));
+      const mapped: UserRow[] = list.map((u: any) => {
+        // Normalize role: support `role` string, `roles` array, or nested resources
+        let role: string | null = (u as any).role ?? null;
+        if (!role && Array.isArray((u as any).roles) && (u as any).roles.length) {
+          const first = (u as any).roles[0];
+          role = typeof first === 'string' ? first : (first?.name ?? null);
+        }
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          job_title: (u as any).job_title ?? null,
+          is_active: (u as any).is_active ?? true,
+          status: (u as any).status ?? "Aktif",
+          role,
+          division: u.division ? { id: u.division.id, name: u.division.name } : null,
+          created_at: (u as any).created_at,
+        } as UserRow;
+      });
       setRows(mapped);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load users");

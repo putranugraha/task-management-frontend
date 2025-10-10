@@ -27,9 +27,11 @@ export default function EditUserPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [roleNames, setRoleNames] = useState<string[]>([]);
+  type SimpleRole = { id: number; name: string; status?: string | null };
+  const [roles, setRoles] = useState<SimpleRole[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [roleName, setRoleName] = useState<string>("");
+  const [roleId, setRoleId] = useState<number | "">("");
   const [divisionId, setDivisionId] = useState<number | "">("");
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export default function EditUserPage() {
           });
           // preselect division and role if available
           setDivisionId((u.division?.id as number) ?? "");
-          setRoleName(u.role ?? "");
+          // Prefer explicit 'role' string; otherwise derive from roles array
+          const roleFromArray = Array.isArray(u.roles) && u.roles.length ? (typeof u.roles[0] === 'string' ? u.roles[0] : u.roles[0]?.name) : "";
+          setRoleName(u.role ?? roleFromArray ?? "");
         }
       } catch (e: any) {
         setError(e?.message ?? "Gagal memuat data user");
@@ -68,15 +72,33 @@ export default function EditUserPage() {
   useEffect(() => {
     (async () => {
       try {
-        const rs = await apiRequest<any>("GET", "/api/roles?status=1");
-        const items = Array.isArray(rs) ? rs : (rs as any).data ?? [];
-        setRoleNames(items.map((r: any) => r.name).filter(Boolean));
+        // Try fetching roles with different filters, then fallback to all
+        const tries = [
+          "/api/roles?status=1",
+          "/api/roles?status=Aktif",
+          "/api/roles",
+        ];
+        let items: any[] = [];
+        for (const path of tries) {
+          try {
+            const rs = await apiRequest<any>("GET", path);
+            const arr = Array.isArray(rs) ? rs : (rs?.data ?? []);
+            if (arr && arr.length) { items = arr; break; }
+          } catch {}
+        }
+        const normalized: SimpleRole[] = items.map((r: any) => ({ id: r.id, name: r.name, status: r.status ?? null }));
+        setRoles(normalized);
+        // Preselect roleId from roleName when possible
+        if (roleName && !roleId) {
+          const found = normalized.find((r) => r.name === roleName);
+          if (found) setRoleId(found.id);
+        }
       } catch {
         try {
           const us = await apiRequest<any>("GET", "/api/users");
           const list = Array.isArray(us) ? us : (us?.data ?? []);
           const names = Array.from(new Set(list.map((u: any) => u.role).filter(Boolean)));
-          setRoleNames(names);
+          setRoles(names.map((n: string, i: number) => ({ id: i + 1, name: n })));
         } catch {}
       }
       try {
@@ -85,7 +107,7 @@ export default function EditUserPage() {
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form?.id]);
+  }, [form?.id, roleName]);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type, checked } = e.target as any;
@@ -106,7 +128,8 @@ export default function EditUserPage() {
         status: form.status,
       };
       if (password) payload.password = password;
-      if (roleName) payload.role = roleName;
+      if (roleName) payload.role = roleName; // name for BE that expects string
+      if (roleId) payload.role_id = roleId; // id for BE that expects id
       payload.division_id = divisionId || null;
       await apiRequest("PUT", `/api/users/${form.id}`, payload);
       router.push("/dashboard/users");
@@ -131,10 +154,19 @@ export default function EditUserPage() {
         </div>
         <div>
           <label className="block text-sm mb-1">Role</label>
-          <select value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full border rounded-md px-3 py-2">
+          <select
+            value={roleId}
+            onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : "";
+              setRoleId(id);
+              const found = roles.find((r) => r.id === Number(id));
+              setRoleName(found?.name || "");
+            }}
+            className="w-full border rounded-md px-3 py-2"
+          >
             <option value="">Pilih role</option>
-            {roleNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
         </div>

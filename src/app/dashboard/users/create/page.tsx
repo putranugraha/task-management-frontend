@@ -14,6 +14,7 @@ type FormState = {
   is_active: boolean;
   status: string;
   division_id: number | "";
+  role_id: number | "";
   role_name: string;
 };
 
@@ -28,9 +29,11 @@ export default function CreateUserPage() {
     is_active: true,
     status: "Aktif",
     division_id: "",
+    role_id: "",
     role_name: "",
   });
-  const [roleNames, setRoleNames] = useState<string[]>([]);
+  type SimpleRole = { id: number; name: string; status?: string | null };
+  const [roles, setRoles] = useState<SimpleRole[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +53,8 @@ export default function CreateUserPage() {
         email: form.email,
         password: form.password || undefined,
         password_confirmation: form.password ? form.password_confirmation : undefined,
-        role: form.role_name || undefined, // BE expects role name
+        role: form.role_name || undefined, // name for BE that expects string
+        role_id: form.role_id || undefined, // id for BE that expects id
         job_title: form.job_title || null,
         is_active: form.is_active,
         status: form.status,
@@ -69,18 +73,29 @@ export default function CreateUserPage() {
     // Prefetch dropdown data; ignore errors (dropdowns optional)
     (async () => {
       try {
-        // Try official roles endpoint first
-        const rs = await apiRequest<any>("GET", "/api/roles?status=1");
-        const items = Array.isArray(rs) ? rs : (rs?.data ?? []);
-        const names: string[] = items.map((r: any) => r.name).filter(Boolean);
-        setRoleNames(names);
+        // Try fetching roles with different filters, then fallback to all
+        const tries = [
+          "/api/roles?status=1",
+          "/api/roles?status=Aktif",
+          "/api/roles",
+        ];
+        let items: any[] = [];
+        for (const path of tries) {
+          try {
+            const rs = await apiRequest<any>("GET", path);
+            const arr = Array.isArray(rs) ? rs : (rs?.data ?? []);
+            if (arr && arr.length) { items = arr; break; }
+          } catch {}
+        }
+        const normalized: SimpleRole[] = items.map((r: any) => ({ id: r.id, name: r.name, status: r.status ?? null }));
+        setRoles(normalized);
       } catch {
         // Fallback: derive role names from existing users (UserResource includes role?)
         try {
           const us = await apiRequest<any>("GET", "/api/users");
           const list = Array.isArray(us) ? us : (us?.data ?? []);
           const names = Array.from(new Set(list.map((u: any) => u.role).filter(Boolean)));
-          setRoleNames(names);
+          setRoles(names.map((n: string, i: number) => ({ id: i + 1, name: n })));
         } catch {}
       }
       try {
@@ -115,13 +130,23 @@ export default function CreateUserPage() {
         )}
         <div>
           <label className="block text-sm mb-1">Role</label>
-          <select name="role_name" value={form.role_name} onChange={onChange} required className="w-full border rounded-md px-3 py-2">
+          <select
+            name="role_id"
+            value={form.role_id}
+            onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : "";
+              const found = roles.find((r) => r.id === Number(id));
+              setForm((s) => ({ ...s, role_id: id, role_name: found?.name || "" }));
+            }}
+            required
+            className="w-full border rounded-md px-3 py-2"
+          >
             <option value="">Pilih role</option>
-            {roleNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
-          <p className="text-xs text-neutral-500 mt-1">Role diperlukan. (akan dikirim sebagai nama role)</p>
+          <p className="text-xs text-neutral-500 mt-1">Dikirim sebagai ID dan nama untuk kompatibilitas API.</p>
         </div>
         <div>
           <label className="block text-sm mb-1">Job Title</label>

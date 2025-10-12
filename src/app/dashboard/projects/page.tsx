@@ -60,7 +60,7 @@ export default function ProjectsPage() {
     }
   };
 
-  const columns = useProjectColumns(handleDelete) as unknown as Column<ProjectRow>[];
+  const columns = useProjectColumns(handleDelete, { minimal: true }) as unknown as Column<ProjectRow>[];
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -75,4 +75,3 @@ export default function ProjectsPage() {
     </div>
   );
 }
-

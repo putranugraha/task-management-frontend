@@ -73,7 +73,7 @@ export default function DivisionsPage() {
     }
   };
 
-  const columns = useDivisionColumns(handleDelete) as unknown as Column<DivisionRow>[];
+  const columns = useDivisionColumns(handleDelete, { minimal: true }) as unknown as Column<DivisionRow>[];
 
   return (
     <div className="max-w-6xl mx-auto">

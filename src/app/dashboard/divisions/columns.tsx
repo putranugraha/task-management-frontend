@@ -17,8 +17,18 @@ export type Column<T> = {
   className?: string;
 };
 
-export function useDivisionColumns(onDelete?: (row: DivisionRow) => void): Column<DivisionRow>[] {
-  return [
+export function useDivisionColumns(
+  onDelete?: (row: DivisionRow) => void,
+  opts?: { minimal?: boolean }
+): Column<DivisionRow>[] {
+  const minimal = opts?.minimal === true;
+
+  const minimalCols: Column<DivisionRow>[] = [
+    { key: "code", header: "Code" },
+    { key: "name", header: "Name" },
+  ];
+
+  const fullCols: Column<DivisionRow>[] = [
     { key: "code", header: "Code" },
     { key: "name", header: "Name" },
     {
@@ -32,11 +42,18 @@ export function useDivisionColumns(onDelete?: (row: DivisionRow) => void): Colum
         return '-';
       }
     },
+  ];
+
+  const cols = minimal ? minimalCols : fullCols;
+
+  return [
+    ...cols,
     {
       key: "actions",
       header: "Actions",
       render: (row) => (
         <div className="flex gap-2 text-sm">
+          <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/divisions/${row.id}`}>Detail</a>
           <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/divisions/${row.id}/edit`}>Edit</a>
           <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50" onClick={() => onDelete?.(row)}>Delete</button>
         </div>

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Settings,
   LogOut,
+  Building2,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { label: "Projects", href: "/dashboard/projects", icon: FolderKanban },
   { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
   { label: "Milestones", href: "/dashboard/milestones", icon: Flag },
+  { label: "Divisions", href: "/dashboard/divisions", icon: Building2 },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart2 },
   { label: "Users", href: "/dashboard/users", icon: Users },
   { label: "Roles", href: "/dashboard/roles", icon: ShieldCheck },

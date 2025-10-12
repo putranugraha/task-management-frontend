@@ -60,7 +60,7 @@ export default function UsersPage() {
     }
   };
 
-  const columns = useUserColumns(handleDelete);
+  const columns = useUserColumns(handleDelete, { minimal: true });
 
   return (
     <div className="max-w-6xl mx-auto">

@@ -56,6 +56,7 @@ function RowActions({ row, onDelete, onChanged }: { row: MilestoneRow; onDelete?
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
+      <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/milestones/${row.id}`}>Detail</a>
       <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/milestones/${row.id}/edit`}>Edit</a>
       <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50" onClick={() => onDelete?.(row)}>Delete</button>
       <button className="px-2 py-1 rounded-md border hover:bg-neutral-50" disabled={saving} onClick={doComplete}>Mark Completed</button>
@@ -68,4 +69,3 @@ function RowActions({ row, onDelete, onChanged }: { row: MilestoneRow; onDelete?
     </div>
   );
 }
-

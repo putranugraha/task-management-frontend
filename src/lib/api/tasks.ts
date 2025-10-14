@@ -1,0 +1,53 @@
+import { apiRequest } from "@/lib/api";
+import type { Task } from "@/types/task";
+
+export type TaskStatus = string; // backend-defined; typical: 'To Do' | 'In Progress' | 'Done'
+
+export type CreateTaskDto = {
+  title: string;
+  description?: string | null;
+  priority?: string;
+  status?: TaskStatus;
+  start_planned?: string | null; // YYYY-MM-DD
+  end_planned?: string | null;   // YYYY-MM-DD
+  percent_complete?: number;     // 0-100
+  project_id?: number;           // some backends require project_id even in nested route
+};
+
+export type UpdateTaskDto = Partial<CreateTaskDto>;
+
+export async function listByMilestone(milestoneId: number | string): Promise<Task[]> {
+  const res = await apiRequest<Task[] | { data: Task[] }>('GET', `/api/milestones/${milestoneId}/tasks`);
+  return Array.isArray(res) ? res : (res as any).data ?? [];
+}
+
+export async function createForMilestone(milestoneId: number | string, dto: CreateTaskDto): Promise<Task> {
+  // Include milestone_id and optionally project_id for backend compatibility
+  const body = { ...(dto as any), milestone_id: Number(milestoneId) };
+  return await apiRequest<Task>('POST', `/api/milestones/${milestoneId}/tasks`, body);
+}
+
+export async function getById(id: number | string): Promise<Task> {
+  const res = await apiRequest<Task | { data: Task }>('GET', `/api/tasks/${id}`);
+  return (res && typeof res === 'object' && 'data' in res) ? (res as any).data : (res as any);
+}
+
+export async function update(id: number | string, dto: UpdateTaskDto): Promise<Task> {
+  return await apiRequest<Task>('PUT', `/api/tasks/${id}`, dto as any);
+}
+
+export async function remove(id: number | string): Promise<void> {
+  await apiRequest('DELETE', `/api/tasks/${id}`);
+}
+
+export async function updateStatus(id: number | string, status: TaskStatus): Promise<Task> {
+  return await apiRequest<Task>('PATCH', `/api/tasks/${id}/status`, { status });
+}
+
+export async function updateProgress(id: number | string, percent_complete: number): Promise<Task> {
+  return await apiRequest<Task>('PATCH', `/api/tasks/${id}/progress`, { percent_complete });
+}
+
+export async function complete(id: number | string): Promise<Task> {
+  return await apiRequest<Task>('PATCH', `/api/tasks/${id}/complete`);
+}

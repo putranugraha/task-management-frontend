@@ -1,0 +1,87 @@
+import { apiRequest } from "@/lib/api";
+import type { Milestone } from "@/types/milestone";
+
+export type MilestoneStatus = 'Planned' | 'In Progress' | 'Completed' | 'Overdue' | 'On Hold';
+
+export type CreateMilestoneDto = {
+  name: string;
+  status: MilestoneStatus;
+  due_planned?: string | null; // YYYY-MM-DD
+  due_actual?: string | null;  // YYYY-MM-DD
+  // project_id comes from route (nested), not body
+};
+
+export type UpdateMilestoneDto = Partial<CreateMilestoneDto> & {
+  name?: string;
+  status?: MilestoneStatus;
+};
+
+export async function listByProject(projectId: number | string): Promise<Milestone[]> {
+  const endpoints = [
+    `/api/projects/${projectId}/milestones`,
+    `/api/project/${projectId}/milestones`,
+    `/api/milestones?project_id=${encodeURIComponent(String(projectId))}`,
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await apiRequest<Milestone[] | { data: Milestone[] }>('GET', ep);
+      return Array.isArray(res) ? res : (res as any).data ?? [];
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        // Try next endpoint
+        continue;
+      }
+      // For non-404 (e.g., 401/500), rethrow
+      throw e;
+    }
+  }
+  // If all tried endpoints 404, treat as empty list for UX resilience
+  return [];
+}
+
+export async function createForProject(projectId: number | string, dto: CreateMilestoneDto): Promise<Milestone> {
+  try {
+    const body = { ...(dto as any), project_id: Number(projectId) };
+    return await apiRequest<Milestone>('POST', `/api/projects/${projectId}/milestones`, body);
+  } catch (e: any) {
+    if (e?.response?.status === 404) {
+      // Try alternate singular route
+      const body = { ...(dto as any), project_id: Number(projectId) };
+      try {
+        return await apiRequest<Milestone>('POST', `/api/project/${projectId}/milestones`, body);
+      } catch (e2: any) {
+        if (e2?.response?.status === 404) {
+          // Final fallback: flat endpoint expecting project_id in payload
+          return await apiRequest<Milestone>('POST', `/api/milestones`, body);
+        }
+        throw e2;
+      }
+    }
+    throw e;
+  }
+}
+
+export async function getById(id: number | string): Promise<Milestone> {
+  const res = await apiRequest<Milestone | { data: Milestone }>('GET', `/api/milestones/${id}`);
+  return (res && typeof res === 'object' && 'data' in res) ? (res as any).data : (res as any);
+}
+
+export async function update(id: number | string, dto: UpdateMilestoneDto): Promise<Milestone> {
+  return await apiRequest<Milestone>('PUT', `/api/milestones/${id}`, dto as any);
+}
+
+export async function remove(id: number | string): Promise<void> {
+  await apiRequest('DELETE', `/api/milestones/${id}`);
+}
+
+export async function updateStatus(id: number | string, status: MilestoneStatus): Promise<Milestone> {
+  return await apiRequest<Milestone>('PATCH', `/api/milestones/${id}/status`, { status });
+}
+
+export async function complete(id: number | string): Promise<Milestone> {
+  return await apiRequest<Milestone>('PATCH', `/api/milestones/${id}/complete`);
+}
+
+export const MILESTONE_STATUS_OPTIONS: MilestoneStatus[] = [
+  'Planned', 'In Progress', 'Completed', 'Overdue', 'On Hold'
+];

@@ -15,6 +15,7 @@ import {
   Building2,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
+import { apiRequest } from "@/lib/api";
 
 type NavItem = {
   label: string;
@@ -88,17 +89,15 @@ export default function Sidebar() {
 function UserQuickPanel() {
   const onLogout = async () => {
     try {
-      // Try API logout if available; ignore errors
-      await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || ""}/api/logout`, {
-        method: "POST",
-        headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
-        credentials: "include",
-      }).catch(() => {});
+      // Try API logout if available; ignore errors. Use centralized api client for consistency.
+      await apiRequest("POST", "/api/logout").catch(() => {});
     } finally {
       if (typeof window !== "undefined") {
         localStorage.removeItem("access_token");
         localStorage.removeItem("token_type");
         localStorage.removeItem("user");
+        // Clear presence cookie used by middleware guard
+        document.cookie = "app_has_token=; Max-Age=0; path=/";
         window.location.href = "/auth/login";
       }
     }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Division } from "@/types/division";
-import type { Role } from "@/types/role";
+import { fetchRolesList, fetchDivisionsList, type SimpleRole } from "@/lib/lookups";
 
 type UserDetail = {
   id: number;
@@ -27,7 +27,6 @@ export default function EditUserPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  type SimpleRole = { id: number; name: string; status?: string | null };
   const [roles, setRoles] = useState<SimpleRole[]>([]);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [roleName, setRoleName] = useState<string>("");
@@ -72,23 +71,8 @@ export default function EditUserPage() {
   useEffect(() => {
     (async () => {
       try {
-        // Try fetching roles with different filters, then fallback to all
-        const tries = [
-          "/api/roles?status=1",
-          "/api/roles?status=Aktif",
-          "/api/roles",
-        ];
-        let items: any[] = [];
-        for (const path of tries) {
-          try {
-            const rs = await apiRequest<any>("GET", path);
-            const arr = Array.isArray(rs) ? rs : (rs?.data ?? []);
-            if (arr && arr.length) { items = arr; break; }
-          } catch {}
-        }
-        const normalized: SimpleRole[] = items.map((r: any) => ({ id: r.id, name: r.name, status: r.status ?? null }));
+        const normalized = await fetchRolesList();
         setRoles(normalized);
-        // Preselect roleId from roleName when possible
         if (roleName && !roleId) {
           const found = normalized.find((r) => r.name === roleName);
           if (found) setRoleId(found.id);
@@ -102,36 +86,8 @@ export default function EditUserPage() {
         } catch {}
       }
       try {
-        // Robust divisions loader: tries multiple endpoints and shapes
-        const tryPaths = [
-          "/api/divisions?status=1",
-          "/api/divisions?status=Aktif",
-          "/api/divisions",
-          "/api/division",
-        ];
-        let items: any[] = [];
-        for (const path of tryPaths) {
-          try {
-            const rs = await apiRequest<any>("GET", path);
-            if (Array.isArray(rs)) { items = rs; break; }
-            if (rs?.data) {
-              if (Array.isArray(rs.data)) { items = rs.data; break; }
-              if (Array.isArray(rs.data?.data)) { items = rs.data.data; break; }
-            }
-            if (Array.isArray(rs?.divisions)) { items = rs.divisions; break; }
-            if (Array.isArray(rs?.items)) { items = rs.items; break; }
-          } catch {}
-        }
-        const normalized: Division[] = items.map((d: any) => ({
-          id: Number(d.id),
-          code: d.code ?? String(d.code ?? ""),
-          name: d.name ?? d.division_name ?? d.title ?? d.label ?? String(d.code ?? ""),
-          description: d.description ?? null,
-          created_at: d.created_at ?? "",
-          updated_at: d.updated_at ?? "",
-          users_count: typeof d.users_count === 'number' ? d.users_count : undefined,
-        }));
-        setDivisions(normalized);
+        const normalizedDivs = await fetchDivisionsList();
+        setDivisions(normalizedDivs);
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

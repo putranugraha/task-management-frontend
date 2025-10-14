@@ -86,6 +86,10 @@ export default function DashboardPage() {
   const handleClearToken = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("token_type");
+    // Clear presence cookie used by middleware guard
+    if (typeof document !== 'undefined') {
+      document.cookie = 'app_has_token=; Max-Age=0; path=/';
+    }
     setToken(null);
   };
 

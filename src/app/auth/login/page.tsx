@@ -54,6 +54,8 @@ export default function LoginPage() {
       if (token) {
         localStorage.setItem("access_token", token);
         localStorage.setItem("token_type", type);
+        // Set presence cookie for middleware guard
+        document.cookie = "app_has_token=1; Max-Age=2592000; path=/"; // 30 days
       }
       if (res.user) {
         localStorage.setItem("user", JSON.stringify(res.user));

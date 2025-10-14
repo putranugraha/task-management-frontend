@@ -43,6 +43,10 @@ export async function autoLoginIfEnabled(): Promise<boolean> {
     if (token) {
       localStorage.setItem('access_token', token);
       localStorage.setItem('token_type', tokenType);
+      // Set presence cookie for middleware guard (client side only)
+      if (typeof document !== 'undefined') {
+        document.cookie = 'app_has_token=1; Max-Age=2592000; path=/';
+      }
       if (data?.user) {
         localStorage.setItem('user', JSON.stringify(data.user));
       }

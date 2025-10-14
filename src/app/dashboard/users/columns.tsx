@@ -54,7 +54,6 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
       header: "Actions",
       render: (row) => (
         <div className="flex gap-2 text-sm">
-          <Link className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/users/${row.id}`}>Detail</Link>
           <Link className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/users/${row.id}/edit`}>Edit</Link>
           <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50" onClick={() => handleDelete(row)}>Delete</button>
         </div>

@@ -81,8 +81,13 @@ export default function EditUserPage() {
         try {
           const us = await apiRequest<any>("GET", "/api/users");
           const list = Array.isArray(us) ? us : (us?.data ?? []);
-          const names = Array.from(new Set(list.map((u: any) => u.role).filter(Boolean)));
-          setRoles(names.map((n: string, i: number) => ({ id: i + 1, name: n })));
+          const names: string[] = Array.from(
+            new Set(
+              (list.map((u: any) => u.role)
+                .filter((v: any): v is string => typeof v === 'string'))
+            )
+          );
+          setRoles(names.map((n, i): SimpleRole => ({ id: i + 1, name: n })));
         } catch {}
       }
       try {

@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
+import { useSearchParams } from "next/navigation";
+import { listByProject as listMilestonesByProject } from "@/lib/api/milestones";
+import type { Milestone } from "@/types/milestone";
 import { fetchProjectsList } from "@/lib/lookups";
 
 type FormState = {
@@ -19,8 +22,10 @@ type FormState = {
 
 export default function CreateTaskPage() {
   const router = useRouter();
+  const search = useSearchParams();
+  const initialProjectId = search?.get('project_id');
   const [form, setForm] = useState<FormState>({
-    project_id: "",
+    project_id: initialProjectId ? Number(initialProjectId) : "",
     title: "",
     description: "",
     priority: "Medium",
@@ -30,6 +35,8 @@ export default function CreateTaskPage() {
     percent_complete: 0,
   });
   const [projects, setProjects] = useState<Project[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestoneId, setMilestoneId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +45,9 @@ export default function CreateTaskPage() {
     if (name === 'percent_complete') {
       setForm((s) => ({ ...s, percent_complete: Number(value) }));
     } else if (name === 'project_id') {
-      setForm((s) => ({ ...s, project_id: value ? Number(value) : "" }));
+      const val = value ? Number(value) : "";
+      setForm((s) => ({ ...s, project_id: val }));
+      setMilestoneId("");
     } else {
       setForm((s) => ({ ...s, [name]: value }));
     }
@@ -51,6 +60,7 @@ export default function CreateTaskPage() {
     try {
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
+        milestone_id: milestoneId || null,
         title: form.title,
         description: form.description || null,
         priority: form.priority,
@@ -73,9 +83,27 @@ export default function CreateTaskPage() {
       try {
         const list = await fetchProjectsList();
         setProjects(list);
+        if (initialProjectId) {
+          try {
+            const ms = await listMilestonesByProject(initialProjectId);
+            setMilestones(ms);
+          } catch {}
+        }
       } catch {}
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!form.project_id) { setMilestones([]); return; }
+      try {
+        const ms = await listMilestonesByProject(form.project_id as number);
+        setMilestones(ms);
+      } catch {
+        setMilestones([]);
+      }
+    })();
+  }, [form.project_id]);
 
   return (
     <div className="max-w-xl">
@@ -92,6 +120,24 @@ export default function CreateTaskPage() {
           </select>
         </div>
         <div>
+          <label className="block text-sm mb-1">Milestone (optional)</label>
+          <select
+            name="milestone_id"
+            value={milestoneId}
+            onChange={(e) => setMilestoneId(e.target.value ? Number(e.target.value) : "")}
+            className="w-full border rounded-md px-3 py-2"
+            disabled={!form.project_id}
+          >
+            <option value="">Unassigned</option>
+            {milestones.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          {!form.project_id && (
+            <p className="text-xs text-neutral-500 mt-1">Pilih project terlebih dahulu untuk menampilkan milestones.</p>
+          )}
+        </div>
+        <div>
           <label className="block text-sm mb-1">Title</label>
           <input name="title" value={form.title} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
         </div>
@@ -106,6 +152,7 @@ export default function CreateTaskPage() {
               <option>Low</option>
               <option>Medium</option>
               <option>High</option>
+              <option>Critical</option>
             </select>
           </div>
           <div>
@@ -114,6 +161,8 @@ export default function CreateTaskPage() {
               <option>To Do</option>
               <option>In Progress</option>
               <option>Done</option>
+              <option>On Hold</option>
+              <option>Cancelled</option>
             </select>
           </div>
         </div>
@@ -139,4 +188,3 @@ export default function CreateTaskPage() {
     </div>
   );
 }
-

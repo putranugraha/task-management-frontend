@@ -11,6 +11,7 @@ export interface TaskDependencyLink {
 export interface Task {
   id: number;
   project_id: number;
+  milestone_id?: number | null;
   title: string;
   description: string | null;
   priority: string; // 'Low' | 'Medium' | 'High' | custom
@@ -23,6 +24,7 @@ export interface Task {
   duration_actual: number | null;
   percent_complete: number; // 0-100
   project?: { id: number; name: string } | null;
+  milestone?: { id: number; name: string } | null;
   dependencies?: TaskDependencyLink[];
   dependents?: TaskDependencyLink[];
   created_at: string; // ISO
@@ -34,4 +36,3 @@ export interface ApiResponse<T> {
   message?: string;
   status: number;
 }
-

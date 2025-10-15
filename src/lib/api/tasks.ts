@@ -16,6 +16,24 @@ export type CreateTaskDto = {
 
 export type UpdateTaskDto = Partial<CreateTaskDto>;
 
+export async function listByProject(projectId: number | string): Promise<Task[]> {
+  const id = encodeURIComponent(String(projectId));
+  const endpoints = [
+    `/api/projects/${id}/tasks?include=milestone`,
+    `/api/tasks?project_id=${id}&include=milestone`,
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await apiRequest<Task[] | { data: Task[] }>('GET', ep);
+      return Array.isArray(res) ? res : (res as any).data ?? [];
+    } catch (e: any) {
+      if (e?.response?.status === 404) continue;
+      throw e;
+    }
+  }
+  return [];
+}
+
 export async function listByMilestone(milestoneId: number | string): Promise<Task[]> {
   const res = await apiRequest<Task[] | { data: Task[] }>('GET', `/api/milestones/${milestoneId}/tasks`);
   return Array.isArray(res) ? res : (res as any).data ?? [];

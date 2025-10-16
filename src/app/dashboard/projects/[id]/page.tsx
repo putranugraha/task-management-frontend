@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { listByProject } from "@/lib/api/milestones";
+import { listByProject as listTasksByProject } from "@/lib/api/tasks";
+import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 
 type ProjectDetail = {
@@ -32,6 +34,9 @@ export default function ProjectDetailPage() {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
   const [milestonesError, setMilestonesError] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -99,6 +104,39 @@ export default function ProjectDetailPage() {
         setMilestonesError(e?.message ?? 'Gagal memuat milestones');
       } finally {
         setMilestonesLoading(false);
+      }
+    }
+    run();
+    return () => { mounted = false; };
+  }, [id]);
+
+  // Fetch project tasks once, then group by milestone at render time
+  useEffect(() => {
+    let mounted = true;
+    async function run() {
+      if (!id) return;
+      setTasksLoading(true);
+      setTasksError(null);
+      try {
+        const list = await listTasksByProject(id);
+        if (mounted) {
+          const arr = Array.isArray(list) ? list : [];
+          // Stabilize order: by status, then created_at, then id
+          arr.sort((a, b) => {
+            const sa = a.status || '';
+            const sb = b.status || '';
+            if (sa !== sb) return sa.localeCompare(sb);
+            const ca = a.created_at ? Date.parse(a.created_at) : 0;
+            const cb = b.created_at ? Date.parse(b.created_at) : 0;
+            if (ca !== cb) return ca - cb;
+            return (a.id ?? 0) - (b.id ?? 0);
+          });
+          setTasks(arr);
+        }
+      } catch (e: any) {
+        setTasksError(e?.message ?? 'Gagal memuat tasks proyek');
+      } finally {
+        setTasksLoading(false);
       }
     }
     run();
@@ -177,6 +215,76 @@ export default function ProjectDetailPage() {
             </table>
           )}
         </div>
+      </section>
+
+      <section className="mt-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium">Milestone Tasks</h3>
+          <a href={`/dashboard/projects/${data.id}/milestones`} className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50">View All</a>
+        </div>
+
+        {tasksLoading ? (
+          <div className="p-3 text-sm text-neutral-500 border rounded-lg">Loading tasks...</div>
+        ) : tasksError ? (
+          <div className="p-3 text-sm text-red-600 border rounded-lg">{tasksError}</div>
+        ) : (() => {
+          // Build map milestone_id -> tasks[] (only tasks that belong to a milestone)
+          const map: Record<number, Task[]> = {};
+          for (const t of tasks) {
+            const mid = (t.milestone?.id ?? t.milestone_id) as number | undefined;
+            if (!mid) continue;
+            if (!map[mid]) map[mid] = [];
+            map[mid].push(t);
+          }
+
+          // Sort milestones (already sorted in state), take top 5 and only those with tasks
+          const topWithTasks = milestones.filter(m => map[m.id] && map[m.id].length > 0).slice(0, 5);
+
+          if (topWithTasks.length === 0) {
+            return <div className="p-3 text-sm text-neutral-500 border rounded-lg">No tasks from milestones</div>;
+          }
+
+          return (
+            <div className="space-y-4">
+              {topWithTasks.map((m) => {
+                const list = map[m.id] || [];
+                const topTasks = list.slice(0, 3);
+                return (
+                  <div key={m.id} className="border rounded-lg">
+                    <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50">
+                      <div className="text-sm font-medium">
+                        <a className="hover:underline" href={`/dashboard/milestones/${m.id}`}>{m.name}</a>
+                      </div>
+                      <div className="text-xs text-neutral-600">{m.status} • Due: {m.due_planned ?? '-'}</div>
+                    </div>
+                    <table className="min-w-full text-sm">
+                      <thead className="text-neutral-700">
+                        <tr>
+                          <th className="text-left font-medium px-3 py-2 border-b">Title</th>
+                          <th className="text-left font-medium px-3 py-2 border-b">Status</th>
+                          <th className="text-left font-medium px-3 py-2 border-b">Percent</th>
+                          <th className="text-left font-medium px-3 py-2 border-b">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topTasks.map((t) => (
+                          <tr key={t.id} className="hover:bg-neutral-50">
+                            <td className="px-3 py-2 border-t">{t.title}</td>
+                            <td className="px-3 py-2 border-t">{t.status}</td>
+                            <td className="px-3 py-2 border-t">{(t.percent_complete ?? 0)}%</td>
+                            <td className="px-3 py-2 border-t">
+                              <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${t.id}/edit`}>Edit</a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </section>
     </div>
   );

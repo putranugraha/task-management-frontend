@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getById as getMilestoneById, updateStatus as setMilestoneStatus, complete as completeMilestone } from "@/lib/api/milestones";
-import { listByMilestone, createForMilestone, updateStatus as setTaskStatus, updateProgress as setTaskProgress, complete as completeTask, remove as deleteTask } from "@/lib/api/tasks";
+import { getById as getMilestoneById } from "@/lib/api/milestones";
+import { listByMilestone, createForMilestone, remove as deleteTask } from "@/lib/api/tasks";
 import type { Milestone } from "@/types/milestone";
 import type { Task } from "@/types/task";
 import DataTable from "@/app/dashboard/users/data-table";
@@ -158,9 +158,6 @@ export default function MilestoneDetailPage() {
           }}>
             Refresh
           </button>
-          <button className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50" onClick={async () => { await completeMilestone(milestone.id); router.refresh?.(); }}>
-            Mark Completed
-          </button>
         </div>
       </div>
 
@@ -229,19 +226,8 @@ export default function MilestoneDetailPage() {
 
 function TaskActions({ row, onChanged }: { row: TaskRow; onChanged: () => void }) {
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState(row.status);
-  const [percent, setPercent] = useState(row.percent_complete);
 
-  const doUpdateStatus = async () => {
-    try { setSaving(true); await setTaskStatus(row.id, status); onChanged(); } catch (e: any) { alert(e?.message ?? 'Failed'); } finally { setSaving(false); }
-  };
-  const doUpdateProgress = async () => {
-    try { setSaving(true); await setTaskProgress(row.id, percent); onChanged(); } catch (e: any) { alert(e?.message ?? 'Failed'); } finally { setSaving(false); }
-  };
-  const doComplete = async () => {
-    const ok = confirm(`Mark task "${row.title}" as completed?`); if (!ok) return;
-    try { setSaving(true); await completeTask(row.id); onChanged(); } catch (e: any) { alert(e?.message ?? 'Failed'); } finally { setSaving(false); }
-  };
+  
   const doDelete = async () => {
     const ok = confirm(`Delete task "${row.title}"?`); if (!ok) return;
     try { setSaving(true); await deleteTask(row.id); onChanged(); } catch (e: any) { alert(e?.message ?? 'Failed'); } finally { setSaving(false); }
@@ -251,19 +237,9 @@ function TaskActions({ row, onChanged }: { row: TaskRow; onChanged: () => void }
     <div className="flex flex-wrap items-center gap-2">
       <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${row.id}/edit`}>Edit</a>
       <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50 text-sm" onClick={doDelete}>Delete</button>
-      <button className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" onClick={doComplete} disabled={saving}>Complete</button>
-      <div className="inline-flex items-center gap-2 text-sm">
-        <select className="border rounded-md px-2 py-1" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option>To Do</option>
-          <option>In Progress</option>
-          <option>Done</option>
-        </select>
-        <button className="px-2 py-1 rounded-md border hover:bg-neutral-50" onClick={doUpdateStatus} disabled={saving}>Update Status</button>
-      </div>
-      <div className="inline-flex items-center gap-2 text-sm">
-        <input type="number" min={0} max={100} className="w-20 border rounded-md px-2 py-1" value={percent} onChange={(e) => setPercent(Number(e.target.value || 0))} />
-        <button className="px-2 py-1 rounded-md border hover:bg-neutral-50" onClick={doUpdateProgress} disabled={saving}>Update %</button>
-      </div>
+      
+      
+      
     </div>
   );
 }

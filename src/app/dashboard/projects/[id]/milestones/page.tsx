@@ -110,6 +110,9 @@ export default function ProjectMilestonesPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <div className="mb-3">
+        <Link href={`/dashboard/projects/${projectId}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Back</Link>
+      </div>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold">Project Milestones</h2>
         <Link href={`/dashboard/projects/${projectId}/milestones/create`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Create Milestone</Link>

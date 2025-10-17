@@ -16,6 +16,7 @@ type TaskDetail = {
   start_planned: string | null;
   end_planned: string | null;
   percent_complete: number;
+  assignments?: { user_id: number; role_on_task: string | null }[];
 };
 
 export default function EditTaskPage() {
@@ -28,6 +29,8 @@ export default function EditTaskPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +42,19 @@ export default function EditTaskPage() {
         const payload = (data && typeof data === 'object' && 'data' in data) ? (data as any).data : data;
         const t = Array.isArray(payload) ? payload[0] : payload;
         if (mounted && t) {
+          // Normalize existing assignments from various shapes
+          const currentAssignments: { user_id: number; role_on_task: string | null }[] = [];
+          if (Array.isArray(t?.assignments)) {
+            for (const a of t.assignments) {
+              const uid = Number(a?.user_id ?? a?.user?.id ?? a?.id);
+              if (Number.isFinite(uid)) currentAssignments.push({ user_id: uid, role_on_task: a?.role_on_task ?? null });
+            }
+          } else if (Array.isArray(t?.users)) {
+            for (const u of t.users) {
+              const uid = Number(u?.id);
+              if (Number.isFinite(uid)) currentAssignments.push({ user_id: uid, role_on_task: u?.pivot?.role_on_task ?? null });
+            }
+          }
           setForm({
             id: t.id,
             project_id: (t.project?.id as number) ?? (t.project_id ?? ""),
@@ -49,6 +65,7 @@ export default function EditTaskPage() {
             start_planned: t.start_planned ?? "",
             end_planned: t.end_planned ?? "",
             percent_complete: Number(t.percent_complete ?? 0),
+            assignments: currentAssignments.length ? currentAssignments : undefined,
           });
         }
       } catch (e: any) {
@@ -67,6 +84,42 @@ export default function EditTaskPage() {
         const list = await fetchProjectsList();
         setProjects(list);
       } catch {}
+    })();
+  }, []);
+
+  // Fetch users options for assignments checklist
+  useEffect(() => {
+    (async () => {
+      setUsersLoading(true);
+      try {
+        const tryPaths = [
+          '/api/users/options?status=1',
+          '/api/users/options?status=Aktif',
+          '/api/users/options',
+          '/api/users?status=1',
+          '/api/users?status=Aktif',
+          '/api/users',
+        ];
+        let mapped: Array<{ id: number; name: string }> = [];
+        for (const path of tryPaths) {
+          try {
+            const rs = await apiRequest<any>('GET', path);
+            let arr: any[] = [];
+            if (Array.isArray(rs)) arr = rs;
+            else if (Array.isArray(rs?.data)) arr = rs.data;
+            else if (Array.isArray(rs?.data?.data)) arr = rs.data.data;
+            else if (Array.isArray(rs?.items)) arr = rs.items;
+            else if (Array.isArray(rs?.users)) arr = rs.users;
+            mapped = (arr || []).map((u: any) => ({ id: Number(u.id), name: u.name ?? u.full_name ?? u.email ?? String(u.id) }));
+            if (mapped.length) break;
+          } catch {}
+        }
+        setUsers(mapped);
+      } catch {
+        setUsers([]);
+      } finally {
+        setUsersLoading(false);
+      }
     })();
   }, []);
 
@@ -94,6 +147,13 @@ export default function EditTaskPage() {
         end_planned: form.end_planned || null,
         percent_complete: Number(form.percent_complete ?? 0),
       };
+      if (form.assignments && form.assignments.length > 0) {
+        // Backend requires non-null role_on_task; default to 'Member' if null/empty
+        payload.assignments = form.assignments.map((a) => ({
+          user_id: a.user_id,
+          role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+        }));
+      }
       await apiRequest("PUT", `/api/tasks/${form.id}`, payload);
       router.push("/dashboard/tasks");
     } catch (e: any) {
@@ -119,6 +179,43 @@ export default function EditTaskPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Assigned Users</label>
+          {usersLoading ? (
+            <div className="text-xs text-neutral-500">Loading users...</div>
+          ) : users.length === 0 ? (
+            <div className="text-xs text-neutral-500">No users available.</div>
+          ) : (
+            <div className="border rounded-md px-3 py-2 max-h-56 overflow-auto space-y-1">
+              {users.map((u) => {
+                const checked = !!form.assignments?.some(a => a.user_id === u.id);
+                return (
+                  <label key={u.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={checked}
+                      onChange={(e) => {
+                        setForm((s) => s ? (() => {
+                          const current = s.assignments ?? [];
+                          if (e.target.checked) {
+                            if (!current.some(a => a.user_id === u.id)) {
+                              return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null }] };
+                            }
+                            return s;
+                          } else {
+                            return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
+                          }
+                        })() : s);
+                      }}
+                    />
+                    <span>{u.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-sm mb-1">Title</label>
@@ -168,4 +265,3 @@ export default function EditTaskPage() {
     </div>
   );
 }
-

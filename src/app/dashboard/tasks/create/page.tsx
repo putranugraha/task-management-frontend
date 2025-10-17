@@ -18,6 +18,7 @@ type FormState = {
   start_planned: string;
   end_planned: string;
   percent_complete: number;
+  assignments?: { user_id: number; role_on_task: string | null }[];
 };
 
 export default function CreateTaskPage() {
@@ -39,6 +40,8 @@ export default function CreateTaskPage() {
   const [milestoneId, setMilestoneId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as any;
@@ -69,10 +72,47 @@ export default function CreateTaskPage() {
         end_planned: form.end_planned || null,
         percent_complete: Number(form.percent_complete ?? 0),
       };
-      await apiRequest("POST", "/api/tasks", payload);
+      if (form.assignments && form.assignments.length > 0) {
+        // Backend requires non-null role_on_task; default to 'Member' if null/empty
+        payload.assignments = form.assignments.map(a => ({
+          user_id: a.user_id,
+          role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+        }));
+      }
+      // Primary endpoint
+      try {
+        await apiRequest("POST", "/api/tasks", payload);
+      } catch (err: any) {
+        // Fallbacks for backends that require nested routes
+        const status = err?.response?.status;
+        let lastErr = err;
+        const fallbacks: Array<{ url: string; adjust?: (p: any) => any }> = [];
+        if (milestoneId) {
+          fallbacks.push({ url: `/api/milestones/${milestoneId}/tasks` });
+        }
+        if (form.project_id) {
+          fallbacks.push({ url: `/api/projects/${form.project_id}/tasks` });
+        }
+        let created = false;
+        for (const fb of fallbacks) {
+          try {
+            const body = fb.adjust ? fb.adjust(payload) : payload;
+            await apiRequest("POST", fb.url, body);
+            created = true;
+            break;
+          } catch (e2: any) {
+            lastErr = e2;
+          }
+        }
+        if (!created) {
+          throw lastErr;
+        }
+      }
       router.push("/dashboard/tasks");
     } catch (e: any) {
-      setError(e?.message ?? "Gagal membuat task");
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.message || e?.message;
+      setError(msg ? `Gagal membuat task (${status ?? 'error'}): ${msg}` : "Gagal membuat task");
     } finally {
       setSubmitting(false);
     }
@@ -104,6 +144,42 @@ export default function CreateTaskPage() {
       }
     })();
   }, [form.project_id]);
+
+  // Fetch users for assignment options
+  useEffect(() => {
+    (async () => {
+      setUsersLoading(true);
+      try {
+        const tryPaths = [
+          "/api/users/options?status=1",
+          "/api/users/options?status=Aktif",
+          "/api/users/options",
+          "/api/users?status=1",
+          "/api/users?status=Aktif",
+          "/api/users",
+        ];
+        let mapped: Array<{ id: number; name: string }> = [];
+        for (const path of tryPaths) {
+          try {
+            const rs = await apiRequest<any>("GET", path);
+            let arr: any[] = [];
+            if (Array.isArray(rs)) arr = rs;
+            else if (Array.isArray(rs?.data)) arr = rs.data;
+            else if (Array.isArray(rs?.data?.data)) arr = rs.data.data;
+            else if (Array.isArray(rs?.items)) arr = rs.items;
+            else if (Array.isArray(rs?.users)) arr = rs.users;
+            mapped = (arr || []).map((u: any) => ({ id: Number(u.id), name: u.name ?? u.full_name ?? u.email ?? String(u.id) }));
+            if (mapped.length) break;
+          } catch {}
+        }
+        setUsers(mapped);
+      } catch {
+        setUsers([]);
+      } finally {
+        setUsersLoading(false);
+      }
+    })();
+  }, []);
 
   return (
     <div className="max-w-xl">
@@ -165,6 +241,43 @@ export default function CreateTaskPage() {
               <option>Cancelled</option>
             </select>
           </div>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Assigned Users</label>
+          {usersLoading ? (
+            <div className="text-xs text-neutral-500">Loading users...</div>
+          ) : users.length === 0 ? (
+            <div className="text-xs text-neutral-500">No users available.</div>
+          ) : (
+            <div className="border rounded-md px-3 py-2 max-h-56 overflow-auto space-y-1">
+              {users.map((u) => {
+                const checked = (form.assignments?.some(a => a.user_id === u.id)) ?? false;
+                return (
+                  <label key={u.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={checked}
+                      onChange={(e) => {
+                        setForm((s) => {
+                          const current = s.assignments ?? [];
+                          if (e.target.checked) {
+                            if (!current.some(a => a.user_id === u.id)) {
+                              return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null }] };
+                            }
+                            return s;
+                          } else {
+                            return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
+                          }
+                        });
+                      }}
+                    />
+                    <span>{u.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>

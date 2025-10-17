@@ -18,9 +18,17 @@ export type UpdateTaskDto = Partial<CreateTaskDto>;
 
 export async function listByProject(projectId: number | string): Promise<Task[]> {
   const id = encodeURIComponent(String(projectId));
+  // Try to include assignees eagerly when backend supports it.
   const endpoints = [
+    `/api/projects/${id}/tasks?include=milestone,assignments,users`,
+    `/api/projects/${id}/tasks?include=milestone,assignments`,
+    `/api/projects/${id}/tasks?include=milestone,users`,
     `/api/projects/${id}/tasks?include=milestone`,
+    `/api/tasks?project_id=${id}&include=milestone,assignments,users`,
+    `/api/tasks?project_id=${id}&include=milestone,assignments`,
+    `/api/tasks?project_id=${id}&include=milestone,users`,
     `/api/tasks?project_id=${id}&include=milestone`,
+    `/api/tasks?project_id=${id}`,
   ];
   for (const ep of endpoints) {
     try {

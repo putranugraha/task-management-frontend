@@ -37,6 +37,7 @@ export default function ProjectDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
+  const [openTaskIds, setOpenTaskIds] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -267,16 +268,66 @@ export default function ProjectDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {topTasks.map((t) => (
-                          <tr key={t.id} className="hover:bg-neutral-50">
-                            <td className="px-3 py-2 border-t">{t.title}</td>
-                            <td className="px-3 py-2 border-t">{t.status}</td>
-                            <td className="px-3 py-2 border-t">{(t.percent_complete ?? 0)}%</td>
-                            <td className="px-3 py-2 border-t">
-                              <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${t.id}/edit`}>Edit</a>
-                            </td>
-                          </tr>
-                        ))}
+                        {topTasks.map((t) => {
+                          const open = !!openTaskIds[(t.id as number)];
+                          const toggle = () => setOpenTaskIds(s => ({ ...s, [t.id]: !s[t.id as number] }));
+                          // Build assignees list from possible shapes
+                          const raw: any = t as any;
+                          const fromAssignments = Array.isArray(raw?.assignments) ? raw.assignments.map((a: any) => ({
+                            name: a?.user?.name ?? a?.user_name ?? a?.user?.full_name ?? a?.user?.email ?? String(a?.user_id ?? ''),
+                            role: a?.role_on_task ?? 'Member',
+                          })) : [];
+                          const fromUsers = Array.isArray(raw?.users) ? raw.users.map((u: any) => ({
+                            name: u?.name ?? u?.full_name ?? u?.email ?? String(u?.id ?? ''),
+                            role: u?.pivot?.role_on_task ?? 'Member',
+                          })) : [];
+                          const assignees = (fromAssignments.length ? fromAssignments : fromUsers);
+                          return (
+                            <>
+                              <tr key={`row-${t.id}`} className="hover:bg-neutral-50">
+                                <td className="px-3 py-2 border-t">{t.title}</td>
+                                <td className="px-3 py-2 border-t">{t.status}</td>
+                                <td className="px-3 py-2 border-t">{(t.percent_complete ?? 0)}%</td>
+                                <td className="px-3 py-2 border-t space-x-2">
+                                  <button type="button" onClick={toggle} className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm">
+                                    {open ? 'Hide' : 'Details'}
+                                  </button>
+                                  <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${t.id}/edit`}>Edit</a>
+                                </td>
+                              </tr>
+                              {open && (
+                                <tr key={`detail-${t.id}`} className="bg-neutral-50/60">
+                                  <td colSpan={4} className="px-3 py-3 border-t">
+                                    <div className="grid gap-1 text-xs text-neutral-700">
+                                      <div><span className="text-neutral-500">Description:</span> <span className="text-neutral-900">{(raw.description ?? '-') || '-'}</span></div>
+                                      <div className="flex flex-wrap gap-4">
+                                        <span><span className="text-neutral-500">Priority:</span> {raw.priority ?? 'Medium'}</span>
+                                        <span><span className="text-neutral-500">Start:</span> {raw.start_planned ?? '-'}</span>
+                                        <span><span className="text-neutral-500">End:</span> {raw.end_planned ?? '-'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-neutral-500">Assignees:</span>{' '}
+                                        {assignees.length === 0 ? (
+                                          <span className="text-neutral-900">No assignees</span>
+                                        ) : (
+                                          <span className="text-neutral-900">{
+                                            assignees
+                                              .map((a) => {
+                                                const role = (a.role ?? '').trim();
+                                                const showRole = role && role.toLowerCase() !== 'member';
+                                                return showRole ? `${a.name} (${role})` : a.name;
+                                              })
+                                              .join(', ')
+                                          }</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

@@ -7,6 +7,7 @@ import { listByProject } from "@/lib/api/milestones";
 import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
+import type { ProjectBaseline } from "@/types/project-baseline";
 
 type ProjectDetail = {
   id: number;
@@ -38,6 +39,14 @@ export default function ProjectDetailPage() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [openTaskIds, setOpenTaskIds] = useState<Record<number, boolean>>({});
+  // Baselines state
+  const [baselines, setBaselines] = useState<ProjectBaseline[]>([]);
+  const [baselinesLoading, setBaselinesLoading] = useState(false);
+  const [baselinesError, setBaselinesError] = useState<string | null>(null);
+  const [baselineModalOpen, setBaselineModalOpen] = useState(false);
+  const [baselineSaving, setBaselineSaving] = useState(false);
+  const [baselineForm, setBaselineForm] = useState<{ baseline_name: string; note: string }>(() => ({ baseline_name: "", note: "" }));
+  const [baselineFormErr, setBaselineFormErr] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -77,6 +86,33 @@ export default function ProjectDetailPage() {
       }
     }
     if (id) run();
+    return () => { mounted = false; };
+  }, [id]);
+
+  // Fetch project baselines
+  useEffect(() => {
+    let mounted = true;
+    async function run() {
+      if (!id) return;
+      setBaselinesLoading(true);
+      setBaselinesError(null);
+      try {
+        const res = await apiRequest<ProjectBaseline[] | { data: ProjectBaseline[] }>("GET", `/api/project-baselines?project_id=${encodeURIComponent(String(id))}`);
+        const arr = Array.isArray(res) ? res : ((res as any)?.data ?? []);
+        arr.sort((a: any, b: any) => {
+          const ta = a.taken_at ? Date.parse(a.taken_at) : 0;
+          const tb = b.taken_at ? Date.parse(b.taken_at) : 0;
+          if (tb !== ta) return tb - ta;
+          return (b.id ?? 0) - (a.id ?? 0);
+        });
+        if (mounted) setBaselines(arr as ProjectBaseline[]);
+      } catch (e: any) {
+        setBaselinesError(e?.message ?? 'Failed to load baselines');
+      } finally {
+        setBaselinesLoading(false);
+      }
+    }
+    run();
     return () => { mounted = false; };
   }, [id]);
 
@@ -180,6 +216,16 @@ export default function ProjectDetailPage() {
       <div className="mt-3 flex flex-wrap gap-2">
         <a href={`/dashboard/projects/${data.id}/edit`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Edit</a>
         <a href={`/dashboard/projects/${data.id}/milestones/create`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Milestone</a>
+        <a href={`/dashboard/tasks/create?project_id=${data.id}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Task</a>
+        <button
+          type="button"
+          className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => setBaselineModalOpen(true)}
+          disabled={!(milestones.length > 0 && tasks.length > 0)}
+          title={milestones.length > 0 && tasks.length > 0 ? 'Create baseline' : 'Requires at least 1 milestone and 1 task'}
+        >
+          Create Baseline
+        </button>
         <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Back</button>
       </div>
 
@@ -217,6 +263,142 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </section>
+
+      <section className="mt-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium">Project Baselines</h3>
+          <button
+            className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => setBaselineModalOpen(true)}
+            disabled={!(milestones.length > 0 && tasks.length > 0)}
+            title={milestones.length > 0 && tasks.length > 0 ? 'Create baseline' : 'Requires at least 1 milestone and 1 task'}
+          >Create</button>
+        </div>
+        <div className="border rounded-lg">
+          {baselinesLoading ? (
+            <div className="p-3 text-sm text-neutral-500">Loading baselines...</div>
+          ) : baselinesError ? (
+            <div className="p-3 text-sm text-red-600">{baselinesError}</div>
+          ) : baselines.length === 0 ? (
+            <div className="p-3 text-sm text-neutral-500">No baselines</div>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead className="bg-neutral-50 text-neutral-700">
+                <tr>
+                  <th className="text-left font-medium px-3 py-2 border-b">Baseline</th>
+                  <th className="text-left font-medium px-3 py-2 border-b">Taken At</th>
+                  <th className="text-left font-medium px-3 py-2 border-b">Start (Base)</th>
+                  <th className="text-left font-medium px-3 py-2 border-b">End (Base)</th>
+                  <th className="text-left font-medium px-3 py-2 border-b">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {baselines.map((b) => (
+                  <tr key={b.id} className="hover:bg-neutral-50">
+                    <td className="px-3 py-2 border-t">{b.baseline_name}</td>
+                    <td className="px-3 py-2 border-t">{b.taken_at ?? '-'}</td>
+                    <td className="px-3 py-2 border-t">{(b as any).start_planned_base ?? '-'}</td>
+                    <td className="px-3 py-2 border-t">{(b as any).end_planned_base ?? '-'}</td>
+                    <td className="px-3 py-2 border-t">{b.note ?? '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      {baselineModalOpen && (
+        <div className="fixed inset-0 bg-black/30 grid place-items-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
+            <h4 className="text-base font-semibold mb-2">Create Project Baseline</h4>
+            {baselineFormErr && <div className="text-sm text-red-600 mb-2">{baselineFormErr}</div>}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBaselineSaving(true);
+                setBaselineFormErr(null);
+                try {
+                  // Laravel API seems to require taken_at. Provide current timestamp if not provided by UI.
+                  const formatDateTime = (d: Date) => {
+                    const pad = (n: number) => String(n).padStart(2, '0');
+                    const yyyy = d.getFullYear();
+                    const mm = pad(d.getMonth() + 1);
+                    const dd = pad(d.getDate());
+                    const hh = pad(d.getHours());
+                    const mi = pad(d.getMinutes());
+                    const ss = pad(d.getSeconds());
+                    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+                  };
+                  if (!baselineForm.baseline_name || baselineForm.baseline_name.trim().length === 0) {
+                    setBaselineFormErr('Baseline name is required');
+                    setBaselineSaving(false);
+                    return;
+                  }
+                  await apiRequest('POST', '/api/project-baselines', {
+                    project_id: id,
+                    baseline_name: baselineForm.baseline_name.trim(),
+                    note: baselineForm.note?.trim() || null,
+                    taken_at: formatDateTime(new Date()),
+                  } as any);
+                  setBaselineModalOpen(false);
+                  setBaselineForm({ baseline_name: '', note: '' });
+                  // Refresh baselines after creation
+                  try {
+                    const res = await apiRequest<ProjectBaseline[] | { data: ProjectBaseline[] }>('GET', `/api/project-baselines?project_id=${encodeURIComponent(String(id))}`);
+                    const arr = Array.isArray(res) ? res : ((res as any)?.data ?? []);
+                    arr.sort((a: any, b: any) => {
+                      const ta = a.taken_at ? Date.parse(a.taken_at) : 0;
+                      const tb = b.taken_at ? Date.parse(b.taken_at) : 0;
+                      if (tb !== ta) return tb - ta;
+                      return (b.id ?? 0) - (a.id ?? 0);
+                    });
+                    setBaselines(arr as ProjectBaseline[]);
+                  } catch {}
+                } catch (e: any) {
+                  const errors = e?.response?.data?.errors;
+                  if (errors && typeof errors === 'object') {
+                    const firstKey = Object.keys(errors)[0];
+                    const val = errors[firstKey];
+                    setBaselineFormErr(Array.isArray(val) ? val.join(', ') : String(val ?? 'Invalid'));
+                  } else if (e?.response?.status === 404) {
+                    setBaselineFormErr('Project not found or unauthorized');
+                  } else if (e?.response?.status === 401 || e?.response?.status === 403) {
+                    setBaselineFormErr('Not authorized to create baseline');
+                  } else {
+                    setBaselineFormErr(e?.message ?? 'Failed to create baseline');
+                  }
+                } finally {
+                  setBaselineSaving(false);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-sm mb-1">Baseline Name</label>
+                <input
+                  className="w-full border rounded-md px-3 py-2"
+                  value={baselineForm.baseline_name}
+                  onChange={(e) => setBaselineForm((s) => ({ ...s, baseline_name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Note (optional)</label>
+                <input
+                  className="w-full border rounded-md px-3 py-2"
+                  value={baselineForm.note}
+                  onChange={(e) => setBaselineForm((s) => ({ ...s, note: e.target.value }))}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setBaselineModalOpen(false)} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
+                <button type="submit" disabled={baselineSaving} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{baselineSaving ? 'Saving...' : 'Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <section className="mt-6">
         <div className="flex items-center justify-between mb-2">

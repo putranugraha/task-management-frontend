@@ -17,6 +17,7 @@ type TaskDetail = {
   end_planned: string | null;
   percent_complete: number;
   assignments?: { user_id: number; role_on_task: string | null }[];
+  dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
 
 export default function EditTaskPage() {
@@ -31,6 +32,8 @@ export default function EditTaskPage() {
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string; status?: string }>>([]);
+  const [depsLoading, setDepsLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -55,6 +58,15 @@ export default function EditTaskPage() {
               if (Number.isFinite(uid)) currentAssignments.push({ user_id: uid, role_on_task: u?.pivot?.role_on_task ?? null });
             }
           }
+          const deps: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[] = [];
+          if (Array.isArray(t?.dependencies)) {
+            for (const d of t.dependencies) {
+              const did = Number((d as any)?.depends_on?.id ?? (d as any)?.depends_on_task_id ?? (d as any)?.id);
+              if (Number.isFinite(did) && did !== t.id) {
+                deps.push({ depends_on_task_id: did, type: (d as any)?.type ?? 'FS', lag_days: Number((d as any)?.lag_days ?? 0) || 0 });
+              }
+            }
+          }
           setForm({
             id: t.id,
             project_id: (t.project?.id as number) ?? (t.project_id ?? ""),
@@ -66,6 +78,7 @@ export default function EditTaskPage() {
             end_planned: t.end_planned ?? "",
             percent_complete: Number(t.percent_complete ?? 0),
             assignments: currentAssignments.length ? currentAssignments : undefined,
+            dependencies: deps,
           });
         }
       } catch (e: any) {
@@ -123,6 +136,32 @@ export default function EditTaskPage() {
     })();
   }, []);
 
+  // Load dependency candidate tasks based on task's milestone if available, otherwise by project
+  useEffect(() => {
+    (async () => {
+      const milestoneId = (form as any)?.milestone_id || (form as any)?.milestone?.id || null;
+      const projectId = form?.project_id || null;
+      if (!milestoneId && !projectId) { setDepOptions([]); return; }
+      setDepsLoading(true);
+      try {
+        let list: any[] = [];
+        if (milestoneId) {
+          list = await (await import('@/lib/api/tasks')).listByMilestone(milestoneId as number);
+        } else if (projectId) {
+          list = await (await import('@/lib/api/tasks')).listByProject(projectId as number);
+        }
+        const opts = (Array.isArray(list) ? list : []).map((t: any) => ({ id: Number(t.id), title: t.title ?? String(t.id), status: t.status ?? 'To Do' }));
+        // Exclude self
+        const filtered = opts.filter(o => o.id !== (form?.id ?? 0));
+        setDepOptions(filtered);
+      } catch {
+        setDepOptions([]);
+      } finally {
+        setDepsLoading(false);
+      }
+    })();
+  }, [form?.project_id]);
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target as any;
     setForm((s) => s ? ({
@@ -137,6 +176,41 @@ export default function EditTaskPage() {
     setSaving(true);
     setError(null);
     try {
+      // Dependency gating validation before submit
+      const newStatus = String(form.status || 'To Do');
+      const deps = form.dependencies || [];
+      if (deps.length > 0) {
+        const unmet: Array<{ title: string; type: string; reason: string }> = [];
+        for (const d of deps) {
+          const pred = depOptions.find(o => o.id === d.depends_on_task_id);
+          const predStatus = (pred?.status || '').toString();
+          const isDone = predStatus === 'Done';
+          const isStarted = predStatus !== '' && predStatus !== 'To Do';
+          const t = (d.type as any) || 'FS';
+          if (newStatus === 'Done') {
+            if ((t === 'FS' || t === 'FF') && !isDone) {
+              unmet.push({ title: pred?.title || `#${d.depends_on_task_id}`, type: t, reason: 'harus selesai lebih dulu' });
+            }
+            if (t === 'SF' && !isStarted) {
+              unmet.push({ title: pred?.title || `#${d.depends_on_task_id}`, type: t, reason: 'harus sudah mulai lebih dulu' });
+            }
+          }
+          if (newStatus === 'In Progress') {
+            if (t === 'FS' && !isDone) {
+              unmet.push({ title: pred?.title || `#${d.depends_on_task_id}`, type: t, reason: 'harus selesai lebih dulu' });
+            }
+            if (t === 'SS' && !isStarted) {
+              unmet.push({ title: pred?.title || `#${d.depends_on_task_id}`, type: t, reason: 'harus sudah mulai lebih dulu' });
+            }
+          }
+        }
+        if (unmet.length > 0) {
+          const msg = 'Tidak bisa menyimpan status karena masih menunggu: ' + unmet.map(u => `${u.title} (${u.type}: ${u.reason})`).join(', ');
+          setError(msg);
+          setSaving(false);
+          return;
+        }
+      }
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
         title: form.title,
@@ -152,6 +226,13 @@ export default function EditTaskPage() {
         payload.assignments = form.assignments.map((a) => ({
           user_id: a.user_id,
           role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+        }));
+      }
+      if (typeof form.dependencies !== 'undefined') {
+        payload.dependencies = (form.dependencies || []).map((d) => ({
+          depends_on_task_id: Number(d.depends_on_task_id),
+          type: (d.type as any) || 'FS',
+          lag_days: Number(d.lag_days ?? 0) || 0,
         }));
       }
       await apiRequest("PUT", `/api/tasks/${form.id}`, payload);
@@ -179,6 +260,31 @@ export default function EditTaskPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Dependencies (optional)</label>
+          {depsLoading ? (
+            <div className="text-xs text-neutral-500">Loading dependencies...</div>
+          ) : depOptions.length === 0 ? (
+            <div className="text-xs text-neutral-500">No dependency candidates</div>
+          ) : (
+            <select
+              multiple
+              className="w-full border rounded-md px-3 py-2 min-h-[120px]"
+              value={(form.dependencies?.map(d => d.depends_on_task_id) ?? []) as any}
+              onChange={(e) => {
+                const values = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
+                const unique = Array.from(new Set(values)).filter(v => v !== form.id);
+                const deps = unique.map(v => ({ depends_on_task_id: v, type: 'FS' as const, lag_days: 0 }));
+                setForm((s) => s ? ({ ...s, dependencies: deps }) : s);
+              }}
+            >
+              {depOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.title}</option>
+              ))}
+            </select>
+          )}
+          <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Hold Ctrl/Cmd to select multiple.</p>
         </div>
         <div>
           <label className="block text-sm mb-1">Assigned Users</label>

@@ -19,6 +19,7 @@ type FormState = {
   end_planned: string;
   percent_complete: number;
   assignments?: { user_id: number; role_on_task: string | null }[];
+  dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
 
 export default function CreateTaskPage() {
@@ -42,6 +43,8 @@ export default function CreateTaskPage() {
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string }>>([]);
+  const [depsLoading, setDepsLoading] = useState(false);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as any;
@@ -77,6 +80,14 @@ export default function CreateTaskPage() {
         payload.assignments = form.assignments.map(a => ({
           user_id: a.user_id,
           role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+        }));
+      }
+      if (typeof form.dependencies !== 'undefined') {
+        // Send dependencies if user interacted; allow empty array to clear
+        payload.dependencies = (form.dependencies || []).map((d: any) => ({
+          depends_on_task_id: Number(d.depends_on_task_id),
+          type: (d.type as any) || 'FS',
+          lag_days: Number(d.lag_days ?? 0) || 0,
         }));
       }
       // Primary endpoint
@@ -181,6 +192,26 @@ export default function CreateTaskPage() {
     })();
   }, []);
 
+  // Load dependency candidate tasks after milestone is chosen
+  useEffect(() => {
+    (async () => {
+      setDepOptions([]);
+      if (!milestoneId) return;
+      // Clear dependencies when milestone changes to avoid stale references
+      setForm((s) => ({ ...s, dependencies: [] }));
+      setDepsLoading(true);
+      try {
+        const list = await (await import('@/lib/api/tasks')).listByMilestone(milestoneId as number);
+        const opts = (Array.isArray(list) ? list : []).map((t: any) => ({ id: Number(t.id), title: t.title ?? String(t.id) }));
+        setDepOptions(opts);
+      } catch {
+        setDepOptions([]);
+      } finally {
+        setDepsLoading(false);
+      }
+    })();
+  }, [milestoneId]);
+
   return (
     <div className="max-w-xl">
       <h2 className="text-xl font-semibold mb-3">Create Task</h2>
@@ -279,6 +310,93 @@ export default function CreateTaskPage() {
             </div>
           )}
         </div>
+        {milestoneId ? (
+          <div>
+            <label className="block text-sm mb-1">Dependencies (optional)</label>
+            {depsLoading ? (
+              <div className="text-xs text-neutral-500">Loading dependencies...</div>
+            ) : depOptions.length === 0 ? (
+              <div className="text-xs text-neutral-500">No dependency candidates</div>
+            ) : (
+              <select
+                multiple
+                className="w-full border rounded-md px-3 py-2 min-h-[120px]"
+                value={(form.dependencies?.map(d => d.depends_on_task_id) ?? []) as any}
+                onChange={(e) => {
+                  const values = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
+                  const unique = Array.from(new Set(values));
+                  setForm((s) => {
+                    const prev = s.dependencies || [];
+                    // Preserve existing type/lag for still-selected items; default new ones
+                    const next = unique.map((id) => {
+                      const found = prev.find(d => d.depends_on_task_id === id);
+                      return found ? found : { depends_on_task_id: id, type: 'FS' as const, lag_days: 0 };
+                    });
+                    return { ...s, dependencies: next };
+                  });
+                }}
+              >
+                {depOptions.map((o) => (
+                  <option key={o.id} value={o.id}>{o.title}</option>
+                ))}
+              </select>
+            )}
+            <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Hold Ctrl/Cmd to select multiple.</p>
+            {Array.isArray(form.dependencies) && form.dependencies.length > 0 && (
+              <div className="mt-2 grid gap-2">
+                {form.dependencies.map((d, idx) => {
+                  const title = depOptions.find(o => o.id === d.depends_on_task_id)?.title ?? `#${d.depends_on_task_id}`;
+                  return (
+                    <div key={`${d.depends_on_task_id}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="px-2 py-1 bg-neutral-100 rounded">{title}</span>
+                      <select
+                        className="border rounded px-2 py-1"
+                        value={(d.type as any) || 'FS'}
+                        onChange={(e) => {
+                          const val = e.target.value as 'FS'|'SS'|'FF'|'SF';
+                          setForm((s) => ({
+                            ...s,
+                            dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, type: val } : x)
+                          }));
+                        }}
+                      >
+                        <option value="FS">FS</option>
+                        <option value="SS">SS</option>
+                        <option value="FF">FF</option>
+                        <option value="SF">SF</option>
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-neutral-600">Lag</label>
+                        <input
+                          type="number"
+                          className="w-20 border rounded px-2 py-1"
+                          value={Number(d.lag_days ?? 0)}
+                          onChange={(e) => {
+                            const val = Number(e.target.value || 0);
+                            setForm((s) => ({
+                              ...s,
+                              dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, lag_days: val } : x)
+                            }));
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="ml-auto px-2 py-1 border rounded hover:bg-neutral-50"
+                        onClick={() => {
+                          setForm((s) => ({
+                            ...s,
+                            dependencies: (s.dependencies || []).filter((x) => x.depends_on_task_id !== d.depends_on_task_id)
+                          }));
+                        }}
+                      >Remove</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm mb-1">Start Planned</label>

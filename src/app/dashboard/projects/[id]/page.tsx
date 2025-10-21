@@ -197,6 +197,27 @@ export default function ProjectDetailPage() {
     return String(v ?? '');
   };
 
+  // Helper flags for enabling baseline creation only when usable dates exist
+  const hasAnyTask = Array.isArray(tasks) && tasks.length > 0;
+  const hasStartDate = tasks.some((t) => !!t.start_planned);
+  const hasEndDate = tasks.some((t) => !!t.end_planned);
+  const canBaseline = (milestones.length > 0) && hasAnyTask && hasStartDate && hasEndDate;
+  // Preview baseline window for the modal
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const toISODate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const startPreview = (() => {
+    const starts = tasks.map(t => t.start_planned).filter((v): v is string => !!v);
+    if (starts.length === 0) return null;
+    const min = Math.min(...starts.map(s => Date.parse(s)));
+    return Number.isFinite(min) ? toISODate(new Date(min)) : null;
+  })();
+  const endPreview = (() => {
+    const ends = tasks.map(t => t.end_planned).filter((v): v is string => !!v);
+    if (ends.length === 0) return null;
+    const max = Math.max(...ends.map(s => Date.parse(s)));
+    return Number.isFinite(max) ? toISODate(new Date(max)) : null;
+  })();
+
   return (
     <div className="max-w-2xl">
       <h2 className="text-xl font-semibold mb-3">Project Detail</h2>
@@ -221,8 +242,8 @@ export default function ProjectDetailPage() {
           type="button"
           className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => setBaselineModalOpen(true)}
-          disabled={!(milestones.length > 0 && tasks.length > 0)}
-          title={milestones.length > 0 && tasks.length > 0 ? 'Create baseline' : 'Requires at least 1 milestone and 1 task'}
+          disabled={!canBaseline}
+          title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
         >
           Create Baseline
         </button>
@@ -270,8 +291,8 @@ export default function ProjectDetailPage() {
           <button
             className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setBaselineModalOpen(true)}
-            disabled={!(milestones.length > 0 && tasks.length > 0)}
-            title={milestones.length > 0 && tasks.length > 0 ? 'Create baseline' : 'Requires at least 1 milestone and 1 task'}
+            disabled={!canBaseline}
+            title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
           >Create</button>
         </div>
         <div className="border rounded-lg">
@@ -313,7 +334,7 @@ export default function ProjectDetailPage() {
           <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
             <h4 className="text-base font-semibold mb-2">Create Project Baseline</h4>
             {baselineFormErr && <div className="text-sm text-red-600 mb-2">{baselineFormErr}</div>}
-            <form
+              <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 setBaselineSaving(true);
@@ -330,16 +351,51 @@ export default function ProjectDetailPage() {
                     const ss = pad(d.getSeconds());
                     return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
                   };
+                  // Compute baseline window from tasks: earliest start_planned and latest end_planned
+                  const toISODate = (d: Date) => {
+                    const pad = (n: number) => String(n).padStart(2, '0');
+                    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                  };
+                  let startBase: string | null = null;
+                  let endBase: string | null = null;
+                  if (Array.isArray(tasks) && tasks.length > 0) {
+                    const starts = tasks
+                      .map((t) => t.start_planned)
+                      .filter((v): v is string => !!v);
+                    const ends = tasks
+                      .map((t) => t.end_planned)
+                      .filter((v): v is string => !!v);
+                    if (starts.length > 0) {
+                      const minMs = Math.min(...starts.map((s) => Date.parse(s)));
+                      if (Number.isFinite(minMs)) startBase = toISODate(new Date(minMs));
+                    }
+                    if (ends.length > 0) {
+                      const maxMs = Math.max(...ends.map((s) => Date.parse(s)));
+                      if (Number.isFinite(maxMs)) endBase = toISODate(new Date(maxMs));
+                    }
+                  }
                   if (!baselineForm.baseline_name || baselineForm.baseline_name.trim().length === 0) {
                     setBaselineFormErr('Baseline name is required');
                     setBaselineSaving(false);
                     return;
                   }
+                  if (!startBase || !endBase) {
+                    setBaselineFormErr('Tidak bisa membuat baseline: butuh minimal 1 task dengan Start Planned dan 1 task dengan End Planned.');
+                    setBaselineSaving(false);
+                    return;
+                  }
+                  const takenAtNow = formatDateTime(new Date());
                   await apiRequest('POST', '/api/project-baselines', {
                     project_id: id,
                     baseline_name: baselineForm.baseline_name.trim(),
                     note: baselineForm.note?.trim() || null,
-                    taken_at: formatDateTime(new Date()),
+                    taken_at: takenAtNow,
+                    // Provide baseline window so backend can persist or validate
+                    start_planned_base: startBase,
+                    end_planned_base: endBase,
+                    // Fallback keys for backends that expect generic names
+                    start_planned: startBase,
+                    end_planned: endBase,
                   } as any);
                   setBaselineModalOpen(false);
                   setBaselineForm({ baseline_name: '', note: '' });
@@ -353,6 +409,12 @@ export default function ProjectDetailPage() {
                       if (tb !== ta) return tb - ta;
                       return (b.id ?? 0) - (a.id ?? 0);
                     });
+                    // Ensure newly created baseline reflects computed window in UI
+                    if (arr.length > 0) {
+                      const first = arr[0] as any;
+                      first.start_planned_base = startBase ?? first.start_planned_base ?? first.start_planned ?? null;
+                      first.end_planned_base = endBase ?? first.end_planned_base ?? first.end_planned ?? null;
+                    }
                     setBaselines(arr as ProjectBaseline[]);
                   } catch {}
                 } catch (e: any) {
@@ -390,6 +452,10 @@ export default function ProjectDetailPage() {
                   value={baselineForm.note}
                   onChange={(e) => setBaselineForm((s) => ({ ...s, note: e.target.value }))}
                 />
+              </div>
+              <div className="text-xs text-neutral-600">
+                Calculated Start (Base): <span className="font-medium text-neutral-900">{startPreview ?? '-'}</span> •
+                {' '}End (Base): <span className="font-medium text-neutral-900">{endPreview ?? '-'}</span>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setBaselineModalOpen(false)} className="px-3 py-2 rounded-md border text-sm">Cancel</button>

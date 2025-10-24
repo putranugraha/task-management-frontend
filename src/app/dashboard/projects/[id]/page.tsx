@@ -238,6 +238,7 @@ export default function ProjectDetailPage() {
         <a href={`/dashboard/projects/${data.id}/edit`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Edit</a>
         <a href={`/dashboard/projects/${data.id}/milestones/create`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Milestone</a>
         <a href={`/dashboard/tasks/create?project_id=${data.id}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Task</a>
+        <a href={`/dashboard/projects/${data.id}/gantt`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">View Gantt</a>
         <button
           type="button"
           className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"

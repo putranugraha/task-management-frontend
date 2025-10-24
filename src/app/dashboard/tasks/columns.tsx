@@ -32,6 +32,7 @@ export function useTaskColumns(onDelete?: (row: TaskRow) => void): Column<TaskRo
       header: "Actions",
       render: (row) => (
         <div className="flex gap-2 text-sm">
+          <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/tasks/${row.id}`}>Detail</a>
           <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/tasks/${row.id}/edit`}>Edit</a>
           <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50" onClick={() => onDelete?.(row)}>Delete</button>
         </div>
@@ -39,4 +40,3 @@ export function useTaskColumns(onDelete?: (row: TaskRow) => void): Column<TaskRo
     },
   ];
 }
-

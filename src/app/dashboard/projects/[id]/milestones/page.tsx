@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import DataTable from "../../../users/data-table";
-import { listByProject, remove } from "@/lib/api/milestones";
+import { listByProject, remove, complete } from "@/lib/api/milestones";
 import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
@@ -28,6 +28,7 @@ export default function ProjectMilestonesPage() {
     percent_complete: number;
   };
   const [taskRows, setTaskRows] = useState<TaskRow[]>([]);
+  const [projectTasksFull, setProjectTasksFull] = useState<Task[]>([]);
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
 
@@ -51,6 +52,7 @@ export default function ProjectMilestonesPage() {
         name: m.name,
         status: m.status,
         due_planned: m.due_planned,
+        due_actual: (m as any).due_actual ?? null,
         project: m.project ?? undefined,
       }));
       setRows(mapped);
@@ -86,6 +88,7 @@ export default function ProjectMilestonesPage() {
         percent_complete: t.percent_complete ?? 0,
       }));
       setTaskRows(mapped);
+      setProjectTasksFull(sorted);
     } catch (e: any) {
       setTaskError(e?.message ?? "Failed to load project tasks");
     } finally {
@@ -106,7 +109,29 @@ export default function ProjectMilestonesPage() {
     }
   };
 
-  const columns = useMilestoneColumns({ onDelete: handleDelete, onChanged: fetchList });
+  const handleComplete = async (row: MilestoneRow) => {
+    try {
+      const tasks = projectTasksFull.filter(t => (t.milestone?.id ?? t.milestone_id) === row.id);
+      let candidate: string | null = null;
+      const actuals = tasks.map((t: any) => t.end_actual).filter(Boolean) as string[];
+      if (actuals.length) {
+        candidate = actuals.sort((a,b) => Date.parse(b)-Date.parse(a))[0];
+      } else {
+        const planned = tasks.map(t => t.end_planned).filter(Boolean) as string[];
+        if (planned.length) candidate = planned.sort((a,b) => Date.parse(b)-Date.parse(a))[0];
+      }
+      const msg = `Mark milestone "${row.name}" as completed` + (candidate ? ` (actual: ${candidate})?` : '?');
+      const ok = confirm(msg);
+      if (!ok) return;
+      await complete(row.id);
+      await fetchList();
+      await fetchProjectTasks();
+    } catch (e: any) {
+      alert(e?.message ?? 'Failed to complete milestone');
+    }
+  };
+
+  const columns = useMilestoneColumns({ onDelete: handleDelete, onChanged: fetchList, onComplete: handleComplete });
 
   return (
     <div className="max-w-6xl mx-auto">

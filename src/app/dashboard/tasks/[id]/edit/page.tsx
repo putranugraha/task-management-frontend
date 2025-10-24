@@ -164,10 +164,31 @@ export default function EditTaskPage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target as any;
-    setForm((s) => s ? ({
-      ...s,
-      [name]: name === 'percent_complete' ? Number(value) : (name === 'project_id' ? (value ? Number(value) : "") : value),
-    }) : s);
+    setForm((s) => {
+      if (!s) return s;
+      // Coerce numeric percent and clamp 0..100
+      if (name === 'percent_complete') {
+        let p = Number(value);
+        if (!Number.isFinite(p)) p = 0;
+        if (p < 0) p = 0; if (p > 100) p = 100;
+        // If percent hits 100, reflect intended status 'Done' in form state.
+        const nextStatus = p === 100 ? 'Done' : s.status;
+        return { ...s, percent_complete: p, status: nextStatus };
+      }
+      // If status changed to Done, force percent to 100 for consistency
+      if (name === 'status') {
+        const status = value;
+        if ((status || '').toString() === 'Done') {
+          const p = 100;
+          return { ...s, status, percent_complete: p };
+        }
+        return { ...s, status } as any;
+      }
+      if (name === 'project_id') {
+        return { ...s, project_id: value ? Number(value) : "" } as any;
+      }
+      return { ...s, [name]: value } as any;
+    });
   };
 
   const onSubmit = async (e: React.FormEvent) => {

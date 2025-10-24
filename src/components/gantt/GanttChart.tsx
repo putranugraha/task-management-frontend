@@ -20,10 +20,15 @@ export default function GanttChart({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = useState<number>(0);
   const [showDeps, setShowDeps] = useState<boolean>(true);
+  const [hoverRow, setHoverRow] = useState<number | null>(null);
+  const [showPhaseStarts, setShowPhaseStarts] = useState<boolean>(true);
 
   const model = useMemo(() => buildModel(tasks, milestones), [tasks, milestones]);
 
   const gridDays = Math.max(1, daysDiffInclusive(model.startDate, model.endDate));
+  const HEADER_WEEK_H = 22;
+  const HEADER_DAY_H = 26;
+  const HEADER_TOTAL_H = HEADER_WEEK_H + HEADER_DAY_H;
   // Responsive scaling: ensure the chart fills available viewport width.
   const basePxPerDay = zoom === "day" ? 32 : 16;
   const pxPerDay = useMemo(() => {
@@ -93,6 +98,11 @@ export default function GanttChart({
             <input type="checkbox" className="h-4 w-4" checked={showDeps} onChange={(e) => setShowDeps(e.target.checked)} />
             <span>Dependencies</span>
           </label>
+          <label className="inline-flex items-center gap-1 text-neutral-700">
+            <input type="checkbox" className="h-4 w-4" checked={showPhaseStarts} onChange={(e) => setShowPhaseStarts(e.target.checked)} />
+            <span>Phase Starts</span>
+          </label>
+          {/* Milestone links removed per request */}
           <button
             type="button"
             onClick={() => exportCsv(model)}
@@ -128,12 +138,22 @@ export default function GanttChart({
 
         {/* Timeline */}
         <div ref={scrollRef} className="relative min-w-0 overflow-x-auto flex-1">
-          {/* Header grid */}
+          {/* Header grid: Weeks + Days */}
           <div className="relative" style={{ width: totalWidth }}>
-            <div className="h-8 border-b flex">
+            {/* Weeks row */}
+            <div className="flex border-b" style={{ height: HEADER_WEEK_H }}>
+              {buildWeekSegments(model.startDate, model.endDate).map((seg, idx) => (
+                <div key={idx} className="h-full border-r text-[11px] text-neutral-600 flex items-center px-2 select-none"
+                     style={{ width: seg.span * pxPerDay }}>
+                  {seg.label}
+                </div>
+              ))}
+            </div>
+            {/* Days row */}
+            <div className="flex border-b" style={{ height: HEADER_DAY_H }}>
               {Array.from({ length: gridDays }).map((_, i) => (
                 <div key={i} className="h-full border-r text-[10px] text-neutral-500 grid place-items-center select-none" style={{ width: pxPerDay }}>
-                  {i % (zoom === "week" ? 7 : 1) === 0 ? labelForOffset(model.startDate, i) : null}
+                  {labelForOffset(model.startDate, i)}
                 </div>
               ))}
             </div>
@@ -150,7 +170,7 @@ export default function GanttChart({
                 const width = Math.max(0, (rightDays - leftDays) * pxPerDay);
                 if (width <= 0) return null;
                 return (
-                  <div className="absolute left-0 right-0" style={{ top: 32, bottom: 0 }}>
+                  <div className="absolute left-0 right-0" style={{ top: HEADER_TOTAL_H, bottom: 0 }}>
                     <div
                       className="absolute h-full bg-indigo-200/25 border-x-2 border-indigo-300/60"
                       style={{ left, width }}
@@ -164,7 +184,16 @@ export default function GanttChart({
             {/* Grid rows + bars */}
             <div>
               {model.rows.map((row, rowIdx) => (
-                <div key={row.id} className="relative border-b" style={{ height: Math.max(24, row.items.length * 22 + 12) }}>
+                <div
+                  key={row.id}
+                  className="relative border-b"
+                  style={{
+                    height: Math.max(24, row.items.length * 22 + 12),
+                    background: rowIdx % 2 === 0 ? '#ffffff' : '#fafafa',
+                  }}
+                  onMouseEnter={() => setHoverRow(rowIdx)}
+                  onMouseLeave={() => setHoverRow((v) => (v === rowIdx ? null : v))}
+                >
                   {/* light grid */}
                   <div className="absolute inset-0 pointer-events-none">
                     <div className="flex h-full">
@@ -174,12 +203,37 @@ export default function GanttChart({
                     </div>
                   </div>
 
-                  {/* milestone marker */}
-                  {row.due && inRange(row.due, model.startDate, model.endDate) && (
-                    <div className="absolute inset-y-0" style={{ left: (daysBetween(model.startDate!, row.due) * pxPerDay) }}>
-                      <div className="h-full w-[2px] bg-rose-400/80" />
-                    </div>
-                  )}
+                  {/* milestone marker as thin line (due date colored) */}
+                  {row.due && inRange(row.due, model.startDate, model.endDate) && (() => {
+                    const left = daysBetween(model.startDate!, row.due) * pxPerDay;
+                    const color = colorForIndex(rowIdx);
+                    return (
+                      <div className="absolute inset-y-0" style={{ left, zIndex: 20 }}>
+                        <div className="h-full" style={{ width: 2, backgroundColor: color }} title={`Milestone due • ${row.name} • ${fmt(row.due)}`} />
+                      </div>
+                    );
+                  })()}
+
+                  {/* hybrid: phase start marker (dashed grey) or fallback main colored if no due */}
+                  {row.span && inRange(row.span.start, model.startDate, model.endDate) && (() => {
+                    const left = daysBetween(model.startDate!, row.span!.start) * pxPerDay;
+                    const hasDue = Boolean(row.due);
+                    if (hasDue) {
+                      if (!showPhaseStarts) return null;
+                      return (
+                        <div className="absolute inset-y-0" style={{ left, zIndex: 19 }} title={`Phase start • ${row.name} • ${fmt(row.span!.start)}`}>
+                          <div className="h-full border-r border-dashed" style={{ borderRightColor: '#9ca3af', borderRightWidth: 1 }} />
+                        </div>
+                      );
+                    }
+                    // Fallback: no due date => use phase start as main colored marker
+                    const color = colorForIndex(rowIdx);
+                    return (
+                      <div className="absolute inset-y-0" style={{ left, zIndex: 20 }}>
+                        <div className="h-full" style={{ width: 2, backgroundColor: color }} title={`Phase start • ${row.name} • ${fmt(row.span!.start)}`} />
+                      </div>
+                    );
+                  })()}
 
                   {/* bars */}
                   <div className="relative">
@@ -190,29 +244,46 @@ export default function GanttChart({
                       const y = 8 + idx * 22;
                       const progress = Math.max(0, Math.min(100, it.percent || 0));
                       const color = colorForIndex(rowIdx);
+                      const barBase = colorForStatus((it as any)?.status ?? '');
                       const durationDays = daysDiffInclusive(it.start, it.end);
                       const tooltip = `${it.title}\n${fmt(it.start)} – ${fmt(it.end)} (${durationDays} day${durationDays>1?'s':''})\nMilestone: ${row.name}\nProgress: ${progress}%`;
                       return (
-                        <a key={it.id} href={`/dashboard/tasks/${it.id}`} className="absolute block rounded transition-colors"
-                           style={{ left: x, top: y, width: w, height: 14, backgroundColor: '#d1d5db' }} title={tooltip}>
-                          <div className="absolute inset-y-0 left-0 rounded-l" style={{ width: 4, backgroundColor: color }} />
-                          <div className="h-full rounded bg-emerald-500/80" style={{ width: `${progress}%` }} />
+                        <a key={it.id} href={`/dashboard/tasks/${it.id}`} className="absolute block rounded-full transition-colors shadow-sm"
+                           style={{ left: x, top: y, width: w, height: 16, backgroundColor: barBase.bg, border: `1px solid ${barBase.border}` }} title={tooltip}>
+                          <div className="absolute inset-y-0 left-0 rounded-l-full" style={{ width: 4, backgroundColor: color }} />
+                          <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: barBase.fg }} />
                         </a>
                       );
                     })}
                   </div>
+
+                  {/* milestone summary span pill */}
+                  {row.span && model.startDate && model.endDate && hoverRow === rowIdx && (() => {
+                    const x = daysBetween(model.startDate!, row.span!.start) * pxPerDay;
+                    const w = Math.max(pxPerDay, row.span!.days * pxPerDay);
+                    const color = colorForIndex(rowIdx);
+                    return (
+                      <div className="absolute" style={{ left: x, top: -18 }}>
+                        <div className="text-[11px] px-2 py-0.5 rounded-full border" style={{ borderColor: color, color }}>
+                          {row.name} • {fmt(row.span!.start)} – {fmt(row.span!.end)} • {row.span!.days}d
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
 
             {/* Dependencies overlay (FS only for now) */}
             {showDeps && (
-              <DependenciesOverlay model={model} gridDays={gridDays} pxPerDay={pxPerDay} />
+              <DependenciesOverlay model={model} gridDays={gridDays} pxPerDay={pxPerDay} headerOffset={HEADER_TOTAL_H} />
             )}
+
+            {/* Milestone link arrows removed as requested */}
 
             {/* Today line */}
             {todayX !== null && (
-              <div className="pointer-events-none absolute top-0 bottom-0" style={{ left: todayX }}>
+              <div className="pointer-events-none absolute" style={{ left: todayX, top: HEADER_TOTAL_H, bottom: 0 }}>
                 <div className="w-[2px] h-full bg-sky-500/80" />
               </div>
             )}
@@ -253,6 +324,24 @@ function labelForOffset(start: Date | null, offsetDays: number) {
   return `${day}/${mon}`;
 }
 
+function buildWeekSegments(start: Date | null, end: Date | null): Array<{ span: number; label: string }> {
+  if (!start || !end) return [];
+  const segments: Array<{ span: number; label: string }> = [];
+  let cur = new Date(start);
+  let idx = 1;
+  while (cur <= end) {
+    const startOfSeg = new Date(cur);
+    const daysLeft = Math.max(1, Math.floor((end.getTime() - startOfSeg.getTime()) / 86400000) + 1);
+    // segment ends at the nearest next Sunday (day=0) relative to current
+    const dow = startOfSeg.getDay(); // 0=Sun ... 6=Sat
+    const span = Math.min(daysLeft, dow === 0 ? 1 : 7 - dow);
+    segments.push({ span, label: `Week ${idx}` });
+    cur.setDate(cur.getDate() + span);
+    idx += 1;
+  }
+  return segments;
+}
+
 function fmt(d: Date | null) {
   if (!d) return "-";
   const y = d.getFullYear();
@@ -278,7 +367,7 @@ function buildModel(tasks: Task[], milestones: Milestone[]) {
   const endDate = dates.length ? new Date(Math.max(...dates.map(d => d.getTime()))) : null;
 
   // group by milestone
-  const byMilestone: Record<string, { id: string; name: string; due: Date | null; items: Array<{ id: number; title: string; start: Date | null; end: Date | null; percent: number; deps?: any[] }> }> = {};
+  const byMilestone: Record<string, { id: string; name: string; due: Date | null; items: Array<{ id: number; title: string; start: Date | null; end: Date | null; percent: number; deps?: any[]; status?: string }>; span?: { start: Date; end: Date; days: number } }> = {};
   for (const m of (milestones || [])) {
     byMilestone[String(m.id)] = {
       id: String(m.id),
@@ -300,6 +389,7 @@ function buildModel(tasks: Task[], milestones: Milestone[]) {
       end: t.end_planned ? toDateOnly(t.end_planned) : null,
       percent: Number(t.percent_complete ?? 0),
       deps: (t as any)?.dependencies,
+      status: (t as any)?.status || '',
     });
   }
 
@@ -311,6 +401,17 @@ function buildModel(tasks: Task[], milestones: Milestone[]) {
       if (da !== db) return da - db;
       return a.name.localeCompare(b.name);
     });
+
+  // compute milestone span from min(start) to max(end) among tasks
+  for (const r of rows) {
+    const starts = r.items.map(i => i.start).filter(Boolean) as Date[];
+    const ends = r.items.map(i => i.end).filter(Boolean) as Date[];
+    if (starts.length && ends.length) {
+      const s = new Date(Math.min(...starts.map(d => d.getTime())));
+      const e = new Date(Math.max(...ends.map(d => d.getTime())));
+      r.span = { start: s, end: e, days: daysDiffInclusive(s, e) };
+    }
+  }
 
   return { startDate, endDate, rows };
 }
@@ -368,8 +469,16 @@ function csv(v: string) {
   return '"' + s.replace(/"/g, '""') + '"';
 }
 
+function colorForStatus(status: string | undefined) {
+  const s = (status || '').toLowerCase();
+  if (s.includes('progress')) return { bg: '#fde68a', border: '#f59e0b', fg: '#f59e0b' }; // amber
+  if (s.includes('done') || s.includes('selesai')) return { bg: '#bbf7d0', border: '#10b981', fg: '#10b981' }; // green
+  if (s.includes('hold')) return { bg: '#fee2e2', border: '#ef4444', fg: '#ef4444' }; // red-ish
+  return { bg: '#e5e7eb', border: '#9ca3af', fg: '#6b7280' }; // neutral
+}
+
 // Draw FS dependencies between tasks
-function DependenciesOverlay({ model, gridDays, pxPerDay }: { model: ReturnType<typeof buildModel>; gridDays: number; pxPerDay: number }) {
+function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { model: ReturnType<typeof buildModel>; gridDays: number; pxPerDay: number; headerOffset: number }) {
   // Compute layout positions for each task id
   let yAcc = 0;
   const rowHeights = model.rows.map(r => Math.max(24, r.items.length * 22 + 12));
@@ -411,12 +520,81 @@ function DependenciesOverlay({ model, gridDays, pxPerDay }: { model: ReturnType<
 
   const totalHeight = rowHeights.reduce((a, b) => a + b, 0);
   return (
-    <svg className="pointer-events-none absolute left-0" style={{ top: 8 }} width={gridDays * pxPerDay} height={totalHeight}>
-      <g stroke="#9ca3af" strokeWidth={1.5} fill="none">
+    <svg className="pointer-events-none absolute left-0" style={{ top: headerOffset }} width={gridDays * pxPerDay} height={totalHeight}>
+      <defs>
+        <marker id="arrow-grey" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#9ca3af" />
+        </marker>
+      </defs>
+      <g stroke="#9ca3af" strokeWidth={1.25} fill="none" strokeOpacity={0.7}>
         {paths.map((p, i) => (
-          <path key={i} d={p.d} markerEnd={undefined} />
+          <path key={i} d={p.d} markerEnd="url(#arrow-grey)" />
         ))}
       </g>
+    </svg>
+  );
+}
+
+// Link the latest finishing task in a milestone to its milestone diamond date
+function MilestoneLinksOverlay({ model, gridDays, pxPerDay, headerOffset }: { model: ReturnType<typeof buildModel>; gridDays: number; pxPerDay: number; headerOffset: number }) {
+  // layout positions
+  let yAcc = 0;
+  const rowHeights = model.rows.map(r => Math.max(24, r.items.length * 22 + 12));
+  const pos = new Map<number, { x: number; w: number; cy: number }>();
+  model.rows.forEach((row, rIdx) => {
+    const rowTop = yAcc;
+    row.items.forEach((it, idx) => {
+      if (!it.start || !it.end) return;
+      const x = daysBetween(model.startDate!, it.start) * pxPerDay;
+      const w = Math.max(pxPerDay, daysDiffInclusive(it.start, it.end) * pxPerDay);
+      const y = rowTop + 8 + idx * 22 + 7;
+      pos.set(it.id, { x, w, cy: y });
+    });
+    yAcc += rowHeights[rIdx];
+  });
+
+  const paths: Array<{ d: string; color: string; xEnd: number; yEnd: number }> = [];
+  // choose candidate task per milestone and connect to milestone diamond
+  yAcc = 0;
+  model.rows.forEach((row, rIdx) => {
+    const rowTop = yAcc;
+    const rowH = rowHeights[rIdx];
+    yAcc += rowH;
+    if (!row.due) return;
+    // compute diamond center
+    const xDiamond = daysBetween(model.startDate!, row.due) * pxPerDay + Math.floor(pxPerDay / 2);
+    const yDiamond = (rowTop) + Math.floor(rowH / 2);
+    // find last task ending at/before due; fallback to latest end
+    const candidates = row.items.filter(it => it.start && it.end);
+    if (candidates.length === 0) return;
+    let chosen = candidates
+      .filter(it => (it.end!.getTime() <= row.due!.getTime()))
+      .sort((a, b) => (b.end!.getTime() - a.end!.getTime()))[0];
+    if (!chosen) {
+      chosen = candidates.slice().sort((a, b) => (b.end!.getTime() - a.end!.getTime()))[0];
+    }
+    const anchor = pos.get(chosen.id);
+    if (!anchor) return;
+    const x1 = anchor.x + anchor.w;
+    const y1 = anchor.cy;
+    const midX = x1 + 8;
+    const dAttr = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${yDiamond} L ${xDiamond - 6} ${yDiamond}`;
+    paths.push({ d: dAttr, color: colorForIndex(rIdx), xEnd: xDiamond, yEnd: yDiamond });
+  });
+
+  const totalHeight = rowHeights.reduce((a, b) => a + b, 0);
+  return (
+    <svg className="pointer-events-none absolute left-0" style={{ top: headerOffset }} width={gridDays * pxPerDay} height={totalHeight}>
+      <defs>
+        <marker id="arrow-colored" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="currentColor" />
+        </marker>
+      </defs>
+      {paths.map((p, i) => (
+        <g key={i} stroke={p.color} strokeWidth={1.1} fill="none" strokeOpacity={0.8} color={p.color}>
+          <path d={p.d} markerEnd="url(#arrow-colored)" />
+        </g>
+      ))}
     </svg>
   );
 }

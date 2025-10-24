@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import { listByProject } from "@/lib/api/milestones";
 import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
@@ -47,6 +48,8 @@ export default function ProjectDetailPage() {
   const [baselineSaving, setBaselineSaving] = useState(false);
   const [baselineForm, setBaselineForm] = useState<{ baseline_name: string; note: string }>(() => ({ baseline_name: "", note: "" }));
   const [baselineFormErr, setBaselineFormErr] = useState<string | null>(null);
+  // Task baseline per-row loading state
+  const [taskBaselineLoading, setTaskBaselineLoading] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -541,6 +544,55 @@ export default function ProjectDetailPage() {
                                   <button type="button" onClick={toggle} className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm">
                                     {open ? 'Hide' : 'Details'}
                                   </button>
+                                  <button
+                                    type="button"
+                                    className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={taskBaselineLoading[t.id] || !t.start_planned || !t.end_planned}
+                                    onClick={async () => {
+                                      if (!t.start_planned || !t.end_planned) {
+                                        alert('Task ini belum memiliki Start/End Planned.');
+                                        return;
+                                      }
+                                      setTaskBaselineLoading(s => ({ ...s, [t.id]: true }));
+                                      try {
+                                        // Cari project baseline terbaru (sudah ada di state baselines dan disortir desc saat load)
+                                        let baselineId: number | undefined = undefined;
+                                        if (Array.isArray(baselines) && baselines.length > 0) {
+                                          baselineId = Number(baselines[0].id);
+                                        }
+                                        // Dedup: jika sudah ada task baseline untuk baseline ini, abaikan
+                                        if (baselineId) {
+                                          try {
+                                            const existing = await listTaskBaselines(t.id);
+                                            const found = (existing || []).some((b: any) => Number(b?.baseline_id) === baselineId);
+                                            if (found) {
+                                              alert('Task baseline untuk baseline project terbaru sudah ada.');
+                                              setTaskBaselineLoading(s => ({ ...s, [t.id]: false }));
+                                              return;
+                                            }
+                                          } catch {}
+                                        }
+                                        const startBase: string = t.start_planned as any;
+                                        const endBase: string = t.end_planned as any;
+                                        const duration = (Number.isFinite(Date.parse(endBase)) && Number.isFinite(Date.parse(startBase)))
+                                          ? (Math.max(0, Math.round((Date.parse(endBase) - Date.parse(startBase)) / (24*60*60*1000))) + 1)
+                                          : null;
+                                        await createTaskBaseline(t.id, {
+                                          start_planned_base: startBase,
+                                          end_planned_base: endBase,
+                                          duration_planned_base: duration as any,
+                                          weight: 1 as any,
+                                          baseline_id: baselineId as any,
+                                        } as any);
+                                        alert('Task baseline berhasil dibuat.');
+                                      } catch (e: any) {
+                                        const msg = e?.response?.data?.message || e?.message || 'Gagal membuat task baseline';
+                                        alert(msg);
+                                      } finally {
+                                        setTaskBaselineLoading(s => ({ ...s, [t.id]: false }));
+                                      }
+                                    }}
+                                  >Create Baseline</button>
                                   <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${t.id}/edit`}>Edit</a>
                                 </td>
                               </tr>

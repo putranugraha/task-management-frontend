@@ -20,6 +20,16 @@ export async function listByProject(projectId: number | string): Promise<Task[]>
   const id = encodeURIComponent(String(projectId));
   // Try to include assignees eagerly when backend supports it.
   const endpoints = [
+    // Prefer fetching dependencies so Gantt can render connectors
+    `/api/projects/${id}/tasks?include=dependencies,milestone,assignments,users`,
+    `/api/projects/${id}/tasks?include=dependencies,milestone,assignments`,
+    `/api/projects/${id}/tasks?include=dependencies,milestone,users`,
+    `/api/projects/${id}/tasks?include=dependencies,milestone`,
+    `/api/tasks?project_id=${id}&include=dependencies,milestone,assignments,users`,
+    `/api/tasks?project_id=${id}&include=dependencies,milestone,assignments`,
+    `/api/tasks?project_id=${id}&include=dependencies,milestone,users`,
+    `/api/tasks?project_id=${id}&include=dependencies,milestone`,
+    // Original includes (without dependencies) as graceful fallback
     `/api/projects/${id}/tasks?include=milestone,assignments,users`,
     `/api/projects/${id}/tasks?include=milestone,assignments`,
     `/api/projects/${id}/tasks?include=milestone,users`,
@@ -28,6 +38,11 @@ export async function listByProject(projectId: number | string): Promise<Task[]>
     `/api/tasks?project_id=${id}&include=milestone,assignments`,
     `/api/tasks?project_id=${id}&include=milestone,users`,
     `/api/tasks?project_id=${id}&include=milestone`,
+    // Some backends use "relations" or "with" param names
+    `/api/projects/${id}/tasks?relations=dependencies,milestone`,
+    `/api/tasks?project_id=${id}&relations=dependencies,milestone`,
+    `/api/projects/${id}/tasks?with=dependencies,milestone`,
+    `/api/tasks?project_id=${id}&with=dependencies,milestone`,
     `/api/tasks?project_id=${id}`,
   ];
   for (const ep of endpoints) {

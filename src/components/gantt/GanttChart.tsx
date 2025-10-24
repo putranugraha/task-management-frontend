@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
@@ -22,6 +23,8 @@ export default function GanttChart({
   const [showDeps, setShowDeps] = useState<boolean>(true);
   const [hoverRow, setHoverRow] = useState<number | null>(null);
   const [showPhaseStarts, setShowPhaseStarts] = useState<boolean>(true);
+  const [showTaskBaselines, setShowTaskBaselines] = useState<boolean>(false);
+  const [taskBaselineMap, setTaskBaselineMap] = useState<Record<number, { start: Date; end: Date } | undefined>>({});
 
   const model = useMemo(() => buildModel(tasks, milestones), [tasks, milestones]);
 
@@ -87,6 +90,40 @@ export default function GanttChart({
     };
   }, []);
 
+  // Lazy-fetch task baselines when toggled on
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      if (!showTaskBaselines) return;
+      const latestBaselineId = Array.isArray(baselines) && baselines.length ? Number(baselines[0].id) : undefined;
+      const map: Record<number, { start: Date; end: Date } | undefined> = {};
+      for (const t of tasks) {
+        const id = Number((t as any)?.id);
+        if (!Number.isFinite(id)) continue;
+        try {
+          const list = await listTaskBaselines(id);
+          let chosen: any = undefined;
+          if (latestBaselineId) {
+            chosen = (list || []).find((b: any) => Number(b?.baseline_id) === latestBaselineId);
+          }
+          if (!chosen) {
+            chosen = (list || []).slice().sort((a: any, b: any) => (Date.parse(b?.created_at || b?.taken_at || '') || 0) - (Date.parse(a?.created_at || a?.taken_at || '') || 0) || (Number(b?.id || 0) - Number(a?.id || 0)))[0];
+          }
+          if (chosen?.start_planned_base && chosen?.end_planned_base) {
+            map[id] = { start: toDateOnly(chosen.start_planned_base), end: toDateOnly(chosen.end_planned_base) };
+          } else {
+            map[id] = undefined;
+          }
+        } catch {
+          map[id] = undefined;
+        }
+      }
+      if (!cancelled) setTaskBaselineMap(map);
+    }
+    run();
+    return () => { cancelled = true; };
+  }, [showTaskBaselines, tasks, baselines]);
+
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50">
@@ -101,6 +138,10 @@ export default function GanttChart({
           <label className="inline-flex items-center gap-1 text-neutral-700">
             <input type="checkbox" className="h-4 w-4" checked={showPhaseStarts} onChange={(e) => setShowPhaseStarts(e.target.checked)} />
             <span>Phase Starts</span>
+          </label>
+          <label className="inline-flex items-center gap-1 text-neutral-700">
+            <input type="checkbox" className="h-4 w-4" checked={showTaskBaselines} onChange={(e) => setShowTaskBaselines(e.target.checked)} />
+            <span>Task Baselines</span>
           </label>
           {/* Milestone links removed per request */}
           <button
@@ -253,6 +294,19 @@ export default function GanttChart({
                           <div className="absolute inset-y-0 left-0 rounded-l-full" style={{ width: 4, backgroundColor: color }} />
                           <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: barBase.fg }} />
                         </a>
+                      );
+                    })}
+                    {showTaskBaselines && row.items.map((it, idx) => {
+                      const id = Number((it as any)?.id);
+                      const snap = taskBaselineMap[id];
+                      if (!snap || !model.startDate) return null;
+                      const bx = daysBetween(model.startDate!, snap.start) * pxPerDay;
+                      const bw = Math.max(pxPerDay, daysDiffInclusive(snap.start, snap.end) * pxPerDay);
+                      const by = 8 + idx * 22 + 18; // below main bar
+                      return (
+                        <div key={`ghost-${id}`} className="absolute rounded-full"
+                          style={{ left: bx, top: by, width: bw, height: 6, backgroundColor: 'transparent', border: '1px dashed #6366f1', opacity: 0.9 }}
+                          title={`Baseline: ${fmt(snap.start)} – ${fmt(snap.end)}`} />
                       );
                     })}
                   </div>

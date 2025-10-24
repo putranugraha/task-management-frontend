@@ -292,12 +292,15 @@ export default function ProjectDetailPage() {
       <section className="mt-6">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium">Project Baselines</h3>
-          <button
+          <div className="flex items-center gap-2">
+            <a href={`/dashboard/projects/${data.id}/baselines`} className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50">View All</a>
+            <button
             className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setBaselineModalOpen(true)}
             disabled={!canBaseline}
             title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
           >Create</button>
+          </div>
         </div>
         <div className="border rounded-lg">
           {baselinesLoading ? (

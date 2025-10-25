@@ -504,7 +504,7 @@ export default function ProjectDetailPage() {
             <div className="space-y-4">
               {topWithTasks.map((m) => {
                 const list = map[m.id] || [];
-                const topTasks = list.slice(0, 3);
+                const topTasks = list; // show all tasks for the milestone (was limited to 3)
                 return (
                   <div key={m.id} className="border rounded-lg">
                     <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50">

@@ -257,7 +257,12 @@ export default function EditTaskPage() {
         }));
       }
       await apiRequest("PUT", `/api/tasks/${form.id}`, payload);
-      router.push("/dashboard/tasks");
+      const pid = form.project_id && Number(form.project_id);
+      if (Number.isFinite(pid)) {
+        router.push(`/dashboard/projects/${pid}`);
+      } else {
+        router.push("/dashboard/tasks");
+      }
     } catch (e: any) {
       setError(e?.message ?? "Gagal menyimpan task");
     } finally {

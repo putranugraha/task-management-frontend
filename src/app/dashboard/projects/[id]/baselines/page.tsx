@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { listByProject as listTasksByProject } from "@/lib/api/tasks";
-import { listByTask as listTaskBaselines, create as createTaskBaseline } from "@/lib/api/task-baselines";
+import { listByTask as listTaskBaselines, listByBaseline as listTaskBaselinesByBaseline, create as createTaskBaseline } from "@/lib/api/task-baselines";
 
 type ProjectBaseline = {
   id: number;
@@ -22,6 +22,10 @@ export default function ProjectBaselinesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyRow, setBusyRow] = useState<number | null>(null);
+  const [openRow, setOpenRow] = useState<Record<number, boolean>>({});
+  const [taskBaselinesMap, setTaskBaselinesMap] = useState<Record<number, any[]>>({});
+  const [taskBaselinesLoading, setTaskBaselinesLoading] = useState<Record<number, boolean>>({});
+  const [taskBaselinesError, setTaskBaselinesError] = useState<Record<number, string | null>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -81,12 +85,21 @@ export default function ProjectBaselinesPage() {
           if (Array.isArray(existing) && existing.some((b: any) => Number(b?.baseline_id) === Number(baseline.id))) { skipped++; continue; }
           const duration = (Number.isFinite(Date.parse(e)) && Number.isFinite(Date.parse(s)))
             ? (Math.max(0, Math.round((Date.parse(e) - Date.parse(s)) / (24*60*60*1000))) + 1) : null;
+          const hoursPerDay = 8;
+          const plannedHours = (duration != null) ? duration * hoursPerDay : null;
           await createTaskBaseline(id, {
             baseline_id: Number(baseline.id) as any,
             start_planned_base: s,
             end_planned_base: e,
             duration_planned_base: duration as any,
+            // keep minimal weight for compatibility
             weight: 1 as any,
+            // provide planned effort hints for backends expecting hours-based PV
+            planned_effort_hours: plannedHours as any,
+            planned_hours: plannedHours as any,
+            effort_hours: plannedHours as any,
+            planned_effort: plannedHours as any,
+            effort_planned: plannedHours as any,
           } as any);
           createdCount++;
         } catch {
@@ -111,6 +124,7 @@ export default function ProjectBaselinesPage() {
         <table className="min-w-full text-sm">
           <thead className="bg-neutral-50 text-neutral-700">
             <tr>
+              <th className="text-left font-medium px-3 py-2 border-b w-20">Tasks</th>
               <th className="text-left font-medium px-3 py-2 border-b">Baseline</th>
               <th className="text-left font-medium px-3 py-2 border-b">Taken At</th>
               <th className="text-left font-medium px-3 py-2 border-b">Start (Base)</th>
@@ -126,20 +140,87 @@ export default function ProjectBaselinesPage() {
               <tr><td className="px-3 py-3 text-neutral-500" colSpan={6}>No baselines</td></tr>
             ) : (
               rows.map((r) => (
-                <tr key={r.id} className="hover:bg-neutral-50">
-                  <td className="px-3 py-2 border-t">{r.baseline_name}</td>
-                  <td className="px-3 py-2 border-t">{r.taken_at || '-'}</td>
-                  <td className="px-3 py-2 border-t">{(r as any).start_planned_base || '-'}</td>
-                  <td className="px-3 py-2 border-t">{(r as any).end_planned_base || '-'}</td>
-                  <td className="px-3 py-2 border-t">{r.note || '-'}</td>
-                  <td className="px-3 py-2 border-t">
-                    <button
-                      className="px-2 py-1 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={busyRow === r.id}
-                      onClick={() => createTaskBaselinesFor(r)}
-                    >Create Task Baselines</button>
-                  </td>
-                </tr>
+                <>
+                  <tr key={`row-${r.id}`} className="hover:bg-neutral-50 align-top">
+                    <td className="px-3 py-2 border-t">
+                      <button
+                        type="button"
+                        className="px-2 py-1 rounded-md border text-xs hover:bg-neutral-50"
+                        onClick={async () => {
+                          setOpenRow(s => ({ ...s, [r.id]: !s[r.id] }));
+                          const open = !openRow[r.id];
+                          if (open) {
+                            // Lazy load task baselines for this baseline
+                            if (!taskBaselinesMap[r.id] || taskBaselinesMap[r.id].length === 0) {
+                              setTaskBaselinesLoading(s => ({ ...s, [r.id]: true }));
+                              setTaskBaselinesError(s => ({ ...s, [r.id]: null }));
+                              try {
+                                const list = await listTaskBaselinesByBaseline(r.id);
+                                setTaskBaselinesMap(s => ({ ...s, [r.id]: Array.isArray(list) ? list : [] }));
+                              } catch (e: any) {
+                                setTaskBaselinesError(s => ({ ...s, [r.id]: e?.message ?? 'Failed to load task baselines' }));
+                              } finally {
+                                setTaskBaselinesLoading(s => ({ ...s, [r.id]: false }));
+                              }
+                            }
+                          }
+                        }}
+                      >{openRow[r.id] ? 'Hide' : 'View'}</button>
+                    </td>
+                    <td className="px-3 py-2 border-t">{r.baseline_name}</td>
+                    <td className="px-3 py-2 border-t">{r.taken_at || '-'}</td>
+                    <td className="px-3 py-2 border-t">{(r as any).start_planned_base || '-'}</td>
+                    <td className="px-3 py-2 border-t">{(r as any).end_planned_base || '-'}</td>
+                    <td className="px-3 py-2 border-t">{r.note || '-'}</td>
+                    <td className="px-3 py-2 border-t">
+                      <button
+                        className="px-2 py-1 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={busyRow === r.id}
+                        onClick={() => createTaskBaselinesFor(r)}
+                      >Create Task Baselines</button>
+                    </td>
+                  </tr>
+                  {openRow[r.id] && (
+                    <tr key={`detail-${r.id}`}>
+                      <td className="px-3 py-2 border-t bg-neutral-50/60" colSpan={7}>
+                        {taskBaselinesLoading[r.id] ? (
+                          <div className="text-xs text-neutral-600">Loading task baselines…</div>
+                        ) : taskBaselinesError[r.id] ? (
+                          <div className="text-xs text-red-600">{taskBaselinesError[r.id]}</div>
+                        ) : (taskBaselinesMap[r.id] || []).length === 0 ? (
+                          <div className="text-xs text-neutral-600">No task baselines for this baseline.</div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs">
+                              <thead className="bg-neutral-100 text-neutral-700">
+                                <tr>
+                                  <th className="text-left font-medium px-2 py-1 border-b">Task</th>
+                                  <th className="text-left font-medium px-2 py-1 border-b">Start (Base)</th>
+                                  <th className="text-left font-medium px-2 py-1 border-b">End (Base)</th>
+                                  <th className="text-left font-medium px-2 py-1 border-b">Duration</th>
+                                  <th className="text-left font-medium px-2 py-1 border-b">Weight</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(taskBaselinesMap[r.id] || []).map((tb: any) => (
+                                  <tr key={tb.id} className="hover:bg-neutral-50">
+                                    <td className="px-2 py-1 border-t">
+                                      {tb?.task?.title || tb?.task_title || `Task #${tb?.task_id ?? '-'}`}
+                                    </td>
+                                    <td className="px-2 py-1 border-t">{tb?.start_planned_base ?? '-'}</td>
+                                    <td className="px-2 py-1 border-t">{tb?.end_planned_base ?? '-'}</td>
+                                    <td className="px-2 py-1 border-t">{tb?.duration_planned_base ?? '-'}</td>
+                                    <td className="px-2 py-1 border-t">{tb?.weight ?? '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))
             )}
           </tbody>
@@ -148,4 +229,3 @@ export default function ProjectBaselinesPage() {
     </div>
   );
 }
-

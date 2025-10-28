@@ -48,3 +48,18 @@ export function shouldUseSanctum() {
   return process.env.NEXT_PUBLIC_USE_SANCTUM === '1' ||
          (process.env.NEXT_PUBLIC_USE_SANCTUM || '').toLowerCase() === 'true';
 }
+
+// Feature flags
+// Hide AC/CV/CPI cards in EVM widgets, keeping SPI (and others) visible.
+// Enable with NEXT_PUBLIC_EVM_HIDE_COST_METRICS=1|true
+export function evmHideCostMetrics() {
+  const v = (process.env.NEXT_PUBLIC_EVM_HIDE_COST_METRICS || '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+// Hide SV card
+// Enable with NEXT_PUBLIC_EVM_HIDE_SV=1|true
+export function evmHideSv() {
+  const v = (process.env.NEXT_PUBLIC_EVM_HIDE_SV || '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}

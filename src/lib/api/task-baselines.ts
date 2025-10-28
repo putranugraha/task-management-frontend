@@ -50,3 +50,34 @@ export async function listByTask(taskId: number | string) {
   }
   return [];
 }
+
+export async function listByBaseline(baselineId: number | string) {
+  const id = encodeURIComponent(String(baselineId));
+  const endpoints = [
+    `/api/task-baselines?baseline_id=${id}&include=task`,
+    `/api/project-baselines/${id}/task-baselines?include=task`,
+    `/api/task-baselines?baseline_id=${id}`,
+  ];
+  for (const ep of endpoints) {
+    try {
+      const res = await apiRequest<any[] | { data: any[] }>('GET', ep);
+      return Array.isArray(res) ? res : (res as any)?.data ?? [];
+    } catch (e: any) {
+      if (e?.response?.status === 404) continue;
+      throw e;
+    }
+  }
+  return [];
+}
+
+// Optional flat creator to match BE route: POST /api/task-baselines
+export async function createFlat(payload: {
+  task_id: number;
+  start_planned_base: string;
+  end_planned_base: string;
+  baseline_id?: number;
+  planned_effort_hours?: number;
+  weight?: number;
+}) {
+  return await apiRequest<any>('POST', `/api/task-baselines`, payload as any);
+}

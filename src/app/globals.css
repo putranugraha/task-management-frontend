@@ -27,3 +27,17 @@
   * { @apply border-border; }
   html, body { @apply h-full; }
 }
+
+/* EVM widget feature-flagged hiding: keep structure, hide via CSS */
+.evm-hide-cost > :nth-child(3),
+.evm-hide-cost > :nth-child(6),
+.evm-hide-cost > :nth-child(7) {
+  display: none;
+}
+
+/* Granular per-metric hides (based on fixed order):
+   1 PV, 2 EV, 3 AC, 4 SV, 5 SPI, 6 CV, 7 CPI */
+.evm-hide-ac  > :nth-child(3) { display: none; }
+.evm-hide-sv  > :nth-child(4) { display: none; }
+.evm-hide-cv  > :nth-child(6) { display: none; }
+.evm-hide-cpi > :nth-child(7) { display: none; }

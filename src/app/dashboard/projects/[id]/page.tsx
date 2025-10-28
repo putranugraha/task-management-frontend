@@ -9,6 +9,10 @@ import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
+import EvmWidget from "@/components/evm/EvmWidget";
+import TaskProgressEditor from "@/components/tasks/TaskProgressEditor";
+import TimeEntryForm from "@/components/time/TimeEntryForm";
+import { totalByTask as totalHoursByTask } from "@/lib/api/time-entries";
 
 type ProjectDetail = {
   id: number;
@@ -50,6 +54,17 @@ export default function ProjectDetailPage() {
   const [baselineFormErr, setBaselineFormErr] = useState<string | null>(null);
   // Task baseline per-row loading state
   const [taskBaselineLoading, setTaskBaselineLoading] = useState<Record<number, boolean>>({});
+  // EVM reload signal after saving progress/time
+  const [evmReloadKey, setEvmReloadKey] = useState(0);
+  // Total hours per task (loaded lazily when details open or after saving time)
+  const [taskTotalHours, setTaskTotalHours] = useState<Record<number, number>>({});
+  const [taskTotalHoursLoading, setTaskTotalHoursLoading] = useState<Record<number, boolean>>({});
+  const [taskTotalHoursError, setTaskTotalHoursError] = useState<Record<number, string | null>>({});
+  // Current user id for time entries (from localStorage user object)
+  const currentUser = (typeof window !== 'undefined') ? (() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+  })() : null;
+  const currentUserId = Number((currentUser?.id ?? currentUser?.user_id) ?? 0);
 
   useEffect(() => {
     let mounted = true;
@@ -253,6 +268,10 @@ export default function ProjectDetailPage() {
         </button>
         <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Back</button>
       </div>
+
+      <section className="mt-6">
+        <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
+      </section>
 
       <section className="mt-6">
         <div className="flex items-center justify-between mb-2">
@@ -525,7 +544,26 @@ export default function ProjectDetailPage() {
                       <tbody>
                         {topTasks.map((t) => {
                           const open = !!openTaskIds[(t.id as number)];
-                          const toggle = () => setOpenTaskIds(s => ({ ...s, [t.id]: !s[t.id as number] }));
+                          const toggle = async () => {
+                            setOpenTaskIds(s => ({ ...s, [t.id]: !s[t.id as number] }));
+                            const willOpen = !open;
+                            if (willOpen) {
+                              const tid = Number(t.id);
+                              if (Number.isFinite(tid) && taskTotalHours[tid] === undefined && !taskTotalHoursLoading[tid]) {
+                                setTaskTotalHoursLoading(s => ({ ...s, [tid]: true }));
+                                setTaskTotalHoursError(s => ({ ...s, [tid]: null }));
+                                try {
+                                  const total = await totalHoursByTask(tid);
+                                  const value = typeof total === 'number' ? total : Number((total as any)?.total ?? 0);
+                                  setTaskTotalHours(s => ({ ...s, [tid]: Number.isFinite(value) ? value : 0 }));
+                                } catch (e: any) {
+                                  setTaskTotalHoursError(s => ({ ...s, [tid]: e?.message ?? 'Gagal memuat total jam' }));
+                                } finally {
+                                  setTaskTotalHoursLoading(s => ({ ...s, [tid]: false }));
+                                }
+                              }
+                            }
+                          };
                           // Build assignees list from possible shapes
                           const raw: any = t as any;
                           const fromAssignments = Array.isArray(raw?.assignments) ? raw.assignments.map((a: any) => ({
@@ -580,11 +618,18 @@ export default function ProjectDetailPage() {
                                         const duration = (Number.isFinite(Date.parse(endBase)) && Number.isFinite(Date.parse(startBase)))
                                           ? (Math.max(0, Math.round((Date.parse(endBase) - Date.parse(startBase)) / (24*60*60*1000))) + 1)
                                           : null;
+                                        const hoursPerDay = 8;
+                                        const plannedHours = (duration != null) ? (duration * hoursPerDay) : null;
                                         await createTaskBaseline(t.id, {
                                           start_planned_base: startBase,
                                           end_planned_base: endBase,
                                           duration_planned_base: duration as any,
                                           weight: 1 as any,
+                                          planned_effort_hours: plannedHours as any,
+                                          planned_hours: plannedHours as any,
+                                          effort_hours: plannedHours as any,
+                                          planned_effort: plannedHours as any,
+                                          effort_planned: plannedHours as any,
                                           baseline_id: baselineId as any,
                                         } as any);
                                         alert('Task baseline berhasil dibuat.');
@@ -624,6 +669,49 @@ export default function ProjectDetailPage() {
                                               .join(', ')
                                           }</span>
                                         )}
+                                      </div>
+                                      <div className="mt-3 pt-3 border-t">
+                                        <div className="text-neutral-900 font-medium mb-2">Update & Log</div>
+                                        <div className="flex flex-wrap items-start gap-4">
+                                          <TaskProgressEditor
+                                            taskId={t.id}
+                                            initialPercent={t.percent_complete ?? 0}
+                                            onSaved={() => setEvmReloadKey(k => k + 1)}
+                                          />
+                                          {currentUserId > 0 ? (
+                                            <TimeEntryForm
+                                              taskId={t.id}
+                                              userId={currentUserId}
+                                              onSaved={async () => {
+                                                setEvmReloadKey(k => k + 1);
+                                                const tid = Number(t.id);
+                                                if (Number.isFinite(tid)) {
+                                                  setTaskTotalHoursLoading(s => ({ ...s, [tid]: true }));
+                                                  try {
+                                                    const total = await totalHoursByTask(tid);
+                                                    const value = typeof total === 'number' ? total : Number((total as any)?.total ?? 0);
+                                                    setTaskTotalHours(s => ({ ...s, [tid]: Number.isFinite(value) ? value : 0 }));
+                                                  } catch (e: any) {
+                                                    setTaskTotalHoursError(s => ({ ...s, [tid]: e?.message ?? 'Gagal memuat total jam' }));
+                                                  } finally {
+                                                    setTaskTotalHoursLoading(s => ({ ...s, [tid]: false }));
+                                                  }
+                                                }
+                                              }}
+                                            />
+                                          ) : (
+                                            <div className="text-[11px] text-neutral-500">Login required to log time.</div>
+                                          )}
+                                          <div className="text-xs text-neutral-700 mt-1">
+                                            {taskTotalHoursLoading[Number(t.id)] ? (
+                                              <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">Loading hours…</span>
+                                            ) : taskTotalHoursError[Number(t.id)] ? (
+                                              <span className="inline-block px-2 py-0.5 rounded border bg-red-50 text-red-700">{taskTotalHoursError[Number(t.id)]}</span>
+                                            ) : (
+                                              <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">Total Hours: <b>{taskTotalHours[Number(t.id)] ?? 0}</b></span>
+                                            )}
+                                          </div>
+                                        </div>
                                       </div>
                                     </div>
                                   </td>

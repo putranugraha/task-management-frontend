@@ -134,7 +134,7 @@ export default function ProjectMilestonesPage() {
   const columns = useMilestoneColumns({ onDelete: handleDelete, onChanged: fetchList, onComplete: handleComplete });
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="mb-3">
         <Link href={`/dashboard/projects/${projectId}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Back</Link>
       </div>

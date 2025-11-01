@@ -52,7 +52,7 @@ export default function MilestonesPage() {
   const columns = useMilestoneColumns(handleDelete);
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold">Milestones</h2>
         <Link href="/dashboard/milestones/create" className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Create Milestone</Link>
@@ -64,4 +64,3 @@ export default function MilestonesPage() {
     </div>
   );
 }
-

@@ -146,7 +146,7 @@ export default function MilestoneDetailPage() {
   if (!milestone) return <div className="text-neutral-500">No milestone</div>;
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="text-xl font-semibold">Milestone: {milestone.name}</h2>

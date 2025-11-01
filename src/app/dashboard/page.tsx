@@ -93,7 +93,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
           <h1 className="text-2xl font-semibold tracking-tight mb-1">Dashboard</h1>
           <p className="text-sm text-neutral-500 mb-4">Cek auto-login dan Authorization header.</p>
 

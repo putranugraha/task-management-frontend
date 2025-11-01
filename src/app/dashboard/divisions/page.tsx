@@ -76,7 +76,7 @@ export default function DivisionsPage() {
   const columns = useDivisionColumns(handleDelete, { minimal: true }) as unknown as Column<DivisionRow>[];
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold">Divisions</h2>
         <Link href="/dashboard/divisions/create" className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Create Division</Link>

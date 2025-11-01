@@ -54,7 +54,7 @@ export default function TasksPage() {
   const columns = useTaskColumns(handleDelete);
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold">Tasks</h2>
         <Link href="/dashboard/tasks/create" className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Create Task</Link>
@@ -66,4 +66,3 @@ export default function TasksPage() {
     </div>
   );
 }
-

@@ -1,23 +1,22 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 import {
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  LifeBuoy,
-  Map,
-  PieChart,
-  Send,
-  Settings2,
-  SquareTerminal,
-} from "lucide-react"
+  LayoutDashboard,
+  FolderKanban,
+  ListTodo,
+  Flag,
+  BarChart2,
+  Users as UsersIconLucide,
+  ShieldCheck,
+  Settings as SettingsIconLucide,
+  Building2,
+} from "lucide-react";
 
-import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavSecondary } from "@/components/nav-secondary"
-import { NavUser } from "@/components/nav-user"
+import { NavMain } from "@/components/nav-main";
+import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
   SidebarContent,
@@ -26,160 +25,88 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
-
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Support",
-      url: "#",
-      icon: LifeBuoy,
-    },
-    {
-      title: "Feedback",
-      url: "#",
-      icon: Send,
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
-}
+  SidebarRail,
+} from "@/components/ui/sidebar";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname();
+
+  const navItems = [
+    { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
+    { title: "Projects", url: "/dashboard/projects", icon: FolderKanban },
+    { title: "Tasks", url: "/dashboard/tasks", icon: ListTodo },
+    { title: "Milestones", url: "/dashboard/milestones", icon: Flag },
+    { title: "Divisions", url: "/dashboard/divisions", icon: Building2 },
+    { title: "Reports", url: "/dashboard/reports", icon: BarChart2 },
+    { title: "Users", url: "/dashboard/users", icon: UsersIconLucide },
+    { title: "Roles", url: "/dashboard/roles", icon: ShieldCheck },
+    { title: "Settings", url: "/dashboard/settings", icon: SettingsIconLucide },
+  ].map((i) => ({
+    ...i,
+    isActive:
+      pathname === i.url ||
+      (i.url !== "/dashboard" && pathname?.startsWith(i.url)),
+  }));
+
+  const [user, setUser] = React.useState({
+    name: "Admin",
+    email: "admin@example.com",
+    avatar: "",
+  });
+
+  React.useEffect(() => {
+    try {
+      const raw =
+        typeof window !== "undefined" ? localStorage.getItem("user") : null;
+      if (raw) {
+        const u = JSON.parse(raw);
+        setUser({
+          name: u?.name || u?.username || u?.full_name || "Admin",
+          email: u?.email || "admin@example.com",
+          avatar: u?.avatar || u?.avatar_url || u?.image || u?.photo || "",
+        });
+      }
+    } catch {}
+  }, []);
+
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar
+      variant="inset"
+      collapsible="icon"
+      className="flex-shrink-0 w-64 md:w-64 lg:w-64 border-r bg-white dark:bg-neutral-950/70 backdrop-blur supports-[backdrop-filter]:bg-white/60"
+      {...props}
+    >
+      {/* HEADER */}
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="#">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Command className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Acme Inc</span>
-                  <span className="truncate text-xs">Enterprise</span>
-                </div>
+              <a href="#" aria-label="Home">
+                <Image
+                  src="/logo/Logo_Central_Saga-removebg-preview.png"
+                  alt="Logo"
+                  width={80}
+                  height={80}
+                  className="rounded-md object-contain mx-auto"
+                />
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
+
+      {/* MAIN MENU */}
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={navItems as any} />
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={data.user} />
+
+      {/* FOOTER */}
+      <SidebarFooter className="border-t border-neutral-200 dark:border-neutral-800">
+        <NavUser user={user} />
       </SidebarFooter>
+
+      {/* RAIL (garis collapse sidebar) */}
+      <SidebarRail />
     </Sidebar>
-  )
+  );
 }

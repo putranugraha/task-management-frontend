@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { upsert, type TimeEntryPayload } from "@/lib/api/time-entries";
+import { upsert, listByTask, type TimeEntryPayload } from "@/lib/api/time-entries";
 
 type Props = {
   taskId: number | string;
@@ -28,11 +28,27 @@ export default function TimeEntryForm({ taskId, userId, onSaved, className }: Pr
     setLoading(true);
     setError(null);
     try {
+      // Determine additive hours if there is an existing same-day entry for this user
+      let newHours = Number(hours);
+      try {
+        const entries = await listByTask(taskId);
+        const sameDay = (entries || []).find((it: any) => Number(it?.user_id) === Number(userId) && String(it?.date || "").slice(0, 10) === date);
+        if (sameDay) {
+          const existing = typeof sameDay.hours === 'string' ? parseFloat(sameDay.hours) : Number(sameDay.hours);
+          const add = typeof hours === 'string' ? parseFloat(hours as any) : Number(hours);
+          const base = Number.isFinite(existing) ? existing : 0;
+          const inc = Number.isFinite(add) ? add : 0;
+          newHours = base + inc;
+        }
+      } catch {
+        // If fetch fails, fall back to raw input hours
+      }
+
       const payload: TimeEntryPayload = {
         task_id: Number(taskId),
         user_id: Number(userId),
         date,
-        hours: Number(hours),
+        hours: newHours,
         note: note?.trim() || null,
       };
       await upsert(payload);
@@ -91,4 +107,3 @@ export default function TimeEntryForm({ taskId, userId, onSaved, className }: Pr
     </form>
   );
 }
-

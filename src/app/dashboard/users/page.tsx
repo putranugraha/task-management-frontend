@@ -6,8 +6,9 @@ import { apiRequest } from "@/lib/api";
 import type { User as UserType } from "@/types/user";
 import DataTable from "./data-table";
 import { useUserColumns, type Column, type UserRow } from "./columns";
-import { UsersIcon, UserIcon, UserMinusIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from "@heroicons/react/24/outline";
-import { Download, Plus, SlidersHorizontal } from "lucide-react";
+import StatsRow from "@/components/dashboard/StatsRow";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { Plus, SlidersHorizontal } from "lucide-react";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -69,7 +70,7 @@ export default function UsersPage() {
   const togglableColumns = useMemo(() => columns.filter((c) => c.key !== "actions"), [columns]);
   const columnOrder = useMemo(() => togglableColumns.map((c) => String(c.key)), [togglableColumns]);
   const defaultVisibleKeys = useMemo(() => {
-    const preferred = new Set(["name", "email", "job_title", "status"]);
+    const preferred = new Set(["name", "role", "status"]);
     const picked = columnOrder.filter((key) => preferred.has(key));
     return picked.length > 0 ? picked : columnOrder;
   }, [columnOrder]);
@@ -131,12 +132,51 @@ export default function UsersPage() {
     [filteredRows, startIndex, rowsPerPage]
   );
 
+  const userStats = useMemo(() => {
+    let active = 0;
+    let inactive = 0;
+
+    rows.forEach((row) => {
+      const normalized = String(row.status ?? "").toLowerCase().normalize("NFKD");
+      const has = (...tokens: string[]) => tokens.some((token) => normalized.includes(token));
+
+      if (has("non", "inaktif", "inactive", "deactive", "suspend", "blokir", "blocked", "disable")) {
+        inactive += 1;
+        return;
+      }
+      if (has("aktif", "active", "enable", "approved")) {
+        active += 1;
+        return;
+      }
+      if (row.is_active === false) {
+        inactive += 1;
+      } else {
+        active += 1;
+      }
+    });
+
+    const total = rows.length;
+    if (active + inactive !== total) {
+      inactive += Math.max(0, total - (active + inactive));
+    }
+
+    const activePercent = total ? Math.round((active / total) * 100) : 0;
+    const inactivePercent = total ? Math.round((inactive / total) * 100) : 0;
+    const totalPercent = activePercent;
+
+    return { total, active, inactive, totalPercent, activePercent, inactivePercent };
+  }, [rows]);
+
   const numberColumn: Column<UserRow> = useMemo(() => ({
     key: "__number",
     header: "No",
     align: "center",
-    className: "w-16",
-    render: (_row, index) => startIndex + index + 1,
+    className: "w-[80px]",
+    render: (_row, index) => (
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500">
+        {startIndex + index + 1}
+      </span>
+    ),
   }), [startIndex]);
 
   const visibleColumns = useMemo(() => {
@@ -170,73 +210,79 @@ export default function UsersPage() {
     });
   };
 
-  const exportAll = () => {
-    try {
-      const payload = JSON.stringify(rows, null, 2);
-      const blob = new Blob([payload], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "users.json";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to export users");
-    }
-  };
-
   return (
-    <div className="w-full space-y-5">
+    <div className="w-full space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">Users Management</h1>
-        <p className="text-sm text-neutral-500">Manage user accounts and permissions.</p>
+        <h1 className="text-3xl font-semibold text-slate-900">Users Dashboard</h1>
+        <p className="text-sm text-slate-500">Monitor the latest activity and keep every account aligned.</p>
       </div>
 
-      <StatsRow rows={rows} loading={loading} />
+      <StatsRow stats={userStats} loading={loading} />
 
       {error && (
-        <div className="text-sm text-red-600">{error}</div>
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
+          {error}
+        </div>
       )}
 
-      <div className="rounded-2xl border bg-white/80 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/70 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 border-b bg-white/60 dark:bg-neutral-900/60">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+      <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
+        <div className="grid grid-cols-1 gap-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-slate-50 px-6 py-6 md:grid-cols-2 md:items-center">
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-300">Quick Search</span>
+            <div className="relative flex h-12 w-full items-center overflow-hidden rounded-xl border border-transparent bg-white/90 shadow-[0_15px_30px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 transition focus-within:ring-2 focus-within:ring-[#00674F] md:max-w-md">
+              <span className="pointer-events-none absolute left-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-[#00674F]/10 text-[#00674F]">
+                <MagnifyingGlassIcon className="h-4 w-4" />
+              </span>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Filter by name or email..."
-                className="h-10 w-60 rounded-lg border px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                placeholder="Type a name, email, or role…"
+                className="h-full w-full rounded-xl border-0 bg-transparent pl-12 pr-24 text-sm font-medium text-slate-600 outline-none placeholder:text-slate-300"
               />
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 inline-flex h-9 items-center gap-2 rounded-lg bg-[#00674F]/10 px-3 text-xs font-semibold uppercase tracking-[0.18em] text-[#00674F] transition hover:bg-[#00674F]/20"
+              >
+                Reset
+              </button>
             </div>
-            <div className="relative" ref={columnMenuRef}>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3" ref={columnMenuRef}>
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => setColumnMenuOpen((v) => !v)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border text-sm font-medium shadow-sm bg-white hover:bg-neutral-50"
+                className="group inline-flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
                 aria-haspopup="menu"
                 aria-expanded={columnMenuOpen}
               >
-                <SlidersHorizontal className="h-4 w-4" />
-                Columns
+                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-slate-50 text-slate-400 transition group-hover:bg-[#00674F]/10 group-hover:text-[#00674F]">
+                  <span className="absolute inset-0 rounded-lg border border-white/40" />
+                  <SlidersHorizontal className="h-[18px] w-[18px]" />
+                </span>
+                Manage Columns
               </button>
               {columnMenuOpen && (
-                <div className="absolute z-30 mt-2 w-52 rounded-lg border bg-white shadow-lg p-2">
-                  <p className="text-xs font-semibold text-neutral-500 px-1 pb-2">Toggle columns</p>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                <div className="absolute right-0 z-30 mt-3 w-60 rounded-2xl border border-slate-100 bg-white/95 p-4 shadow-[0_18px_36px_rgba(15,23,42,0.14)] ring-1 ring-slate-100">
+                  <p className="px-1 pb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">Visible Columns</p>
+                  <div className="max-h-56 space-y-1 overflow-y-auto text-sm">
                     {togglableColumns.map((col) => {
                       const key = String(col.key);
                       const checked = visibleKeys.includes(key);
                       return (
-                        <label key={key} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-neutral-100">
+                        <label
+                          key={key}
+                          className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50/0 px-3 py-2 text-slate-600 transition hover:bg-slate-50/90"
+                        >
                           <input
                             type="checkbox"
-                            className="h-3.5 w-3.5"
+                            className="h-4 w-4 rounded border-slate-300 text-[#00674F] focus:ring-[#008061]"
                             checked={checked}
                             onChange={() => toggleColumn(key)}
                           />
-                          <span className="truncate">{col.header}</span>
+                          <span className="flex-1 truncate text-sm font-medium">{col.header}</span>
+                          <span className="text-[10px] uppercase tracking-[0.3em] text-slate-300">{checked ? "On" : "Off"}</span>
                         </label>
                       );
                     })}
@@ -244,12 +290,9 @@ export default function UsersPage() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
             <Link
               href="/dashboard/users/create"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#00674F] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#008061]"
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
             >
               <Plus className="h-4 w-4" />
               Create User
@@ -259,48 +302,48 @@ export default function UsersPage() {
 
         <DataTable columns={visibleColumns as Column<UserRow>[]} data={paginatedRows} loading={loading} />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t bg-neutral-50/80 text-sm text-neutral-600">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>
             Showing {summaryStart} to {summaryEnd} of {filteredRows.length} user{filteredRows.length === 1 ? "" : "s"}
           </span>
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2">
-              <span className="text-xs uppercase tracking-wide text-neutral-500">Rows per page</span>
+            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Rows per page
               <select
                 value={rowsPerPage}
                 onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                className="h-9 rounded-md border px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="h-10 rounded-full border-0 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
               >
                 {[10, 25, 50].map((size) => (
                   <option key={size} value={size}>{size}</option>
                 ))}
               </select>
             </label>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 text-slate-500">
               <button
-                className="h-9 w-9 rounded-md border bg-white hover:bg-neutral-100 disabled:opacity-40"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold transition hover:border-blue-200 hover:text-blue-500 disabled:opacity-40"
                 onClick={() => setPage(1)}
                 disabled={page === 1}
               >
                 «
               </button>
               <button
-                className="h-9 w-9 rounded-md border bg-white hover:bg-neutral-100 disabled:opacity-40"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold transition hover:border-blue-200 hover:text-blue-500 disabled:opacity-40"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
                 ‹
               </button>
-              <span className="px-2 text-sm">Page {page} of {totalPages}</span>
+              <span className="px-3 text-sm font-semibold text-slate-500">Page {page} of {totalPages}</span>
               <button
-                className="h-9 w-9 rounded-md border bg-white hover:bg-neutral-100 disabled:opacity-40"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold transition hover:border-blue-200 hover:text-blue-500 disabled:opacity-40"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >
                 ›
               </button>
               <button
-                className="h-9 w-9 rounded-md border bg-white hover:bg-neutral-100 disabled:opacity-40"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold transition hover:border-blue-200 hover:text-blue-500 disabled:opacity-40"
                 onClick={() => setPage(totalPages)}
                 disabled={page === totalPages}
               >
@@ -310,87 +353,6 @@ export default function UsersPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatsRow({ rows, loading }: { rows: UserRow[]; loading: boolean }) {
-  const { total, active, inactive } = useMemo(() => {
-    const total = rows.length;
-    const active = rows.filter((u) => {
-      const status = String(u.status ?? '').toLowerCase();
-      return u.is_active === true || status.includes('aktif') || status.includes('active');
-    }).length;
-    const inactive = Math.max(0, total - active);
-    return { total, active, inactive };
-  }, [rows]);
-
-  const Card = ({
-    title,
-    value,
-    TopIcon,
-    tone,
-    sub,
-  }: {
-    title: string
-    value: number
-    TopIcon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-    tone: "cyan" | "emerald" | "rose"
-    sub?: { icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; text: string }
-  }) => {
-    const toneMap: Record<string, { bar: string; badge: string; text: string; ring: string }> = {
-      cyan: { bar: "bg-cyan-400", badge: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20", text: "", ring: "" },
-      emerald: { bar: "bg-emerald-400", badge: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20", text: "text-emerald-600 dark:text-emerald-300", ring: "" },
-      rose: { bar: "bg-rose-400", badge: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20", text: "text-rose-600 dark:text-rose-300", ring: "" },
-    }
-    const t = toneMap[tone]
-    return (
-      <div className="relative rounded-xl border bg-white/80 dark:bg-neutral-950/50 backdrop-blur supports-[backdrop-filter]:bg-white/60 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
-        <span className={["absolute left-0 top-3 bottom-3 w-1 rounded-full", t.bar].join(" ")} />
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-xs text-neutral-500">{title}</div>
-            <div className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">
-              {loading ? <span className="inline-block h-8 w-16 rounded bg-neutral-200/70 dark:bg-neutral-800/70 animate-pulse" /> : value}
-            </div>
-          </div>
-          <div className={["h-9 w-9 rounded-full grid place-items-center", t.badge].join(" ")}>
-            <TopIcon className="h-5 w-5" />
-          </div>
-        </div>
-        {sub && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-neutral-500">
-            <sub.icon className={["h-4 w-4", t.text].join(" ")} />
-            <span className="truncate">{sub.text}</span>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-      <Card
-        title="Total Users"
-        value={total}
-        TopIcon={UsersIcon}
-        tone="cyan"
-        sub={{ icon: ArrowTrendingUpIcon, text: `${total ? Math.round((active / Math.max(1,total)) * 100) : 0}% active users` }}
-      />
-      <Card
-        title="Active"
-        value={active}
-        TopIcon={UserIcon}
-        tone="emerald"
-        sub={{ icon: ArrowTrendingUpIcon, text: `${total ? Math.round((active / Math.max(1,total)) * 100) : 0}% of total` }}
-      />
-      <Card
-        title="Inactive"
-        value={inactive}
-        TopIcon={UserMinusIcon}
-        tone="rose"
-        sub={{ icon: ArrowTrendingDownIcon, text: `${total ? Math.round((inactive / Math.max(1,total)) * 100) : 0}% of total` }}
-      />
     </div>
   );
 }

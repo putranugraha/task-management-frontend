@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Division } from "@/types/division";
 import { fetchRolesList, fetchDivisionsList, type SimpleRole } from "@/lib/lookups";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronLeft, Loader2, Sparkles, ChevronsUpDown, Check } from "lucide-react";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 type FormState = {
   name: string;
@@ -37,6 +41,8 @@ export default function CreateUserPage() {
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type, checked } = e.target as any;
@@ -47,7 +53,13 @@ export default function CreateUserPage() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    setSuccessMessage(null);
     try {
+      if (form.password !== form.password_confirmation) {
+        setError("Password dan konfirmasi tidak sama");
+        setSubmitting(false);
+        return;
+      }
       const payload: Record<string, any> = {
         name: form.name,
         email: form.email,
@@ -61,7 +73,8 @@ export default function CreateUserPage() {
         division_id: form.division_id || null,
       };
       await apiRequest("POST", "/api/users", payload);
-      router.push("/dashboard/users");
+      setSuccessMessage("User berhasil ditambahkan.");
+      setTimeout(() => router.push("/dashboard/users"), 900);
     } catch (e: any) {
       setError(e?.message ?? "Gagal membuat user");
     } finally {
@@ -70,100 +83,372 @@ export default function CreateUserPage() {
   };
 
   useEffect(() => {
-    // Prefetch dropdown data; ignore errors (dropdowns optional)
+    let mounted = true;
     (async () => {
       try {
         const normalized = await fetchRolesList();
-        setRoles(normalized);
+        if (mounted) setRoles(normalized);
       } catch {
         try {
           const us = await apiRequest<any>("GET", "/api/users");
           const list = Array.isArray(us) ? us : (us?.data ?? []);
           const names: string[] = Array.from(
             new Set(
-              (list.map((u: any) => u.role)
-                .filter((v: any): v is string => typeof v === 'string'))
+              list
+                .map((u: any) => u.role)
+                .filter((v: any): v is string => typeof v === "string")
             )
           );
-          setRoles(names.map((n, i): SimpleRole => ({ id: i + 1, name: n })));
+          if (mounted) setRoles(names.map((n, i): SimpleRole => ({ id: i + 1, name: n })));
         } catch {}
       }
       try {
         const normalizedDivs = await fetchDivisionsList();
-        setDivisions(normalizedDivs);
+        if (mounted) setDivisions(normalizedDivs);
       } catch {}
+      if (mounted) setLookupsLoading(false);
     })();
+    return () => { mounted = false; };
   }, []);
 
+  const handleCancel = () => {
+    if (submitting) return;
+    router.push("/dashboard/users");
+  };
+
+  const checklistItems = useMemo(() => {
+    return [
+      {
+        key: "name",
+        label: "Isi nama dan email dengan benar",
+        completed: Boolean(form.name && form.email),
+      },
+      {
+        key: "credentials",
+        label: "Set password dan konfirmasi",
+        completed: Boolean(form.password && form.password_confirmation && form.password === form.password_confirmation),
+      },
+      {
+        key: "role",
+        label: "Pilih role dan division yang sesuai",
+        completed: Boolean(form.role_id || form.division_id),
+      },
+      {
+        key: "status",
+        label: "Pastikan status aktif sesuai kebutuhan",
+        completed: form.is_active,
+      },
+    ];
+  }, [form]);
+
+  const checklistProgress = useMemo(() => {
+    const total = checklistItems.length;
+    const done = checklistItems.filter((item) => item.completed).length;
+    return Math.round((done / total) * 100);
+  }, [checklistItems]);
+
+  const selectedRole = useMemo(() => {
+    if (!form.role_id) return null;
+    return roles.find((role) => role.id === Number(form.role_id)) ?? null;
+  }, [roles, form.role_id]);
+
+  const selectedDivision = useMemo(() => {
+    if (!form.division_id) return null;
+    return divisions.find((division) => division.id === Number(form.division_id)) ?? null;
+  }, [divisions, form.division_id]);
+
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-semibold mb-3">Create User</h2>
-      {error && <div className="text-sm text-red-600 mb-2">{error}</div>}
-      <form onSubmit={onSubmit} className="space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Name</label>
-          <input name="name" value={form.name} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Email</label>
-          <input type="email" name="email" value={form.email} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Password</label>
-          <input type="password" name="password" value={form.password} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-        </div>
-        {form.password !== undefined && (
-          <div>
-            <label className="block text-sm mb-1">Confirm Password</label>
-            <input type="password" name="password_confirmation" value={form.password_confirmation} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-          </div>
-        )}
-        <div>
-          <label className="block text-sm mb-1">Role</label>
-          <select
-            name="role_id"
-            value={form.role_id}
-            onChange={(e) => {
-              const id = e.target.value ? Number(e.target.value) : "";
-              const found = roles.find((r) => r.id === Number(id));
-              setForm((s) => ({ ...s, role_id: id, role_name: found?.name || "" }));
-            }}
-            required
-            className="w-full border rounded-md px-3 py-2"
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="group inline-flex items-center gap-2 text-sm font-medium text-[#00674F] transition hover:text-[#008061]"
           >
-            <option value="">Pilih role</option>
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-neutral-500 mt-1">Dikirim sebagai ID dan nama untuk kompatibilitas API.</p>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00674F]/10 text-[#00674F] transition group-hover:bg-[#008061]/20 group-hover:text-[#008061]">
+              <ChevronLeft className="h-4 w-4" />
+            </span>
+            Back to Users
+          </button>
+          <h1 className="text-3xl font-semibold text-slate-900">Create User</h1>
+          <p className="max-w-xl text-sm text-slate-500">
+            Lengkapi informasi anggota tim baru dan pastikan akses serta peran sudah tepat sebelum menyimpan.
+          </p>
         </div>
-        <div>
-          <label className="block text-sm mb-1">Job Title</label>
-          <input name="job_title" value={form.job_title} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
+          {error}
         </div>
-        <div>
-          <label className="block text-sm mb-1">Division</label>
-          <select name="division_id" value={form.division_id} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-            <option value="">(Optional) Pilih division</option>
-            {divisions.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" checked={form.is_active} onChange={onChange} /> Active</label>
-          <label className="text-sm">Status</label>
-          <select name="status" value={form.status} onChange={onChange} className="border rounded-md px-2 py-1 text-sm">
-            <option value="Aktif">Aktif</option>
-            <option value="Non Aktif">Non Aktif</option>
-          </select>
-        </div>
-        <div className="pt-2 flex items-center gap-2">
-          <button type="submit" disabled={submitting} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{submitting ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
-        </div>
-      </form>
+      )}
+
+      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <aside className="flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="w-full rounded-full bg-emerald-800/30">
+                <div
+                  className="h-1 rounded-full bg-white/80 transition-all duration-500"
+                  style={{ width: `${checklistProgress}%` }}
+                />
+              </div>
+              <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">Onboarding Checklist</h2>
+            </div>
+            <ul className="space-y-3 text-sm leading-relaxed">
+              {checklistItems.map((item) => (
+                <li
+                  key={item.key}
+                  className={`flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2 transition-all duration-300 hover:translate-x-1 ${item.completed ? "text-white opacity-100" : "text-white/70 opacity-60"}`}
+                >
+                  <CheckCircleIcon className={`h-5 w-5 flex-none ${item.completed ? "text-white" : "text-white/50"}`} />
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Tip</p>
+            <p className="text-sm leading-relaxed">
+              Gunakan password sementara yang akan diminta untuk diganti saat login pertama kali.
+            </p>
+          </div>
+        </aside>
+
+        <form
+          onSubmit={onSubmit}
+          className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
+        >
+          <div>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Account Details</h2>
+            <p className="text-xs text-neutral-400">Informasi dasar yang diperlukan untuk membuat akun baru.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="name" className="text-sm font-semibold text-slate-500">Name</label>
+              <input
+                id="name"
+                name="name"
+                value={form.name}
+                onChange={onChange}
+                required
+                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                placeholder="John Doe"
+                autoComplete="name"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-semibold text-slate-500">Email</label>
+              <input
+                id="email"
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={onChange}
+                required
+                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                placeholder="john@company.com"
+                autoComplete="email"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-semibold text-slate-500">Password</label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={onChange}
+                required
+                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                placeholder="••••••••"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="password_confirmation" className="text-sm font-semibold text-slate-500">Confirm Password</label>
+              <input
+                id="password_confirmation"
+                type="password"
+                name="password_confirmation"
+                value={form.password_confirmation}
+                onChange={onChange}
+                required
+                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                placeholder="Repeat password"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Role</label>
+              {lookupsLoading ? (
+                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={lookupsLoading}
+                      className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    >
+                      <span className={selectedRole ? "text-slate-700" : "text-slate-400"}>
+                        {selectedRole?.name ?? "Pilih role"}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+                  >
+                    {roles.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-neutral-400">Tidak ada data</div>
+                    ) : (
+                      roles.map((role) => (
+                        <DropdownMenuItem
+                          key={role.id}
+                          onSelect={() => {
+                            setForm((s) => ({ ...s, role_id: role.id, role_name: role.name }));
+                          }}
+                          className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                        >
+                          <span>{role.name}</span>
+                          {form.role_id === role.id && <Check className="h-4 w-4 text-emerald-500" />}
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <p className="text-xs text-slate-400">Role membantu mengatur hak akses dan notifikasi.</p>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="job_title" className="text-sm font-semibold text-slate-500">Job Title</label>
+              <input
+                id="job_title"
+                name="job_title"
+                value={form.job_title}
+                onChange={onChange}
+                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                placeholder="Product Manager"
+                autoComplete="organization-title"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Division</label>
+              {lookupsLoading ? (
+                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    >
+                      <span className={selectedDivision ? "text-slate-700" : "text-slate-400"}>
+                        {selectedDivision?.name ?? "(Optional) Pilih division"}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+                  >
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setForm((s) => ({ ...s, division_id: "" }));
+                      }}
+                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                    >
+                      <span>Tidak ada division</span>
+                      {form.division_id === "" && <Check className="h-4 w-4 text-emerald-500" />}
+                    </DropdownMenuItem>
+                    {divisions.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-neutral-400">Tidak ada data</div>
+                    ) : (
+                      divisions.map((division) => (
+                        <DropdownMenuItem
+                          key={division.id}
+                          onSelect={() => {
+                            setForm((s) => ({ ...s, division_id: division.id }));
+                          }}
+                          className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                        >
+                          <span>{division.name}</span>
+                          {Number(form.division_id) === division.id && <Check className="h-4 w-4 text-emerald-500" />}
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Status</label>
+              <div className="flex h-11 items-center gap-3 rounded-xl border border-slate-200 px-4 shadow-inner">
+                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="is_active"
+                    checked={form.is_active}
+                    onChange={onChange}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                  />
+                  Active
+                </label>
+                <span className="h-4 w-px bg-slate-200" />
+                <select
+                  name="status"
+                  value={form.status}
+                  onChange={onChange}
+                  className="rounded-lg border border-transparent bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition-all duration-300 hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_12px_24px_rgba(16,185,129,0.2)] focus:outline-none"
+                >
+                  <option value="Aktif">Aktif</option>
+                  <option value="Non Aktif">Non Aktif</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="text-xs text-slate-400">
+              Semua data terenkripsi dan dikirim melalui koneksi aman.
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:border-slate-300"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061] disabled:opacity-60"
+              >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {submitting ? "Saving" : "Create User"}
+              </button>
+            </div>
+          </div>
+          {successMessage && (
+            <p className="mt-3 text-sm font-medium text-emerald-600">✔ {successMessage}</p>
+          )}
+        </form>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   Mail,
   ShieldCheck,
   Trash2,
+  Pencil,
 } from "lucide-react";
 
 export type UserRow = {
@@ -70,19 +71,12 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
           </div>
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-900">{row.name ?? "-"}</div>
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
-              {row.email && (
-                <span className="inline-flex items-center gap-1 text-slate-500">
-                  <Mail className="h-3 w-3" />
-                  <span className="truncate max-w-[140px] md:max-w-[220px]">{row.email}</span>
-                </span>
-              )}
-              {row.division?.name && (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                  {row.division.name}
-                </span>
-              )}
-            </div>
+            {row.email && (
+              <div className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500">
+                <Mail className="h-3 w-3" />
+                <span className="truncate max-w-[140px] md:max-w-[220px]">{row.email}</span>
+              </div>
+            )}
           </div>
         </div>
       ),
@@ -94,6 +88,16 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
       render: (row) => (
         <span className="text-sm font-medium text-slate-600">
           {row.role ?? "-"}
+        </span>
+      ),
+    },
+    {
+      key: "division",
+      header: "Division",
+      className: "min-w-[140px]",
+      render: (row) => (
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          {row.division?.name ?? "-"}
         </span>
       ),
     },
@@ -152,18 +156,19 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
   ]), []);
 
   if (minimal) {
+    const compact = baseCols.filter((col) => ["name", "role", "status"].includes(String(col.key)));
     return [
-      ...baseCols.slice(0, 3),
+      ...compact,
       {
         key: "actions",
         header: "Actions",
         align: "right",
         render: (row) => (
           <Link
-            className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-700"
+            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#008061]"
             href={`/dashboard/users/${row.id}/edit`}
           >
-            View Details
+            Detail
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         ),
@@ -181,20 +186,27 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
           <Link
-            className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:from-slate-700 hover:to-slate-800"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
             href={`/dashboard/users/${row.id}/edit`}
+            title={`Edit ${row.name}`}
           >
-            View Details
-            <ArrowRight className="h-3.5 w-3.5" />
+            <Pencil className="h-4 w-4" />
           </Link>
           <button
             type="button"
             onClick={() => handleDelete(row)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:text-rose-500"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
             title={`Delete ${row.name}`}
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          <Link
+            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
+            href={`/dashboard/users/${row.id}/edit`}
+          >
+            Detail
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       ),
     },

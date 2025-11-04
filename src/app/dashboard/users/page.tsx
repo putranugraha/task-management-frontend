@@ -6,6 +6,9 @@ import { apiRequest } from "@/lib/api";
 import type { User as UserType } from "@/types/user";
 import DataTable from "./data-table";
 import { useUserColumns, type Column, type UserRow } from "./columns";
+import { Mail, ShieldCheck, AlertCircle, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Skeleton } from "@/components/ui/skeleton";
 import StatsRow from "@/components/dashboard/StatsRow";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Plus, SlidersHorizontal } from "lucide-react";
@@ -63,7 +66,50 @@ export default function UsersPage() {
     }
   };
 
-  const columns = useUserColumns(handleDelete);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailData, setDetailData] = useState<(UserRow & { last_login_at?: string | null; email_verified_at?: string | null; updated_at?: string | null }) | null>(null);
+
+  const openDetail = async (row: UserRow) => {
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const res = await apiRequest<any>("GET", `/api/users/${row.id}`);
+      const payload = (res && typeof res === 'object' && 'data' in res) ? (res as any).data : res;
+      const u = Array.isArray(payload) ? payload[0] : payload;
+      const role = u?.role ?? (Array.isArray(u?.roles) && u.roles.length ? (typeof u.roles[0] === 'string' ? u.roles[0] : u.roles[0]?.name) : null);
+      setDetailData({
+        id: Number(u.id),
+        name: u.name,
+        email: u.email,
+        role,
+        job_title: u.job_title ?? null,
+        is_active: Boolean(u.is_active ?? true),
+        status: u.status ?? 'Aktif',
+        division: u.division ? { id: Number(u.division.id), name: u.division.name } : null,
+        created_at: u.created_at,
+        updated_at: u.updated_at,
+        last_login_at: u.last_login_at ?? null,
+        email_verified_at: u.email_verified_at ?? null,
+      });
+    } catch (e: any) {
+      setDetailError(e?.message ?? "Gagal memuat detail user");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const columns = useUserColumns(handleDelete, { onDetail: openDetail });
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (!detailOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [detailOpen]);
 
   const [search, setSearch] = useState("");
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
@@ -302,6 +348,119 @@ export default function UsersPage() {
 
         <DataTable columns={visibleColumns as Column<UserRow>[]} data={paginatedRows} loading={loading} />
 
+        {detailOpen && (
+          (typeof document !== 'undefined') ? createPortal(
+          <div className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto p-6">
+            <div className="absolute inset-0 z-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setDetailOpen(false)} />
+            <div className="relative z-10 mt-16 w-full max-w-5xl">
+              <div className="rounded-3xl bg-white/95 shadow-[0_25px_45px_rgba(15,23,42,0.18)] ring-1 ring-slate-100 overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                  <h3 className="text-lg font-semibold text-slate-900">User Detail</h3>
+                  <button
+                    type="button"
+                    onClick={() => setDetailOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5 text-slate-500" />
+                  </button>
+                </div>
+                <div className="grid gap-8 p-6 lg:grid-cols-[0.9fr_1.1fr]">
+                  <aside className="flex h-full flex-col gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
+                    {detailLoading ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                          <div className="h-16 w-16 rounded-full bg-white/30 animate-pulse" />
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-40 rounded" />
+                            <Skeleton className="h-3 w-48 rounded" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Skeleton className="h-6 w-24 rounded-full" />
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                          <Skeleton className="h-6 w-16 rounded-full" />
+                        </div>
+                      </div>
+                    ) : detailData ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                          <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-lg font-bold">
+                            {getInitials(detailData.name, detailData.email)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xl font-semibold text-white">{detailData.name}</div>
+                            <div className="mt-1 inline-flex items-center gap-2 text-sm text-white/80">
+                              <Mail className="h-4 w-4" />
+                              <span className="truncate max-w-[220px] md:max-w-[260px]">{detailData.email}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {detailData.role && (
+                            <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
+                              {detailData.role}
+                            </span>
+                          )}
+                          {detailData.division?.name && (
+                            <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
+                              {detailData.division.name}
+                            </span>
+                          )}
+                          <span className={["inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold", (detailData.status ?? '').toLowerCase().includes('non') ? 'bg-rose-50 text-rose-500 ring-1 ring-rose-200' : 'bg-emerald-50 text-emerald-500 ring-1 ring-emerald-200'].join(' ')}>
+                            <span className="relative flex h-2 w-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current/40" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+                            </span>
+                            {detailData.status}
+                          </span>
+                          {detailData.is_active ? (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
+                              <ShieldCheck className="h-4 w-4" /> Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-500">
+                              <AlertCircle className="h-4 w-4" /> Inactive
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </aside>
+
+                  <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
+                    {detailLoading ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                        {[...Array(8)].map((_, i) => (
+                          <div key={i} className="space-y-2">
+                            <Skeleton className="h-3 w-20 rounded" />
+                            <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : detailError ? (
+                      <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{detailError}</div>
+                    ) : detailData ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                        <Row label="Name" value={detailData.name} />
+                        <Row label="Email" value={detailData.email} />
+                        <Row label="Role" value={detailData.role ?? '-'} />
+                        <Row label="Division" value={detailData.division?.name ?? '-'} />
+                        <Row label="Status" value={detailData.status ?? '-'} />
+                        <Row label="Active" value={detailData.is_active ? 'Yes' : 'No'} />
+                        <Row label="Last Login" value={detailData.last_login_at ?? '-'} />
+                        <Row label="Email Verified" value={detailData.email_verified_at ?? '-'} />
+                        <Row label="Created At" value={detailData.created_at ?? '-'} />
+                        <Row label="Updated At" value={detailData.updated_at ?? '-'} />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>, document.body) : null
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>
             Showing {summaryStart} to {summaryEnd} of {filteredRows.length} user{filteredRows.length === 1 ? "" : "s"}
@@ -355,4 +514,22 @@ export default function UsersPage() {
       </div>
     </div>
   );
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
+        <span className="truncate w-full whitespace-nowrap">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function getInitials(name?: string | null, fallback?: string | null) {
+  const source = (name ?? fallback ?? "").trim();
+  if (!source) return "?";
+  const parts = source.split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0] ?? "").join("").toUpperCase();
 }

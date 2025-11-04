@@ -124,9 +124,9 @@ export default function CreateRolePage() {
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{error}</div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid min-w-0 w-full items-start gap-6 md:gap-8 lg:grid-cols-[1fr_1.2fr] xl:grid-cols-[1fr_1.4fr]">
         {/* Sidebar checklist */}
-        <aside className="flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
+        <aside className="min-w-0 flex flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
           <div className="space-y-5">
             <div className="space-y-3">
               <div className="w-full rounded-full bg-emerald-800/30">
@@ -153,13 +153,13 @@ export default function CreateRolePage() {
         </aside>
 
         {/* Form */}
-        <form onSubmit={onSubmit} className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
+        <form onSubmit={onSubmit} className="min-w-0 flex w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
           <div>
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Role Details</h2>
             <p className="text-xs text-neutral-400">Informasi dasar role dan pengaturan akses.</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="min-w-0 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-semibold text-slate-500">Name</label>
               <input
@@ -210,7 +210,7 @@ export default function CreateRolePage() {
             <label className="text-sm font-semibold text-slate-500">Permissions</label>
             <div className="rounded-2xl border border-slate-200 bg-white p-3">
               {lookupsLoading ? (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div className="min-w-0 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {[...Array(8)].map((_, i) => (
                     <Skeleton key={i} className="h-9 w-full rounded-xl bg-neutral-200/60" />
                   ))}
@@ -218,7 +218,7 @@ export default function CreateRolePage() {
               ) : permissions.length === 0 ? (
                 <div className="px-2 py-8 text-center text-sm text-neutral-400">No permissions found</div>
               ) : (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div className="min-w-0 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {permissions.map((p) => {
                     const checked = form.permissions.includes(p.name);
                     return (

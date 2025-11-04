@@ -52,7 +52,10 @@ const statusClasses = (value: string) => {
   return "bg-emerald-50 text-emerald-500 ring-1 ring-emerald-200";
 };
 
-export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minimal?: boolean }): Column<UserRow>[] {
+export function useUserColumns(
+  onDelete?: (row: UserRow) => void,
+  opts?: { minimal?: boolean; onDetail?: (row: UserRow) => void }
+): Column<UserRow>[] {
   const handleDelete = useCallback((row: UserRow) => {
     if (onDelete) onDelete(row);
   }, [onDelete]);
@@ -164,13 +167,24 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
         header: "Actions",
         align: "right",
         render: (row) => (
-          <Link
-            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#008061]"
-            href={`/dashboard/users/${row.id}/edit`}
-          >
-            Detail
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          opts?.onDetail ? (
+            <button
+              type="button"
+              onClick={() => opts.onDetail?.(row)}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#008061]"
+            >
+              Detail
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Link
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#008061]"
+              href={`/dashboard/users/${row.id}`}
+            >
+              Detail
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )
         ),
       },
     ];
@@ -200,13 +214,24 @@ export function useUserColumns(onDelete?: (row: UserRow) => void, opts?: { minim
           >
             <Trash2 className="h-4 w-4" />
           </button>
-          <Link
-            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
-            href={`/dashboard/users/${row.id}/edit`}
-          >
-            Detail
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          {opts?.onDetail ? (
+            <button
+              type="button"
+              onClick={() => opts.onDetail?.(row)}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
+            >
+              Detail
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Link
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
+              href={`/dashboard/users/${row.id}`}
+            >
+              Detail
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </div>
       ),
     },

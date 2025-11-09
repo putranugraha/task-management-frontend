@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
-import { useSearchParams } from "next/navigation";
 import { listByProject as listMilestonesByProject } from "@/lib/api/milestones";
 import type { Milestone } from "@/types/milestone";
 import { fetchProjectsList } from "@/lib/lookups";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 
 type FormState = {
   project_id: number | "";
@@ -41,6 +43,7 @@ export default function CreateTaskPage() {
   const [milestoneId, setMilestoneId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string }>>([]);
@@ -119,7 +122,8 @@ export default function CreateTaskPage() {
           throw lastErr;
         }
       }
-      router.push("/dashboard/tasks");
+      setSuccessMessage("Task berhasil dibuat.");
+      setTimeout(() => router.push("/dashboard/tasks"), 900);
     } catch (e: any) {
       const status = e?.response?.status;
       const msg = e?.response?.data?.message || e?.message;
@@ -212,210 +216,318 @@ export default function CreateTaskPage() {
     })();
   }, [milestoneId]);
 
+  const handleCancel = () => {
+    if (submitting) return;
+    router.push("/dashboard/tasks");
+  };
+
+  const checklistItems = useMemo(() => {
+    return [
+      { key: 'title', label: 'Isi judul task', completed: Boolean(form.title.trim()) },
+      { key: 'plan', label: 'Atur tanggal rencana', completed: Boolean(form.start_planned && form.end_planned) },
+      { key: 'progress', label: 'Set progress 0-100', completed: form.percent_complete >= 0 && form.percent_complete <= 100 },
+      { key: 'project', label: 'Opsional: pilih project/milestone', completed: Boolean(form.project_id || milestoneId) },
+    ];
+  }, [form.title, form.start_planned, form.end_planned, form.percent_complete, form.project_id, milestoneId]);
+
+  const checklistProgress = useMemo(() => {
+    const total = checklistItems.length;
+    const done = checklistItems.filter((i) => i.completed).length;
+    return Math.round((done / total) * 100);
+  }, [checklistItems]);
+
+  const selectedProject = useMemo(() => {
+    if (!form.project_id) return null;
+    return projects.find((p) => Number(p.id) === Number(form.project_id)) ?? null;
+  }, [projects, form.project_id]);
+
+  const selectedMilestone = useMemo(() => {
+    if (!milestoneId) return null;
+    return milestones.find((m) => Number(m.id) === Number(milestoneId)) ?? null;
+  }, [milestones, milestoneId]);
+
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-semibold mb-3">Create Task</h2>
-      {error && <div className="text-sm text-red-600 mb-2">{error}</div>}
-      <form onSubmit={onSubmit} className="space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Project</label>
-          <select name="project_id" value={form.project_id} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-            <option value="">(Optional) Pilih project</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-2">
+          <button type="button" onClick={handleCancel} className="group inline-flex items-center gap-2 text-sm font-medium text-[#00674F] transition hover:text-[#008061]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00674F]/10 text-[#00674F] transition group-hover:bg-[#008061]/20 group-hover:text-[#008061]">
+              <ChevronLeft className="h-4 w-4" />
+            </span>
+            Back to Tasks
+          </button>
+          <h1 className="text-3xl font-semibold text-slate-900">Create Task</h1>
+          <p className="max-w-xl text-sm text-slate-500">Lengkapi informasi task agar tim paham konteks, jadwal, dan keterkaitannya.</p>
         </div>
-        <div>
-          <label className="block text-sm mb-1">Milestone (optional)</label>
-          <select
-            name="milestone_id"
-            value={milestoneId}
-            onChange={(e) => setMilestoneId(e.target.value ? Number(e.target.value) : "")}
-            className="w-full border rounded-md px-3 py-2"
-            disabled={!form.project_id}
-          >
-            <option value="">Unassigned</option>
-            {milestones.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
-          {!form.project_id && (
-            <p className="text-xs text-neutral-500 mt-1">Pilih project terlebih dahulu untuk menampilkan milestones.</p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Title</label>
-          <input name="title" value={form.title} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Description</label>
-          <textarea name="description" value={form.description} onChange={onChange} className="w-full border rounded-md px-3 py-2" rows={4} />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm mb-1">Priority</label>
-            <select name="priority" value={form.priority} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-              <option>Critical</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Status</label>
-            <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-              <option>To Do</option>
-              <option>In Progress</option>
-              <option>Done</option>
-              <option>On Hold</option>
-              <option>Cancelled</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Assigned Users</label>
-          {usersLoading ? (
-            <div className="text-xs text-neutral-500">Loading users...</div>
-          ) : users.length === 0 ? (
-            <div className="text-xs text-neutral-500">No users available.</div>
-          ) : (
-            <div className="border rounded-md px-3 py-2 max-h-56 overflow-auto space-y-1">
-              {users.map((u) => {
-                const checked = (form.assignments?.some(a => a.user_id === u.id)) ?? false;
-                return (
-                  <label key={u.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={checked}
-                      onChange={(e) => {
-                        setForm((s) => {
-                          const current = s.assignments ?? [];
-                          if (e.target.checked) {
-                            if (!current.some(a => a.user_id === u.id)) {
-                              return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null }] };
-                            }
-                            return s;
-                          } else {
-                            return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
-                          }
-                        });
-                      }}
-                    />
-                    <span>{u.name}</span>
-                  </label>
-                );
-              })}
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{error}</div>
+      )}
+
+      <div className="grid gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="w-full rounded-full bg-emerald-800/30">
+                <div className="h-1 rounded-full bg-white/80 transition-all duration-500" style={{ width: `${checklistProgress}%` }} />
+              </div>
+              <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">Task Checklist</h2>
             </div>
-          )}
-        </div>
-        {milestoneId ? (
+            <ul className="space-y-3 text-sm leading-relaxed">
+              {checklistItems.map((item) => (
+                <li key={item.key} className={`flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2 transition-all duration-300 hover:translate-x-1 ${item.completed ? 'text-white opacity-100' : 'text-white/70 opacity-60'}`}>
+                  <span className={`mt-0.5 inline-block h-5 w-5 rounded-full ${item.completed ? 'bg-white' : 'bg-white/40'}`} />
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Tip</p>
+            <p className="text-sm leading-relaxed">Isi judul yang jelas dan target waktu realistis agar tim mudah sinkron.</p>
+          </div>
+        </aside>
+
+        <form onSubmit={onSubmit} className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
           <div>
-            <label className="block text-sm mb-1">Dependencies (optional)</label>
-            {depsLoading ? (
-              <div className="text-xs text-neutral-500">Loading dependencies...</div>
-            ) : depOptions.length === 0 ? (
-              <div className="text-xs text-neutral-500">No dependency candidates</div>
-            ) : (
-              <select
-                multiple
-                className="w-full border rounded-md px-3 py-2 min-h-[120px]"
-                value={(form.dependencies?.map(d => d.depends_on_task_id) ?? []) as any}
-                onChange={(e) => {
-                  const values = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
-                  const unique = Array.from(new Set(values));
-                  setForm((s) => {
-                    const prev = s.dependencies || [];
-                    // Preserve existing type/lag for still-selected items; default new ones
-                    const next = unique.map((id) => {
-                      const found = prev.find(d => d.depends_on_task_id === id);
-                      return found ? found : { depends_on_task_id: id, type: 'FS' as const, lag_days: 0 };
-                    });
-                    return { ...s, dependencies: next };
-                  });
-                }}
-              >
-                {depOptions.map((o) => (
-                  <option key={o.id} value={o.id}>{o.title}</option>
-                ))}
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Task Details</h2>
+            <p className="text-xs text-neutral-400">Informasi dasar task.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Project</label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    <span className={selectedProject ? 'text-slate-700' : 'text-slate-400'}>
+                      {selectedProject?.name ?? 'Pilih project (opsional)'}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                  <DropdownMenuItem onSelect={() => setForm((s) => ({ ...s, project_id: "" }))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                    <span>Tanpa project</span>
+                    {!form.project_id && <Check className="h-4 w-4 text-emerald-500" />}
+                  </DropdownMenuItem>
+                  {projects.map((p) => (
+                    <DropdownMenuItem key={p.id} onSelect={() => setForm((s) => ({ ...s, project_id: Number(p.id) }))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                      <span>{p.name}</span>
+                      {Number(form.project_id) === Number(p.id) && <Check className="h-4 w-4 text-emerald-500" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Milestone</label>
+              {form.project_id ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                      <span className={selectedMilestone ? 'text-slate-700' : 'text-slate-400'}>
+                        {selectedMilestone?.name ?? 'Pilih milestone (opsional)'}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                    <DropdownMenuItem onSelect={() => setMilestoneId("")} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                      <span>Tanpa milestone</span>
+                      {!milestoneId && <Check className="h-4 w-4 text-emerald-500" />}
+                    </DropdownMenuItem>
+                    {milestones.map((m) => (
+                      <DropdownMenuItem key={m.id} onSelect={() => setMilestoneId(Number(m.id))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                        <span>{m.name}</span>
+                        {Number(milestoneId) === Number(m.id) && <Check className="h-4 w-4 text-emerald-500" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="title" className="text-sm font-semibold text-slate-500">Title</label>
+              <input id="title" name="title" value={form.title} onChange={onChange} required className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="Implement login page" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Priority</label>
+              <select name="priority" value={form.priority} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+                <option>Critical</option>
               </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Status</label>
+              <select name="status" value={form.status} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
+                <option>To Do</option>
+                <option>In Progress</option>
+                <option>Done</option>
+                <option>On Hold</option>
+                <option>Cancelled</option>
+              </select>
+            </div>
+            {false && (
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-500">Percent Complete</label>
+                <input type="number" min={0} max={100} name="percent_complete" value={form.percent_complete} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="0-100" />
+              </div>
             )}
-            <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Hold Ctrl/Cmd to select multiple.</p>
-            {Array.isArray(form.dependencies) && form.dependencies.length > 0 && (
-              <div className="mt-2 grid gap-2">
-                {form.dependencies.map((d, idx) => {
-                  const title = depOptions.find(o => o.id === d.depends_on_task_id)?.title ?? `#${d.depends_on_task_id}`;
-                  return (
-                    <div key={`${d.depends_on_task_id}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="px-2 py-1 bg-neutral-100 rounded">{title}</span>
-                      <select
-                        className="border rounded px-2 py-1"
-                        value={(d.type as any) || 'FS'}
-                        onChange={(e) => {
-                          const val = e.target.value as 'FS'|'SS'|'FF'|'SF';
-                          setForm((s) => ({
-                            ...s,
-                            dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, type: val } : x)
-                          }));
-                        }}
-                      >
-                        <option value="FS">FS</option>
-                        <option value="SS">SS</option>
-                        <option value="FF">FF</option>
-                        <option value="SF">SF</option>
-                      </select>
-                      <div className="flex items-center gap-1">
-                        <label className="text-xs text-neutral-600">Lag</label>
+            <div className="space-y-2 md:col-span-2 lg:col-span-3">
+              <label htmlFor="description" className="text-sm font-semibold text-slate-500">Description</label>
+              <textarea id="description" name="description" value={form.description} onChange={onChange} rows={4} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="Context, goals, acceptance criteria…" />
+            </div>
+          </div>
+          <div>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Planning</h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-500">Start Planned</label>
+                <input type="date" name="start_planned" value={form.start_planned} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-500">End Planned</label>
+                <input type="date" name="end_planned" value={form.end_planned} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Assignments</h2>
+            {usersLoading ? (
+              <Skeleton className="h-24 w-full rounded-xl bg-neutral-200/50" />
+            ) : users.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">No users available.</div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-inner">
+                <div className="grid max-h-56 grid-cols-1 gap-1 overflow-auto">
+                  {users.map((u) => {
+                    const checked = (form.assignments?.some(a => a.user_id === u.id)) ?? false;
+                    return (
+                      <label key={u.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50">
+                        <span className="text-slate-700">{u.name}</span>
                         <input
-                          type="number"
-                          className="w-20 border rounded px-2 py-1"
-                          value={Number(d.lag_days ?? 0)}
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                          checked={checked}
                           onChange={(e) => {
-                            const val = Number(e.target.value || 0);
-                            setForm((s) => ({
-                              ...s,
-                              dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, lag_days: val } : x)
-                            }));
+                            setForm((s) => {
+                              const current = s.assignments ?? [];
+                              if (e.target.checked) {
+                                if (!current.some(a => a.user_id === u.id)) {
+                                  return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null }] };
+                                }
+                                return s;
+                              } else {
+                                return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
+                              }
+                            });
                           }}
                         />
-                      </div>
-                      <button
-                        type="button"
-                        className="ml-auto px-2 py-1 border rounded hover:bg-neutral-50"
-                        onClick={() => {
-                          setForm((s) => ({
-                            ...s,
-                            dependencies: (s.dependencies || []).filter((x) => x.depends_on_task_id !== d.depends_on_task_id)
-                          }));
-                        }}
-                      >Remove</button>
-                    </div>
-                  );
-                })}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
-        ) : null}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm mb-1">Start Planned</label>
-            <input type="date" name="start_planned" value={form.start_planned} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
+          {milestoneId ? (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Dependencies</h2>
+              {depsLoading ? (
+                <Skeleton className="h-24 w-full rounded-xl bg-neutral-200/50" />
+              ) : depOptions.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">No dependency candidates.</div>
+              ) : (
+                <select
+                  multiple
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner min-h-[120px]"
+                  value={(form.dependencies?.map(d => d.depends_on_task_id) ?? []) as any}
+                  onChange={(e) => {
+                    const values = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
+                    const unique = Array.from(new Set(values));
+                    setForm((s) => {
+                      const prev = s.dependencies || [];
+                      const next = unique.map((id) => {
+                        const found = prev.find(d => d.depends_on_task_id === id);
+                        return found ? found : { depends_on_task_id: id, type: 'FS' as const, lag_days: 0 };
+                      });
+                      return { ...s, dependencies: next };
+                    });
+                  }}
+                >
+                  {depOptions.map((o) => (
+                    <option key={o.id} value={o.id}>{o.title}</option>
+                  ))}
+                </select>
+              )}
+              {Array.isArray(form.dependencies) && form.dependencies.length > 0 && (
+                <div className="mt-2 grid gap-2">
+                  {form.dependencies.map((d, idx) => {
+                    const title = depOptions.find(o => o.id === d.depends_on_task_id)?.title ?? `#${d.depends_on_task_id}`;
+                    return (
+                      <div key={`${d.depends_on_task_id}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="rounded bg-neutral-100 px-2 py-1">{title}</span>
+                        <select
+                          className="rounded border px-2 py-1"
+                          value={(d.type as any) || 'FS'}
+                          onChange={(e) => {
+                            const val = e.target.value as 'FS'|'SS'|'FF'|'SF';
+                            setForm((s) => ({
+                              ...s,
+                              dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, type: val } : x)
+                            }));
+                          }}
+                        >
+                          <option value="FS">FS</option>
+                          <option value="SS">SS</option>
+                          <option value="FF">FF</option>
+                          <option value="SF">SF</option>
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <label className="text-xs text-neutral-600">Lag</label>
+                          <input
+                            type="number"
+                            className="w-20 rounded border px-2 py-1"
+                            value={Number(d.lag_days ?? 0)}
+                            onChange={(e) => {
+                              const val = Number(e.target.value || 0);
+                              setForm((s) => ({
+                                ...s,
+                                dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, lag_days: val } : x)
+                              }));
+                            }}
+                          />
+                        </div>
+                        <button type="button" className="ml-auto rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => {
+                          setForm((s) => ({ ...s, dependencies: (s.dependencies || []).filter((x) => x.depends_on_task_id !== d.depends_on_task_id) }));
+                        }}>Remove</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="text-xs text-slate-400">Semua data dikirim melalui koneksi aman.</div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleCancel} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:border-slate-300" disabled={submitting}>Cancel</button>
+              <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061] disabled:opacity-60">
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {submitting ? 'Saving' : 'Create Task'}
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm mb-1">End Planned</label>
-            <input type="date" name="end_planned" value={form.end_planned} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Percent Complete</label>
-          <input type="number" min={0} max={100} name="percent_complete" value={form.percent_complete} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div className="pt-2 flex items-center gap-2">
-          <button type="submit" disabled={submitting} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{submitting ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
-        </div>
-      </form>
+          {successMessage && (
+            <p className="mt-3 text-sm font-medium text-emerald-600">✔ {successMessage}</p>
+          )}
+        </form>
+      </div>
     </div>
   );
 }

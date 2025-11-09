@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 type SimpleUser = { id: number; name: string };
 
@@ -28,6 +32,7 @@ export default function EditProjectPage() {
 
   const [form, setForm] = useState<ProjectDetail | null>(null);
   const [owners, setOwners] = useState<SimpleUser[]>([]);
+  const [ownersLoading, setOwnersLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +71,18 @@ export default function EditProjectPage() {
   }, [id]);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
+      setOwnersLoading(true);
       try {
         const rs = await apiRequest<any>("GET", "/api/users");
         const list = Array.isArray(rs) ? rs : (rs?.data ?? []);
         const normalized: SimpleUser[] = list.map((u: any) => ({ id: Number(u.id), name: u.name ?? u.full_name ?? u.email }));
-        setOwners(normalized);
+        if (mounted) setOwners(normalized);
       } catch {}
+      if (mounted) setOwnersLoading(false);
     })();
+    return () => { mounted = false; };
   }, []);
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -107,68 +116,174 @@ export default function EditProjectPage() {
     }
   };
 
+  const handleCancel = () => {
+    if (saving) return;
+    router.push("/dashboard/projects");
+  };
+
+  const checklistItems = useMemo(() => {
+    return [
+      { key: "basic", label: "Nama, client, dan nilai terisi", completed: Boolean(form?.name && form?.client_name && String(form?.value_amount ?? '').length) },
+      { key: "timeline", label: "Tanggal mulai dan selesai diset", completed: Boolean(form?.start_planned && form?.end_planned) },
+      { key: "owner", label: "Owner dan status proyek ditinjau", completed: Boolean(form?.status) },
+      { key: "scope", label: "Scope dan objective diperbarui", completed: Boolean(String(form?.scope ?? '').length || String(form?.objective ?? '').length) },
+    ];
+  }, [form]);
+  const checklistProgress = useMemo(() => {
+    const total = checklistItems.length;
+    const done = checklistItems.filter((i) => i.completed).length;
+    return Math.round((done / total) * 100);
+  }, [checklistItems]);
+
+  const selectedOwner = useMemo(() => {
+    const ownerId = form?.division_owner_id;
+    if (!ownerId) return null;
+    return owners.find((o) => o.id === Number(ownerId)) ?? null;
+  }, [owners, form?.division_owner_id]);
+
   if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
   if (!form) return <div>Not found</div>;
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-semibold mb-3">Edit Project</h2>
-      <form onSubmit={onSubmit} className="space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Name</label>
-          <input name="name" value={form.name} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Client Name</label>
-          <input name="client_name" value={form.client_name} onChange={onChange} required className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Value Amount (IDR)</label>
-          <input name="value_amount" value={String(form.value_amount ?? '')} onChange={onChange} inputMode="decimal" className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Owner</label>
-          <select
-            name="division_owner_id"
-            value={form.division_owner_id ?? ''}
-            onChange={(e) => setForm((s) => s ? { ...s, division_owner_id: e.target.value ? Number(e.target.value) : null } : s)}
-            className="w-full border rounded-md px-3 py-2"
+    <div className="space-y-8">
+      {error && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{error}</div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="group inline-flex items-center gap-2 text-sm font-medium text-[#00674F] transition hover:text-[#008061]"
           >
-            <option value="">(Optional) Pilih owner</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </select>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00674F]/10 text-[#00674F] transition group-hover:bg-[#008061]/20 group-hover:text-[#008061]">
+              <ChevronLeft className="h-4 w-4" />
+            </span>
+            Back to Projects
+          </button>
+          <h1 className="text-3xl font-semibold text-slate-900">Edit Project</h1>
+          <p className="max-w-xl text-sm text-slate-500">Perbarui detail proyek agar tetap sinkron dengan kondisi terkini.</p>
         </div>
-        <div>
-          <label className="block text-sm mb-1">Start Planned</label>
-          <input type="date" name="start_planned" value={form.start_planned ?? ''} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">End Planned</label>
-          <input type="date" name="end_planned" value={form.end_planned ?? ''} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="text-sm">Status</label>
-          <select name="status" value={form.status} onChange={onChange} className="border rounded-md px-2 py-1 text-sm">
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Scope</label>
-          <textarea name="scope" value={form.scope ?? ''} onChange={onChange} rows={3} className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Objective</label>
-          <textarea name="objective" value={form.objective ?? ''} onChange={onChange} rows={3} className="w-full border rounded-md px-3 py-2" />
-        </div>
-        <div className="pt-2 flex items-center gap-2">
-          <button type="submit" disabled={saving} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{saving ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
-        </div>
-      </form>
+      </div>
+
+      <div className="grid gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="w-full rounded-full bg-emerald-800/30">
+                <div className="h-1 rounded-full bg-white/80 transition-all duration-500" style={{ width: `${checklistProgress}%` }} />
+              </div>
+              <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">Review Checklist</h2>
+            </div>
+            <ul className="space-y-3 text-sm leading-relaxed">
+              {checklistItems.map((item) => (
+                <li key={item.key} className={`flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2 transition-all duration-300 hover:translate-x-1 ${item.completed ? "text-white opacity-100" : "text-white/70 opacity-60"}`}>
+                  <CheckCircleIcon className={`h-5 w-5 flex-none ${item.completed ? "text-white" : "text-white/50"}`} />
+                  <span>{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Tip</p>
+            <p className="text-sm leading-relaxed">Validasi kembali tanggal agar tidak bertabrakan dengan milestone.</p>
+          </div>
+        </aside>
+
+        <form onSubmit={onSubmit} className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
+          <div>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Project Details</h2>
+            <p className="text-xs text-neutral-400">Ubah informasi proyek sesuai kebutuhan.</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <label htmlFor="name" className="text-sm font-semibold text-slate-500">Name</label>
+              <input id="name" name="name" value={form.name} onChange={onChange} required className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="client_name" className="text-sm font-semibold text-slate-500">Client</label>
+              <input id="client_name" name="client_name" value={form.client_name} onChange={onChange} required className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="value_amount" className="text-sm font-semibold text-slate-500">Value (IDR)</label>
+              <input id="value_amount" name="value_amount" value={String(form.value_amount ?? '')} onChange={onChange} inputMode="decimal" className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Owner</label>
+              {ownersLoading ? (
+                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                      <span className={selectedOwner ? "text-slate-700" : "text-slate-400"}>{selectedOwner?.name ?? "Pilih owner"}</span>
+                      <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[240px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                    {owners.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-neutral-400">Tidak ada data</div>
+                    ) : (
+                      owners.map((o) => (
+                        <DropdownMenuItem key={o.id} onSelect={() => setForm((s) => s ? { ...s, division_owner_id: o.id } : s)} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                          <span>{o.name}</span>
+                          {form.division_owner_id === o.id && <Check className="h-4 w-4 text-emerald-500" />}
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="start_planned" className="text-sm font-semibold text-slate-500">Start Planned</label>
+              <input id="start_planned" type="date" name="start_planned" value={form.start_planned ?? ''} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="end_planned" className="text-sm font-semibold text-slate-500">End Planned</label>
+              <input id="end_planned" type="date" name="end_planned" value={form.end_planned ?? ''} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Status</label>
+              <div className="flex h-11 items-center gap-3 rounded-xl border border-slate-200 px-4 shadow-inner">
+                <select name="status" value={form.status} onChange={onChange} className="rounded-lg border border-transparent bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition-all duration-300 hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_12px_24px_rgba(16,185,129,0.2)] focus:outline-none">
+                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-2 md:col-span-3">
+              <label htmlFor="scope" className="text-sm font-semibold text-slate-500">Scope</label>
+              <textarea id="scope" name="scope" value={form.scope ?? ''} onChange={onChange} rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+            <div className="space-y-2 md:col-span-3">
+              <label htmlFor="objective" className="text-sm font-semibold text-slate-500">Objective</label>
+              <textarea id="objective" name="objective" value={form.objective ?? ''} onChange={onChange} rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="text-xs text-slate-400">Perubahan akan mempengaruhi timeline dan alokasi tim.</div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={handleCancel} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:border-slate-300" disabled={saving}>Cancel</button>
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061] disabled:opacity-60">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? "Saving" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
-

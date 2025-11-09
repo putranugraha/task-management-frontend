@@ -1,7 +1,5 @@
 import { apiRequest } from "@/lib/api";
-import type { Milestone } from "@/types/milestone";
-
-export type MilestoneStatus = 'Planned' | 'In Progress' | 'Completed' | 'Overdue' | 'On Hold';
+import type { Milestone, MilestoneStatus } from "@/types/milestone";
 
 export type CreateMilestoneDto = {
   name: string;

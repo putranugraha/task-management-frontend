@@ -1,5 +1,7 @@
 "use client";
 
+import { Pencil, Trash2 } from "lucide-react";
+
 export type ProjectRow = {
   id: number;
   name: string;
@@ -13,15 +15,16 @@ export type ProjectRow = {
 };
 
 export type Column<T> = {
-  key: keyof T | "actions";
+  key: keyof T | "actions" | string;
   header: string;
-  render?: (row: T) => React.ReactNode;
+  render?: (row: T, index: number) => React.ReactNode;
   className?: string;
+  align?: "left" | "center" | "right";
 };
 
 export function useProjectColumns(
   onDelete?: (row: ProjectRow) => void,
-  opts?: { minimal?: boolean }
+  opts?: { minimal?: boolean; onDetail?: (row: ProjectRow) => void }
 ): Column<ProjectRow>[] {
   const minimal = opts?.minimal === true;
 
@@ -38,18 +41,33 @@ export function useProjectColumns(
   };
 
   const fullCols: Column<ProjectRow>[] = [
-    { key: "name", header: "Project" },
-    { key: "client_name", header: "Client" },
-    { key: "value_amount", header: "Value", render: (r) => currency(r.value_amount) },
-    { key: "status", header: "Status" },
+    {
+      key: "name",
+      header: "Project",
+      className: "min-w-[220px]",
+      render: (r) => (
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-900">{r.name}</div>
+          {r.client_name && (
+            <div className="mt-0.5 text-xs text-slate-500">{r.client_name}</div>
+          )}
+        </div>
+      ),
+    },
+    { key: "status", header: "Status", align: "center", render: (r) => (
+      <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+        {r.status ?? '-'}
+      </span>
+    ) },
+    { key: "start_planned", header: "Start", render: (r) => r.start_planned ? new Date(r.start_planned).toLocaleDateString() : '-' },
+    { key: "end_planned", header: "End", render: (r) => r.end_planned ? new Date(r.end_planned).toLocaleDateString() : '-' },
+    { key: "value_amount", header: "Value", align: "right", render: (r) => <span className="font-semibold">{currency(r.value_amount)}</span> },
     { key: "division_owner", header: "Owner", render: (r) => r.division_owner?.name ?? '-' },
-    { key: "start_planned", header: "Start" },
-    { key: "end_planned", header: "End" },
   ];
 
   const minimalCols: Column<ProjectRow>[] = [
-    { key: "name", header: "Project" },
-    { key: "status", header: "Status" },
+    { key: "name", header: "Project", className: "min-w-[220px]" },
+    { key: "status", header: "Status", align: "center" },
     { key: "start_planned", header: "Start" },
     { key: "end_planned", header: "End" },
   ];
@@ -61,11 +79,30 @@ export function useProjectColumns(
     {
       key: "actions",
       header: "Actions",
+      align: "right",
       render: (row) => (
-        <div className="flex gap-2 text-sm">
-          <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/projects/${row.id}`}>Detail</a>
-          <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/projects/${row.id}/edit`}>Edit</a>
-          <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50" onClick={() => onDelete?.(row)}>Delete</button>
+        <div className="flex items-center justify-end gap-3">
+          <a
+            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#008061]"
+            href={`/dashboard/projects/${row.id}`}
+          >
+            Detail
+          </a>
+          <a
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+            href={`/dashboard/projects/${row.id}/edit`}
+            title={`Edit ${row.name}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </a>
+          <button
+            type="button"
+            onClick={() => onDelete?.(row)}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+            title={`Delete ${row.name}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       ),
     },

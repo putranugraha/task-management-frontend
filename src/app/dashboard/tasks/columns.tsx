@@ -24,8 +24,9 @@ export type Column<T> = {
 
 export function useTaskColumns(
   onDelete?: (row: TaskRow) => void,
-  opts?: { onDetail?: (row: TaskRow) => void }
+  opts?: { onDetail?: (row: TaskRow) => void; canManage?: boolean }
 ): Column<TaskRow>[] {
+  const canManage = opts?.canManage !== false;
   return [
     { key: "title", header: "Title", className: "min-w-[220px]" },
     { key: "project", header: "Project", className: "min-w-[160px]", render: (r) => r.project?.name ?? '-' },
@@ -41,21 +42,25 @@ export function useTaskColumns(
       className: "min-w-[190px]",
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
-          <Link
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-            href={`/dashboard/tasks/${row.id}/edit`}
-            title={`Edit ${row.title}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </Link>
-          <button
-            type="button"
-            onClick={() => onDelete?.(row)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-            title={`Delete ${row.title}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canManage && (
+            <>
+              <Link
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+                href={`/dashboard/tasks/${row.id}/edit`}
+                title={`Edit ${row.title}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => onDelete?.(row)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+                title={`Delete ${row.title}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
           {opts?.onDetail ? (
             <button
               type="button"

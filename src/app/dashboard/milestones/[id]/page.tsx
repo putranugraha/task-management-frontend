@@ -7,6 +7,7 @@ import { listByMilestone, createForMilestone, remove as deleteTask } from "@/lib
 import type { Milestone } from "@/types/milestone";
 import type { Task } from "@/types/task";
 import DataTable from "@/app/dashboard/users/data-table";
+import { useAuth } from "@/contexts/auth-context";
 
 type TaskRow = Pick<Task, 'id' | 'title' | 'status' | 'start_planned' | 'end_planned' | 'percent_complete'>;
 
@@ -14,6 +15,8 @@ export default function MilestoneDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
+  const { can } = useAuth();
+  const canManageTasks = can("mengelola tugas");
 
   const [milestone, setMilestone] = useState<Milestone | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,19 +130,37 @@ export default function MilestoneDetailPage() {
 
   const columns = useMemo(() => {
     return [
-      { key: 'title', header: 'Title' },
-      { key: 'status', header: 'Status' },
-      { key: 'start_planned', header: 'Start', render: (r: TaskRow) => r.start_planned ?? '-' },
-      { key: 'end_planned', header: 'End', render: (r: TaskRow) => r.end_planned ?? '-' },
-      { key: 'percent_complete', header: '%', render: (r: TaskRow) => `${r.percent_complete}%` },
+      { key: "title", header: "Title" },
+      { key: "status", header: "Status" },
       {
-        key: 'actions',
-        header: 'Actions',
-        render: (row: TaskRow) => <TaskActions row={row} onChanged={fetchTasks} />,
+        key: "start_planned",
+        header: "Start",
+        render: (r: TaskRow) => r.start_planned ?? "-",
+      },
+      {
+        key: "end_planned",
+        header: "End",
+        render: (r: TaskRow) => r.end_planned ?? "-",
+      },
+      {
+        key: "percent_complete",
+        header: "%",
+        render: (r: TaskRow) => `${r.percent_complete}%`,
+      },
+      {
+        key: "actions",
+        header: "Actions",
+        render: (row: TaskRow) => (
+          <TaskActions
+            row={row}
+            onChanged={fetchTasks}
+            canManage={canManageTasks}
+          />
+        ),
       },
     ] as any;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManageTasks]);
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-600">{error}</div>;
@@ -164,7 +185,14 @@ export default function MilestoneDetailPage() {
       <section className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium">Tasks</h3>
-          <button onClick={() => setModalOpen(true)} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Task</button>
+          {canManageTasks && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50"
+            >
+              Add Task
+            </button>
+          )}
         </div>
         <DataTable columns={columns} data={tasks} loading={tLoading} />
         {tError && <div className="mt-2 text-sm text-red-600">{tError}</div>}
@@ -224,7 +252,15 @@ export default function MilestoneDetailPage() {
   );
 }
 
-function TaskActions({ row, onChanged }: { row: TaskRow; onChanged: () => void }) {
+function TaskActions({
+  row,
+  onChanged,
+  canManage,
+}: {
+  row: TaskRow;
+  onChanged: () => void;
+  canManage: boolean;
+}) {
   const [saving, setSaving] = useState(false);
 
   
@@ -235,11 +271,28 @@ function TaskActions({ row, onChanged }: { row: TaskRow; onChanged: () => void }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${row.id}/edit`}>Edit</a>
-      <button className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50 text-sm" onClick={doDelete}>Delete</button>
-      
-      
-      
+      <a
+        className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm"
+        href={`/dashboard/tasks/${row.id}`}
+      >
+        Detail
+      </a>
+      {canManage && (
+        <>
+          <a
+            className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm"
+            href={`/dashboard/tasks/${row.id}/edit`}
+          >
+            Edit
+          </a>
+          <button
+            className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50 text-sm"
+            onClick={doDelete}
+          >
+            Delete
+          </button>
+        </>
+      )}
     </div>
   );
 }

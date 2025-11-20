@@ -9,10 +9,14 @@ import { useProjectColumns, type ProjectRow, type Column } from "./columns";
 import ProjectStatsRow from "@/components/dashboard/ProjectStatsRow";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Plus, SlidersHorizontal } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
 export default function ProjectsPage() {
+  const { can } = useAuth();
+  const canManageProject = can("mengelola project");
+
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,10 @@ export default function ProjectsPage() {
     }
   };
 
-  const baseColumns = useProjectColumns(handleDelete, { minimal: true }) as unknown as Column<ProjectRow>[];
+  const baseColumns = useProjectColumns(handleDelete, {
+    minimal: true,
+    canManage: canManageProject,
+  }) as unknown as Column<ProjectRow>[];
 
   // Column visibility controls, mirroring Users page
   const [search, setSearch] = useState("");
@@ -252,13 +259,15 @@ export default function ProjectsPage() {
                 </div>
               )}
             </div>
-            <Link
-              href="/dashboard/projects/create"
-              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-            >
-              <Plus className="h-4 w-4" />
-              Create Project
-            </Link>
+            {canManageProject && (
+              <Link
+                href="/dashboard/projects/create"
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                <Plus className="h-4 w-4" />
+                Create Project
+              </Link>
+            )}
           </div>
         </div>
 

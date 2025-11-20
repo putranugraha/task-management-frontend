@@ -8,9 +8,24 @@ import { apiRequest } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 const TASK_STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"] as const;
 const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
+// Distinct accent colors to differentiate task cards
+const TASK_CARD_COLORS = [
+  '#059669', // emerald-600
+  '#0ea5e9', // sky-500
+  '#6366f1', // indigo-500
+  '#f59e0b', // amber-500
+  '#f43f5e', // rose-500
+  '#06b6d4', // cyan-500
+  '#8b5cf6', // violet-500
+  '#84cc16', // lime-500
+  '#ec4899', // pink-500
+  '#14b8a6', // teal-500
+] as const;
 
 type FormState = {
   name: string;
@@ -22,6 +37,14 @@ type FormState = {
 type FieldErrors = Partial<Record<keyof CreateMilestoneDto, string>> & { [k: string]: string };
 
 export default function CreateProjectMilestonePage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola project",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const router = useRouter();
   const params = useParams();
   const projectId = params?.id as string;
@@ -378,7 +401,8 @@ export default function CreateProjectMilestonePage() {
             ) : (
               <div className="grid gap-3">
                 {taskForms.map((t, idx) => (
-                  <div key={t.tempKey} className="rounded-xl border border-slate-200 p-3 grid gap-2 bg-white/50">
+                  <div key={t.tempKey} className="relative overflow-hidden rounded-2xl border border-slate-200 p-4 grid gap-3 bg-white/95 ring-1 ring-slate-100 shadow-[0_12px_24px_rgba(15,23,42,0.06),0_10px_24px_rgba(0,103,79,0.12)] transition hover:shadow-[0_16px_32px_rgba(15,23,42,0.08),0_14px_32px_rgba(0,103,79,0.18)]">
+                    <div className="absolute inset-x-0 top-0 h-1.5 rounded-t-2xl" style={{ backgroundColor: TASK_CARD_COLORS[idx % TASK_CARD_COLORS.length] }} />
                     <div className="flex items-center justify-between">
                       <div className="text-xs text-neutral-600">Task #{idx + 1}</div>
                       <button type="button" onClick={() => removeTask(idx)} className="text-xs px-2 py-1 border rounded hover:bg-neutral-50">Remove</button>

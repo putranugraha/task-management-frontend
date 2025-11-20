@@ -5,6 +5,7 @@ import { listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
+import { ChevronLeft } from "lucide-react";
 
 type Zoom = "day" | "week";
 
@@ -25,6 +26,7 @@ export default function GanttChart({
   const [showPhaseStarts, setShowPhaseStarts] = useState<boolean>(true);
   const [showTaskBaselines, setShowTaskBaselines] = useState<boolean>(false);
   const [taskBaselineMap, setTaskBaselineMap] = useState<Record<number, { start: Date; end: Date } | undefined>>({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
   const model = useMemo(() => buildModel(tasks, milestones), [tasks, milestones]);
 
@@ -125,43 +127,73 @@ export default function GanttChart({
   }, [showTaskBaselines, tasks, baselines]);
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50">
-        <div className="text-sm text-neutral-700">
+    <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b bg-secondary">
+        <div className="text-sm text-muted-foreground">
           Range: {fmt(model.startDate)} – {fmt(model.endDate)} • Tasks with dates: {model.rows.reduce((n, r) => n + r.items.length, 0)}
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <label className="inline-flex items-center gap-1 text-neutral-700">
+        <div className="flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground shadow-sm hover:bg-muted transition-colors"
+          >
+            <ChevronLeft
+              className={
+                "h-3.5 w-3.5 transition-transform " +
+                (sidebarCollapsed ? "rotate-180" : "")
+              }
+            />
+            <span className="hidden sm:inline">
+              {sidebarCollapsed ? "Show list" : "Hide list"}
+            </span>
+          </button>
+          <label className="inline-flex items-center gap-2 text-muted-foreground">
             <input type="checkbox" className="h-4 w-4" checked={showDeps} onChange={(e) => setShowDeps(e.target.checked)} />
             <span>Dependencies</span>
           </label>
-          <label className="inline-flex items-center gap-1 text-neutral-700">
+          <label className="inline-flex items-center gap-2 text-muted-foreground">
             <input type="checkbox" className="h-4 w-4" checked={showPhaseStarts} onChange={(e) => setShowPhaseStarts(e.target.checked)} />
             <span>Phase Starts</span>
           </label>
-          <label className="inline-flex items-center gap-1 text-neutral-700">
+          <label className="inline-flex items-center gap-2 text-muted-foreground">
             <input type="checkbox" className="h-4 w-4" checked={showTaskBaselines} onChange={(e) => setShowTaskBaselines(e.target.checked)} />
             <span>Task Baselines</span>
           </label>
           {/* Milestone links removed per request */}
-          <button
-            type="button"
-            onClick={() => exportCsv(model)}
-            className="px-2 py-1 border rounded hover:bg-neutral-100"
-            title="Export schedule as CSV"
-          >Export CSV</button>
-          <label className="text-neutral-600">Zoom</label>
-          <select value={zoom} onChange={(e) => setZoom(e.target.value as Zoom)} className="border rounded px-2 py-1">
+          <label className="text-muted-foreground">Zoom</label>
+          <select value={zoom} onChange={(e) => setZoom(e.target.value as Zoom)} className="h-8 rounded-md border border-input bg-background px-2 text-sm">
             <option value="day">Day</option>
             <option value="week">Week</option>
           </select>
+          <div className="hidden md:flex items-center gap-3 pl-2">
+            {[
+              { key: 'Planned', status: '' },
+              { key: 'In Progress', status: 'progress' },
+              { key: 'Done', status: 'done' },
+              { key: 'On Hold', status: 'hold' },
+            ].map((it) => {
+              const c = colorForStatus(it.status);
+              return (
+                <div key={it.key} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="h-2.5 w-2.5 rounded-full border" style={{ backgroundColor: c.bg, borderColor: c.fg }} />
+                  <span>{it.key}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       <div className="flex">
         {/* Sidebar */}
-        <div className="w-80 shrink-0 border-r bg-white">
-          <div className="h-8 px-3 flex items-center text-xs text-neutral-600 border-b">Milestone / Task</div>
+        <div
+          className={
+            "shrink-0 border-r bg-card overflow-hidden transition-all duration-200 " +
+            (sidebarCollapsed ? "w-0" : "w-80")
+          }
+        >
+          <div className="h-9 px-3 flex items-center text-xs text-muted-foreground border-b">Milestone / Task</div>
           <div>
             {model.rows.map((row, idx) => (
               <div key={row.id} className="border-b">
@@ -170,7 +202,7 @@ export default function GanttChart({
                   <span className="truncate" title={row.name}>{row.name}</span>
                 </div>
                 {row.items.map((it) => (
-                  <div key={it.id} className="px-3 py-1 text-xs text-neutral-700 truncate">{it.title}</div>
+                  <div key={it.id} className="px-3 py-1 text-xs text-muted-foreground truncate">{it.title}</div>
                 ))}
               </div>
             ))}
@@ -182,18 +214,26 @@ export default function GanttChart({
           {/* Header grid: Weeks + Days */}
           <div className="relative" style={{ width: totalWidth }}>
             {/* Weeks row */}
-            <div className="flex border-b" style={{ height: HEADER_WEEK_H }}>
-              {buildWeekSegments(model.startDate, model.endDate).map((seg, idx) => (
-                <div key={idx} className="h-full border-r text-[11px] text-neutral-600 flex items-center px-2 select-none"
-                     style={{ width: seg.span * pxPerDay }}>
-                  {seg.label}
-                </div>
-              ))}
+            <div className="flex border-b bg-secondary/60" style={{ height: HEADER_WEEK_H }}>
+              {buildWeekSegments(model.startDate, model.endDate).map((seg, idx) => {
+                const segPx = seg.span * pxPerDay;
+                const label = segPx < 48 ? seg.label.replace('Week ', 'W ') : seg.label;
+                return (
+                  <div
+                    key={idx}
+                    className="h-full border-r text-[11px] text-muted-foreground flex items-center px-2 select-none whitespace-nowrap overflow-hidden text-ellipsis"
+                    style={{ width: segPx }}
+                    title={seg.label}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
             </div>
             {/* Days row */}
-            <div className="flex border-b" style={{ height: HEADER_DAY_H }}>
+            <div className="flex border-b bg-secondary/40" style={{ height: HEADER_DAY_H }}>
               {Array.from({ length: gridDays }).map((_, i) => (
-                <div key={i} className="h-full border-r text-[10px] text-neutral-500 grid place-items-center select-none" style={{ width: pxPerDay }}>
+                <div key={i} className="h-full border-r text-[10px] text-muted-foreground grid place-items-center select-none whitespace-nowrap" style={{ width: pxPerDay }}>
                   {labelForOffset(model.startDate, i)}
                 </div>
               ))}
@@ -213,8 +253,8 @@ export default function GanttChart({
                 return (
                   <div className="absolute left-0 right-0" style={{ top: HEADER_TOTAL_H, bottom: 0 }}>
                     <div
-                      className="absolute h-full bg-indigo-200/25 border-x-2 border-indigo-300/60"
-                      style={{ left, width }}
+                      className="absolute h-full border-x-2"
+                      style={{ left, width, backgroundColor: 'color-mix(in oklab, var(--primary) 12%, transparent)', borderColor: 'color-mix(in oklab, var(--primary) 55%, transparent)' }}
                       title={`Baseline: ${fmt(start)} – ${fmt(end)}`}
                     />
                   </div>
@@ -230,7 +270,7 @@ export default function GanttChart({
                   className="relative border-b"
                   style={{
                     height: Math.max(24, row.items.length * 22 + 12),
-                    background: rowIdx % 2 === 0 ? '#ffffff' : '#fafafa',
+                    background: rowIdx % 2 === 0 ? 'var(--card)' : 'color-mix(in oklab, var(--muted) 30%, transparent)'
                   }}
                   onMouseEnter={() => setHoverRow(rowIdx)}
                   onMouseLeave={() => setHoverRow((v) => (v === rowIdx ? null : v))}
@@ -239,18 +279,24 @@ export default function GanttChart({
                   <div className="absolute inset-0 pointer-events-none">
                     <div className="flex h-full">
                       {Array.from({ length: gridDays }).map((_, i) => (
-                        <div key={i} className={"border-r " + (i % 7 === 0 ? "bg-neutral-50" : "bg-white")} style={{ width: pxPerDay }} />
+                        <div key={i} className={"border-r " + (i % 7 === 0 ? "bg-secondary/40" : "bg-card")} style={{ width: pxPerDay }} />
                       ))}
                     </div>
                   </div>
 
-                  {/* milestone marker as thin line (due date colored) */}
+                  {/* milestone marker: centered diamond on due date */}
                   {row.due && inRange(row.due, model.startDate, model.endDate) && (() => {
-                    const left = daysBetween(model.startDate!, row.due) * pxPerDay;
+                    const centerX = daysBetween(model.startDate!, row.due) * pxPerDay + Math.floor(pxPerDay / 2);
                     const color = colorForIndex(rowIdx);
+                    const size = Math.max(8, Math.min(12, pxPerDay - 4));
+                    const left = centerX - Math.floor(size / 2);
+                    const top = `calc(50% - ${Math.floor(size / 2)}px)`;
                     return (
-                      <div className="absolute inset-y-0" style={{ left, zIndex: 20 }}>
-                        <div className="h-full" style={{ width: 2, backgroundColor: color }} title={`Milestone due • ${row.name} • ${fmt(row.due)}`} />
+                      <div className="absolute" style={{ left, top, zIndex: 25 }} title={`Milestone due • ${row.name} • ${fmt(row.due)}`}>
+                        <div
+                          className="rounded-[2px]"
+                          style={{ width: size, height: size, transform: 'rotate(45deg)', backgroundColor: 'var(--card)', border: `1.5px solid ${color}` }}
+                        />
                       </div>
                     );
                   })()}
@@ -259,11 +305,15 @@ export default function GanttChart({
                   {row.span && inRange(row.span.start, model.startDate, model.endDate) && (() => {
                     const left = daysBetween(model.startDate!, row.span!.start) * pxPerDay;
                     const hasDue = Boolean(row.due);
+                    // avoid duplicate marker if phase start equals due date
+                    if (hasDue && row.due && toDateOnly(row.due).getTime() === toDateOnly(row.span!.start).getTime()) {
+                      return null;
+                    }
                     if (hasDue) {
                       if (!showPhaseStarts) return null;
                       return (
                         <div className="absolute inset-y-0" style={{ left, zIndex: 19 }} title={`Phase start • ${row.name} • ${fmt(row.span!.start)}`}>
-                          <div className="h-full border-r border-dashed" style={{ borderRightColor: '#9ca3af', borderRightWidth: 1 }} />
+                          <div className="h-full border-r border-dashed" style={{ borderRightColor: 'var(--border)', borderRightWidth: 1 }} />
                         </div>
                       );
                     }
@@ -293,6 +343,11 @@ export default function GanttChart({
                            style={{ left: x, top: y, width: w, height: 16, backgroundColor: barBase.bg, border: `1px solid ${barBase.border}` }} title={tooltip}>
                           <div className="absolute inset-y-0 left-0 rounded-l-full" style={{ width: 4, backgroundColor: color }} />
                           <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: barBase.fg }} />
+                          {w >= 56 && (
+                            <span className="absolute inset-0 hidden md:flex items-center pointer-events-none">
+                              <span className="pl-1.5 pr-1 text-[10px] font-medium" style={{ color: barBase.fg }}>{progress}%</span>
+                            </span>
+                          )}
                         </a>
                       );
                     })}
@@ -318,7 +373,7 @@ export default function GanttChart({
                     const color = colorForIndex(rowIdx);
                     return (
                       <div className="absolute" style={{ left: x, top: -18 }}>
-                        <div className="text-[11px] px-2 py-0.5 rounded-full border" style={{ borderColor: color, color }}>
+                        <div className="text-[11px] px-2 py-0.5 rounded-full border bg-background" style={{ borderColor: color, color }}>
                           {row.name} • {fmt(row.span!.start)} – {fmt(row.span!.end)} • {row.span!.days}d
                         </div>
                       </div>
@@ -338,7 +393,7 @@ export default function GanttChart({
             {/* Today line */}
             {todayX !== null && (
               <div className="pointer-events-none absolute" style={{ left: todayX, top: HEADER_TOTAL_H, bottom: 0 }}>
-                <div className="w-[2px] h-full bg-sky-500/80" />
+                <div className="w-[2px] h-full bg-primary/70" />
               </div>
             )}
           </div>
@@ -388,7 +443,7 @@ function buildWeekSegments(start: Date | null, end: Date | null): Array<{ span: 
     const daysLeft = Math.max(1, Math.floor((end.getTime() - startOfSeg.getTime()) / 86400000) + 1);
     // segment ends at the nearest next Sunday (day=0) relative to current
     const dow = startOfSeg.getDay(); // 0=Sun ... 6=Sat
-    const span = Math.min(daysLeft, dow === 0 ? 1 : 7 - dow);
+    const span = Math.min(daysLeft, dow === 0 ? 7 : 7 - dow);
     segments.push({ span, label: `Week ${idx}` });
     cur.setDate(cur.getDate() + span);
     idx += 1;
@@ -470,65 +525,43 @@ function buildModel(tasks: Task[], milestones: Milestone[]) {
   return { startDate, endDate, rows };
 }
 
-// Simple distinct color palette for milestones
+// Theme-based palette for milestones (uses CSS variables, falls back to neutral if missing)
 function colorForIndex(i: number) {
   const palette = [
-    '#f97316', // orange-500
-    '#10b981', // emerald-500
-    '#3b82f6', // blue-500
-    '#a855f7', // purple-500
-    '#ef4444', // red-500
-    '#14b8a6', // teal-500
+    'var(--chart-1)',
+    'var(--chart-2)',
+    'var(--chart-3)',
+    'var(--chart-4)',
+    'var(--chart-5)',
   ];
-  return palette[i % palette.length];
+  return palette[i % palette.length] || 'var(--primary)';
 }
 
-// Build and copy CSV schedule (Milestone, Task, Start, End, Duration, Dependency, Description)
-function exportCsv(model: ReturnType<typeof buildModel>) {
-  const rows: string[] = [];
-  rows.push(['"Milestone"','"Task"','"Start Date"','"End Date"','"Duration"','"Dependency"','"Description"'].join(','));
-  const taskTitleById = new Map<number,string>();
-  model.rows.forEach(r => r.items.forEach(it => taskTitleById.set(it.id, it.title)));
-  for (const r of model.rows) {
-    for (const it of r.items) {
-      const deps = Array.isArray(it.deps) ? it.deps.map((d: any) => d?.depends_on?.title || taskTitleById.get(Number(d?.depends_on?.id)) || `Task #${d?.depends_on?.id ?? ''}`) : [];
-      const duration = daysDiffInclusive(it.start, it.end);
-      const line = [
-        csv(r.name),
-        csv(it.title),
-        csv(fmt(it.start)),
-        csv(fmt(it.end)),
-        csv(`${duration} hari`),
-        csv(deps.join(' | ') || '-'),
-        csv(''),
-      ].join(',');
-      rows.push(line);
-    }
-  }
-  const csvText = rows.join('\n');
-  try { navigator.clipboard?.writeText(csvText); } catch {}
-  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'schedule.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function csv(v: string) {
-  const s = (v ?? '').toString();
-  return '"' + s.replace(/"/g, '""') + '"';
-}
+// CSV export removed per request
 
 function colorForStatus(status: string | undefined) {
   const s = (status || '').toLowerCase();
-  if (s.includes('progress')) return { bg: '#fde68a', border: '#f59e0b', fg: '#f59e0b' }; // amber
-  if (s.includes('done') || s.includes('selesai')) return { bg: '#bbf7d0', border: '#10b981', fg: '#10b981' }; // green
-  if (s.includes('hold')) return { bg: '#fee2e2', border: '#ef4444', fg: '#ef4444' }; // red-ish
-  return { bg: '#e5e7eb', border: '#9ca3af', fg: '#6b7280' }; // neutral
+  // Use theme tokens; backgrounds are soft via color-mix for readability
+  if (s.includes('progress')) return {
+    bg: 'color-mix(in oklab, var(--chart-5) 28%, transparent)',
+    border: 'var(--chart-5)',
+    fg: 'var(--chart-5)'
+  };
+  if (s.includes('done') || s.includes('selesai')) return {
+    bg: 'color-mix(in oklab, var(--chart-2) 22%, transparent)',
+    border: 'var(--chart-2)',
+    fg: 'var(--chart-2)'
+  };
+  if (s.includes('hold')) return {
+    bg: 'color-mix(in oklab, var(--destructive) 22%, transparent)',
+    border: 'var(--destructive)',
+    fg: 'var(--destructive)'
+  };
+  return {
+    bg: 'var(--muted)',
+    border: 'var(--border)',
+    fg: 'var(--muted-foreground)'
+  };
 }
 
 // Draw FS dependencies between tasks
@@ -577,10 +610,10 @@ function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { mode
     <svg className="pointer-events-none absolute left-0" style={{ top: headerOffset }} width={gridDays * pxPerDay} height={totalHeight}>
       <defs>
         <marker id="arrow-grey" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
-          <path d="M0,0 L6,3 L0,6 Z" fill="#9ca3af" />
+          <path d="M0,0 L6,3 L0,6 Z" fill="currentColor" />
         </marker>
       </defs>
-      <g stroke="#9ca3af" strokeWidth={1.25} fill="none" strokeOpacity={0.7}>
+      <g strokeWidth={1.25} fill="none" strokeOpacity={0.7} color="var(--muted-foreground)" stroke="currentColor">
         {paths.map((p, i) => (
           <path key={i} d={p.d} markerEnd="url(#arrow-grey)" />
         ))}

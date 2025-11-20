@@ -113,7 +113,7 @@ export default function ProjectBaselinesPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto">
       <div className="mb-3 flex items-center gap-2">
         <a href={`/dashboard/projects/${projectId}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Back</a>
         <h2 className="text-xl font-semibold">Project Baselines</h2>

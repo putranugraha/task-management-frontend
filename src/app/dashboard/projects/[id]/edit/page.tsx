@@ -6,6 +6,8 @@ import { apiRequest } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 type SimpleUser = { id: number; name: string };
@@ -26,6 +28,14 @@ type ProjectDetail = {
 const STATUS_OPTIONS = ["Planned", "In Progress", "Completed", "On Hold"] as const;
 
 export default function EditProjectPage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola project",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);

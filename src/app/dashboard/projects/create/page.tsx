@@ -6,6 +6,8 @@ import { apiRequest } from "@/lib/api";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 type SimpleUser = { id: number; name: string };
@@ -26,6 +28,14 @@ type FormState = {
 // Status default diset internal (hidden from UI)
 
 export default function CreateProjectPage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola project",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const router = useRouter();
   const [form, setForm] = useState<FormState>({
     name: "",

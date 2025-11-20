@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
 import { fetchProjectsList } from "@/lib/lookups";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type TaskDetail = {
   id: number;
@@ -21,6 +23,14 @@ type TaskDetail = {
 };
 
 export default function EditTaskPage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola tugas",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);

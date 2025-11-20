@@ -24,9 +24,10 @@ export type Column<T> = {
 
 export function useProjectColumns(
   onDelete?: (row: ProjectRow) => void,
-  opts?: { minimal?: boolean; onDetail?: (row: ProjectRow) => void }
+  opts?: { minimal?: boolean; onDetail?: (row: ProjectRow) => void; canManage?: boolean }
 ): Column<ProjectRow>[] {
   const minimal = opts?.minimal === true;
+  const canManage = opts?.canManage !== false;
 
   const currency = (v: number | string | undefined) => {
     const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -88,21 +89,25 @@ export function useProjectColumns(
           >
             Detail
           </a>
-          <a
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-            href={`/dashboard/projects/${row.id}/edit`}
-            title={`Edit ${row.name}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </a>
-          <button
-            type="button"
-            onClick={() => onDelete?.(row)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-            title={`Delete ${row.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canManage && (
+            <>
+              <a
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+                href={`/dashboard/projects/${row.id}/edit`}
+                title={`Edit ${row.name}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </a>
+              <button
+                type="button"
+                onClick={() => onDelete?.(row)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+                title={`Delete ${row.name}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
         </div>
       ),
     },

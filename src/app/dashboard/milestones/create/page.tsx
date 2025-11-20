@@ -6,6 +6,8 @@ import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
 import { fetchProjectsList } from "@/lib/lookups";
 import { ChevronLeft, Loader2 } from "lucide-react";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
 type FormState = {
@@ -16,6 +18,14 @@ type FormState = {
 };
 
 export default function CreateMilestonePage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola project",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const router = useRouter();
   const [form, setForm] = useState<FormState>({
     project_id: "",

@@ -9,10 +9,14 @@ import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import { useMilestoneColumns, type MilestoneRow } from "./columns";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function ProjectMilestonesPage() {
   const params = useParams();
   const projectId = params?.id as string;
+  const { can } = useAuth();
+  const canManageProject = can("mengelola project");
+  const canManageTasks = can("mengelola tugas");
 
   const [rows, setRows] = useState<MilestoneRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -131,7 +135,11 @@ export default function ProjectMilestonesPage() {
     }
   };
 
-  const columns = useMilestoneColumns({ onDelete: handleDelete, onChanged: fetchList, onComplete: handleComplete });
+  const columns = useMilestoneColumns({
+    onDelete: handleDelete,
+    onComplete: handleComplete,
+    canManage: canManageProject,
+  });
 
   return (
     <div className="w-full">
@@ -140,7 +148,14 @@ export default function ProjectMilestonesPage() {
       </div>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold">Project Milestones</h2>
-        <Link href={`/dashboard/projects/${projectId}/milestones/create`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Create Milestone</Link>
+        {canManageProject && (
+          <Link
+            href={`/dashboard/projects/${projectId}/milestones/create`}
+            className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50"
+          >
+            Create Milestone
+          </Link>
+        )}
       </div>
       {error && (
         <div className="mb-3 text-sm text-red-600">{error}</div>
@@ -149,7 +164,14 @@ export default function ProjectMilestonesPage() {
 
       <div className="flex items-center justify-between mt-8 mb-3">
         <h2 className="text-xl font-semibold">Project Tasks</h2>
-        <Link href={`/dashboard/tasks/create?project_id=${projectId}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Create Task</Link>
+        {canManageTasks && (
+          <Link
+            href={`/dashboard/tasks/create?project_id=${projectId}`}
+            className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50"
+          >
+            Create Task
+          </Link>
+        )}
       </div>
       {taskError && (
         <div className="mb-3 text-sm text-red-600">{taskError}</div>
@@ -161,11 +183,22 @@ export default function ProjectMilestonesPage() {
           { key: 'priority', header: 'Priority' },
           { key: 'status', header: 'Status' },
           { key: 'percent_complete', header: '%', render: (r: TaskRow) => `${r.percent_complete ?? 0}%` },
-          { key: 'actions', header: 'Actions', render: (r: TaskRow) => (
-            <div className="flex gap-2 text-sm">
-              <a className="px-2 py-1 rounded-md border hover:bg-neutral-50" href={`/dashboard/tasks/${r.id}/edit`}>Edit</a>
-            </div>
-          )},
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (r: TaskRow) => (
+              <div className="flex gap-2 text-sm">
+                {canManageTasks && (
+                  <a
+                    className="px-2 py-1 rounded-md border hover:bg-neutral-50"
+                    href={`/dashboard/tasks/${r.id}/edit`}
+                  >
+                    Edit
+                  </a>
+                )}
+              </div>
+            ),
+          },
         ] as any}
         data={taskRows}
         loading={taskLoading}

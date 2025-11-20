@@ -10,6 +10,8 @@ import { fetchProjectsList } from "@/lib/lookups";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type FormState = {
   project_id: number | "";
@@ -25,6 +27,14 @@ type FormState = {
 };
 
 export default function CreateTaskPage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola tugas",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const router = useRouter();
   const search = useSearchParams();
   const initialProjectId = search?.get('project_id');
@@ -183,7 +193,12 @@ export default function CreateTaskPage() {
             else if (Array.isArray(rs?.data?.data)) arr = rs.data.data;
             else if (Array.isArray(rs?.items)) arr = rs.items;
             else if (Array.isArray(rs?.users)) arr = rs.users;
-            mapped = (arr || []).map((u: any) => ({ id: Number(u.id), name: u.name ?? u.full_name ?? u.email ?? String(u.id) }));
+            mapped = (arr || []).map((u: any) => ({
+              id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
+              name: u.name ?? u.full_name ?? u.username ?? u.email ?? String(u.id ?? u.user_id ?? '')
+            })).filter((u:any)=> Number.isFinite(u.id));
+            const seen = new Set<number>();
+            mapped = mapped.filter((u)=> (seen.has(u.id) ? false : (seen.add(u.id), true)));
             if (mapped.length) break;
           } catch {}
         }

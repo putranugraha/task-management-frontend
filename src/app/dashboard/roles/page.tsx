@@ -11,10 +11,20 @@ import { useRoleColumns, type RoleRow } from "./columns";
 import DataTable from "../users/data-table";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Plus, SlidersHorizontal } from "lucide-react";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
 export default function RolesPage() {
+  const { loading: authLoading, allowed } = usePermissionGuard([
+    "mengelola roles",
+  ]);
+
+  if (!authLoading && !allowed) {
+    return <Forbidden />;
+  }
+
   const [rows, setRows] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

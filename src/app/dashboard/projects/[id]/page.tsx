@@ -13,6 +13,10 @@ import EvmWidget from "@/components/evm/EvmWidget";
 import TaskProgressEditor from "@/components/tasks/TaskProgressEditor";
 import TimeEntryForm from "@/components/time/TimeEntryForm";
 import { totalByTask as totalHoursByTask } from "@/lib/api/time-entries";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, MoreHorizontal } from "lucide-react";
 
 type ProjectDetail = {
   id: number;
@@ -60,6 +64,8 @@ export default function ProjectDetailPage() {
   const [taskTotalHours, setTaskTotalHours] = useState<Record<number, number>>({});
   const [taskTotalHoursLoading, setTaskTotalHoursLoading] = useState<Record<number, boolean>>({});
   const [taskTotalHoursError, setTaskTotalHoursError] = useState<Record<number, string | null>>({});
+  // Local UI tab state
+  const [activeTab, setActiveTab] = useState<"overview" | "evm" | "milestones" | "baselines" | "tasks">("overview");
   // Current user id for time entries (from localStorage user object)
   const currentUser = (typeof window !== 'undefined') ? (() => {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
@@ -198,7 +204,54 @@ export default function ProjectDetailPage() {
     return () => { mounted = false; };
   }, [id]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="w-full space-y-6">
+        <div className="px-1">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard/projects">Projects</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Loading…</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+        <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6">
+          <div className="space-y-3">
+            <Skeleton className="h-8 w-64 rounded-md" />
+            <Skeleton className="h-4 w-40 rounded-md" />
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="h-6 w-28 rounded-full" />
+            </div>
+          </div>
+          <div className="mt-6 grid gap-3 grid-cols-1 md:grid-cols-2">
+            <Skeleton className="h-4 w-full rounded" />
+            <Skeleton className="h-4 w-full rounded" />
+            <Skeleton className="h-4 w-1/2 rounded" />
+            <Skeleton className="h-4 w-1/3 rounded" />
+          </div>
+        </div>
+        <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4">
+          <Skeleton className="h-48 w-full rounded-xl" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+        </div>
+      </div>
+    );
+  }
   if (notFound) return <div className="text-neutral-500">Project not found</div>;
   if (error) return <div className="text-red-600">{error}</div>;
   if (!data) return <div className="text-neutral-500">No project data</div>;
@@ -237,127 +290,207 @@ export default function ProjectDetailPage() {
   })();
 
   return (
-    <div className="max-w-2xl">
-      <h2 className="text-xl font-semibold mb-3">Project Detail</h2>
-      <div className="grid gap-2 border rounded-lg p-4">
-        <Row label="Project" value={data.name} />
-        <Row label="Client" value={data.client_name} />
-        <Row label="Value" value={currency(data.value_amount)} />
-        <Row label="Status" value={data.status} />
-        <Row label="Owner" value={data.division_owner?.name ?? '-'} />
-        <Row label="Start Planned" value={data.start_planned ?? '-'} />
-        <Row label="End Planned" value={data.end_planned ?? '-'} />
-        <Row label="Scope" value={data.scope ?? '-'} />
-        <Row label="Objective" value={data.objective ?? '-'} />
-        <Row label="Created At" value={data.created_at ?? '-'} />
-        <Row label="Updated At" value={data.updated_at ?? '-'} />
+    <div className="w-full space-y-6">
+      <div className="px-1">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard/projects">Projects</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{data.name}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <a href={`/dashboard/projects/${data.id}/edit`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Edit</a>
-        <a href={`/dashboard/projects/${data.id}/milestones/create`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Milestone</a>
-        <a href={`/dashboard/tasks/create?project_id=${data.id}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Add Task</a>
-        <a href={`/dashboard/projects/${data.id}/gantt`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">View Gantt</a>
-        <button
-          type="button"
-          className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => setBaselineModalOpen(true)}
-          disabled={!canBaseline}
-          title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
-        >
-          Create Baseline
-        </button>
-        <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Back</button>
-      </div>
-
-      <section className="mt-6">
-        <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
-      </section>
-
-      <section className="mt-6">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">Project Milestones</h3>
-          <a href={`/dashboard/projects/${data.id}/milestones`} className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50">View All</a>
+      <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-slate-900 truncate">{data.name}</h1>
+            <p className="text-sm text-slate-500 truncate">{data.client_name}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Status: {data.status}</span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Owner: {data.division_owner?.name ?? '-'}</span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Value: {currency(data.value_amount)}</span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Start: {data.start_planned ?? '-'}</span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">End: {data.end_planned ?? '-'}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/dashboard/projects/${data.id}/milestones/create`}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+            >
+              <Plus className="h-4 w-4" />
+              Add Milestone
+            </a>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl border border-slate-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.14)]">
+                <DropdownMenuItem onSelect={() => (location.href = `/dashboard/projects/${data.id}/edit`)}>Edit Project</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => (location.href = `/dashboard/tasks/create?project_id=${data.id}`)}>Add Task</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => (location.href = `/dashboard/projects/${data.id}/gantt`)}>View Gantt</DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!canBaseline}
+                  onSelect={() => setBaselineModalOpen(true)}
+                >
+                  {canBaseline ? 'Create Baseline' : 'Create Baseline (unavailable)'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => history.back()}>Back</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-        <div className="border rounded-lg">
-          {milestonesLoading ? (
+        {/* Detail rows: 2 columns on desktop, 1 on mobile */}
+        <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
+          <Row label="Scope" value={data.scope ?? '-'} />
+          <Row label="Objective" value={data.objective ?? '-'} />
+          <Row label="Created At" value={data.created_at ?? '-'} />
+          <Row label="Updated At" value={data.updated_at ?? '-'} />
+        </div>
+        <div className="mt-6">
+          <div className="inline-flex rounded-xl border bg-white p-1 text-sm shadow-sm">
+            {[
+              { key: "overview", label: "Overview" },
+              { key: "evm", label: "EVM" },
+              { key: "milestones", label: "Milestones" },
+              { key: "baselines", label: "Baselines" },
+              { key: "tasks", label: "Tasks" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key as any)}
+                className={`px-3 py-1.5 rounded-lg transition ${activeTab === (t.key as any) ? 'bg-neutral-100 text-slate-900' : 'text-slate-600 hover:bg-neutral-50'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {activeTab === 'overview' && (
+        <section>
+          <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4">
+            <div className="text-sm text-slate-600">Select a tab above to view EVM, Milestones, Baselines, or Tasks.</div>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'evm' && (
+        <section>
+          <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4">
+            <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'milestones' && (
+      <section>
+        <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-700">Project Milestones</h3>
+            <a href={`/dashboard/projects/${data.id}/milestones`} className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50">View All</a>
+          </div>
+          <div className="overflow-x-auto">
+            {milestonesLoading ? (
             <div className="p-3 text-sm text-neutral-500">Loading milestones...</div>
           ) : milestonesError ? (
             <div className="p-3 text-sm text-red-600">{milestonesError}</div>
           ) : milestones.length === 0 ? (
             <div className="p-3 text-sm text-neutral-500">No milestones</div>
           ) : (
-            <table className="min-w-full text-sm">
+            <table className="min-w-full text-sm table-fixed">
               <thead className="bg-neutral-50 text-neutral-700">
                 <tr>
-                  <th className="text-left font-medium px-3 py-2 border-b">Name</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Status</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Due Planned</th>
+                  <th className="text-left font-medium px-3 py-2 border-b w-[50%]">Name</th>
+                  <th className="text-left font-medium px-3 py-2 border-b w-[20%]">Status</th>
+                  <th className="text-left font-medium px-3 py-2 border-b w-[30%]">Due Planned</th>
                 </tr>
               </thead>
               <tbody>
                 {(milestones.slice(0, 5)).map((m) => (
                   <tr key={m.id} className="hover:bg-neutral-50">
-                    <td className="px-3 py-2 border-t">{m.name}</td>
-                    <td className="px-3 py-2 border-t">{m.status}</td>
-                    <td className="px-3 py-2 border-t">{m.due_planned ?? '-'}</td>
+                    <td className="px-3 py-2 border-t align-top truncate"><span className="block truncate" title={m.name}>{m.name}</span></td>
+                    <td className="px-3 py-2 border-t align-top whitespace-nowrap">{m.status}</td>
+                    <td className="px-3 py-2 border-t align-top whitespace-nowrap">{m.due_planned ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </div>
-      </section>
-
-      <section className="mt-6">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">Project Baselines</h3>
-          <div className="flex items-center gap-2">
-            <a href={`/dashboard/projects/${data.id}/baselines`} className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50">View All</a>
-            <button
-            className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => setBaselineModalOpen(true)}
-            disabled={!canBaseline}
-            title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
-          >Create</button>
           </div>
         </div>
-        <div className="border rounded-lg">
-          {baselinesLoading ? (
-            <div className="p-3 text-sm text-neutral-500">Loading baselines...</div>
-          ) : baselinesError ? (
-            <div className="p-3 text-sm text-red-600">{baselinesError}</div>
-          ) : baselines.length === 0 ? (
-            <div className="p-3 text-sm text-neutral-500">No baselines</div>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-700">
-                <tr>
-                  <th className="text-left font-medium px-3 py-2 border-b">Baseline</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Taken At</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Start (Base)</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">End (Base)</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {baselines.map((b) => (
-                  <tr key={b.id} className="hover:bg-neutral-50">
-                    <td className="px-3 py-2 border-t">{b.baseline_name}</td>
-                    <td className="px-3 py-2 border-t">{b.taken_at ?? '-'}</td>
-                    <td className="px-3 py-2 border-t">{(b as any).start_planned_base ?? '-'}</td>
-                    <td className="px-3 py-2 border-t">{(b as any).end_planned_base ?? '-'}</td>
-                    <td className="px-3 py-2 border-t">{b.note ?? '-'}</td>
+      </section>
+      )}
+
+      {activeTab === 'baselines' && (
+      <section>
+        <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-700">Project Baselines</h3>
+            <div className="flex items-center gap-2">
+              <a href={`/dashboard/projects/${data.id}/baselines`} className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50">View All</a>
+              <button
+                className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setBaselineModalOpen(true)}
+                disabled={!canBaseline}
+                title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
+              >Create</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            {baselinesLoading ? (
+              <div className="p-3 text-sm text-neutral-500">Loading baselines...</div>
+            ) : baselinesError ? (
+              <div className="p-3 text-sm text-red-600">{baselinesError}</div>
+            ) : baselines.length === 0 ? (
+              <div className="p-3 text-sm text-neutral-500">No baselines</div>
+            ) : (
+              <table className="min-w-full text-sm table-fixed">
+                <thead className="bg-neutral-50 text-neutral-700">
+                  <tr>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[26%]">Baseline</th>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[18%]">Taken At</th>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[18%]">Start (Base)</th>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[18%]">End (Base)</th>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[20%]">Note</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {baselines.map((b) => (
+                    <tr key={b.id} className="hover:bg-neutral-50">
+                      <td className="px-3 py-2 border-t align-top truncate"><span className="block truncate" title={b.baseline_name}>{b.baseline_name}</span></td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{b.taken_at ?? '-'}</td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{(b as any).start_planned_base ?? '-'}</td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{(b as any).end_planned_base ?? '-'}</td>
+                      <td className="px-3 py-2 border-t align-top truncate"><span className="block truncate" title={b.note ?? ''}>{b.note ?? '-'}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </section>
+      )}
 
       {baselineModalOpen && (
         <div className="fixed inset-0 bg-black/30 grid place-items-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl md:max-w-5xl p-6">
             <h4 className="text-base font-semibold mb-2">Create Project Baseline</h4>
             {baselineFormErr && <div className="text-sm text-red-600 mb-2">{baselineFormErr}</div>}
               <form
@@ -460,9 +593,9 @@ export default function ProjectDetailPage() {
                   setBaselineSaving(false);
                 }
               }}
-              className="space-y-3"
+              className="grid grid-cols-1 md:grid-cols-2 gap-3"
             >
-              <div>
+              <div className="min-w-0">
                 <label className="block text-sm mb-1">Baseline Name</label>
                 <input
                   className="w-full border rounded-md px-3 py-2"
@@ -471,7 +604,7 @@ export default function ProjectDetailPage() {
                   required
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-sm mb-1">Note (optional)</label>
                 <input
                   className="w-full border rounded-md px-3 py-2"
@@ -479,11 +612,11 @@ export default function ProjectDetailPage() {
                   onChange={(e) => setBaselineForm((s) => ({ ...s, note: e.target.value }))}
                 />
               </div>
-              <div className="text-xs text-neutral-600">
+              <div className="text-xs text-neutral-600 md:col-span-2">
                 Calculated Start (Base): <span className="font-medium text-neutral-900">{startPreview ?? '-'}</span> •
                 {' '}End (Base): <span className="font-medium text-neutral-900">{endPreview ?? '-'}</span>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-2 md:col-span-2">
                 <button type="button" onClick={() => setBaselineModalOpen(false)} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
                 <button type="submit" disabled={baselineSaving} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{baselineSaving ? 'Saving...' : 'Save'}</button>
               </div>
@@ -492,6 +625,7 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
+      {activeTab === 'tasks' && (
       <section className="mt-6">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium">Milestone Tasks</h3>
@@ -729,15 +863,20 @@ export default function ProjectDetailPage() {
           );
         })()}
       </section>
+      )}
     </div>
   );
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[140px_1fr] gap-3 text-sm">
-      <div className="text-neutral-500">{label}</div>
-      <div className="font-medium break-words">{value}</div>
+    <div className="space-y-1">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
+        <span className="truncate w-full whitespace-nowrap">{value}</span>
+      </div>
     </div>
   );
 }
+
+// old Row variant removed to avoid duplicate declaration; unified above

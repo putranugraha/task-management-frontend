@@ -11,10 +11,14 @@ import { SlidersHorizontal, X, Plus } from "lucide-react";
 import { createPortal } from "react-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import MilestoneStatsRow from "@/components/dashboard/MilestoneStatsRow";
+import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
 export default function MilestonesPage() {
+  const { can } = useAuth();
+  const canManageProject = can("mengelola project");
+
   const [rows, setRows] = useState<MilestoneRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +95,11 @@ export default function MilestonesPage() {
     }
   };
 
-  const columns = useMilestoneColumns({ onDelete: handleDelete, onDetail: openDetail });
+  const columns = useMilestoneColumns({
+    onDelete: handleDelete,
+    onDetail: openDetail,
+    canManage: canManageProject,
+  });
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -292,13 +300,15 @@ export default function MilestonesPage() {
                 </div>
               )}
             </div>
-            <Link
-              href="/dashboard/milestones/create"
-              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-            >
-              <Plus className="h-4 w-4" />
-              Create Milestone
-            </Link>
+            {canManageProject && (
+              <Link
+                href="/dashboard/milestones/create"
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                <Plus className="h-4 w-4" />
+                Create Milestone
+              </Link>
+            )}
           </div>
         </div>
         <div className="p-6">

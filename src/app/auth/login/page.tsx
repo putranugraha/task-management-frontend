@@ -1,23 +1,68 @@
 "use client";
 
-import { useState } from "react";
-import { apiRequest } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { autoLoginIfEnabled } from "@/lib/auth";
+import { useAuth } from "@/contexts/auth-context";
+import type { DashboardType } from "@/types/auth";
 
-type LoginResponse = {
-  token?: string;
-  access_token?: string;
-  token_type?: string;
-  user?: unknown;
-  message?: string;
-};
+function resolveHomePath(
+  nextParam: string | null,
+  homePath: string | null,
+  dashboardType: DashboardType | null
+): string {
+  if (nextParam && nextParam.startsWith("/")) {
+    return nextParam;
+  }
+
+  if (homePath && homePath.startsWith("/")) {
+    // Backend may send /admin/dashboard, /manager/dashboard, /member/dashboard.
+    // FE saat ini memakai /dashboard tunggal, jadi normalkan ke /dashboard.
+    if (
+      homePath.startsWith("/admin/dashboard") ||
+      homePath.startsWith("/manager/dashboard") ||
+      homePath.startsWith("/member/dashboard")
+    ) {
+      return "/dashboard";
+    }
+    return homePath;
+  }
+
+  // Fallback sederhana: satu dashboard utama.
+  return "/dashboard";
+}
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { state, login } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  // Jika sudah login dan auth sudah ter-initialize, redirect dari halaman login.
+  useEffect(() => {
+    if (!state.isInitialized) return;
+    if (!state.token) return;
+
+    const nextParam = searchParams?.get("next") ?? null;
+    const dest = resolveHomePath(
+      nextParam,
+      state.home_path,
+      state.dashboard_type
+    );
+    router.replace(dest);
+  }, [
+    state.isInitialized,
+    state.token,
+    state.home_path,
+    state.dashboard_type,
+    router,
+    searchParams,
+  ]);
 
   const doAuto = async () => {
     setLoading(true);
@@ -27,12 +72,16 @@ export default function LoginPage() {
       const ok = await autoLoginIfEnabled();
       if (ok) {
         setInfo("Auto-login berhasil. Mengarahkan ke dashboard...");
-        window.location.href = "/dashboard";
+        router.replace("/dashboard");
       } else {
         setInfo("Auto-login tidak aktif atau gagal. Coba form di bawah.");
       }
-    } catch (e: any) {
-      setError(e?.message ?? "Auto-login gagal");
+    } catch (e: unknown) {
+      const message =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message?: string }).message)
+          : "Auto-login gagal";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -44,25 +93,22 @@ export default function LoginPage() {
     setError(null);
     setInfo(null);
     try {
-      // Explicitly prefetch CSRF cookie in Sanctum mode to avoid 419
-      try {
-        await apiRequest<unknown>("GET", "/sanctum/csrf-cookie");
-      } catch {}
-      const res = await apiRequest<LoginResponse>("POST", "/api/login", { email, password });
-      const token = res.access_token || res.token;
-      const type = res.token_type || "Bearer";
-      if (token) {
-        localStorage.setItem("access_token", token);
-        localStorage.setItem("token_type", type);
-        // Set presence cookie for middleware guard
-        document.cookie = "app_has_token=1; Max-Age=2592000; path=/"; // 30 days
-      }
-      if (res.user) {
-        localStorage.setItem("user", JSON.stringify(res.user));
-      }
-      window.location.href = "/dashboard";
-    } catch (e: any) {
-      setError(e?.message ?? "Login gagal");
+      const res = await login(email, password);
+
+      const nextParam = searchParams?.get("next") ?? null;
+      const dest = resolveHomePath(
+        nextParam,
+        (res && res.home_path) || null,
+        (res && res.dashboard_type) || null
+      );
+
+      router.replace(dest);
+    } catch (e: unknown) {
+      const message =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message?: string }).message)
+          : "Login gagal";
+      setError(message);
     } finally {
       setLoading(false);
     }

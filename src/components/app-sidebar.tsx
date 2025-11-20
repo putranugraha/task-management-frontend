@@ -17,6 +17,8 @@ import {
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
+import { useAuth } from "@/contexts/auth-context";
+import { MENU_ITEMS } from "@/config/menu";
 import {
   Sidebar,
   SidebarContent,
@@ -31,7 +33,9 @@ import {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
-  const navItems = [
+  const { state, hasRole, can } = useAuth();
+
+  const allNavItems = [
     { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
     { title: "Projects", url: "/dashboard/projects", icon: FolderKanban },
     { title: "Tasks", url: "/dashboard/tasks", icon: ListTodo },
@@ -41,12 +45,53 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Users", url: "/dashboard/users", icon: UsersIconLucide },
     { title: "Roles", url: "/dashboard/roles", icon: ShieldCheck },
     { title: "Settings", url: "/dashboard/settings", icon: SettingsIconLucide },
-  ].map((i) => ({
-    ...i,
-    isActive:
-      pathname === i.url ||
-      (i.url !== "/dashboard" && pathname?.startsWith(i.url)),
-  }));
+  ];
+
+  const navItems = React.useMemo(
+    () =>
+      allNavItems
+        .filter((item) => {
+          const config = MENU_ITEMS.find((m) => m.path === item.url);
+
+          // Saat auth belum ter-initialize, bersikap konservatif:
+          // - Sembunyikan item yang membutuhkan roles/permissions/dashboardTypes
+          //   untuk menghindari flash menu admin/manager pada Member.
+          // - Item yang tidak punya konfigurasi atau tidak punya batasan eksplisit
+          //   tetap ditampilkan.
+          if (!state || !state.isInitialized) {
+            if (!config) return true;
+            if (config.roles || config.permissions || config.dashboardTypes) {
+              return false;
+            }
+            return true;
+          }
+
+          if (!config) return true;
+
+          if (config.roles && !config.roles.some((r) => hasRole(r))) {
+            return false;
+          }
+          if (config.permissions && !config.permissions.some((p) => can(p))) {
+            return false;
+          }
+          if (
+            config.dashboardTypes &&
+            state.dashboard_type &&
+            !config.dashboardTypes.includes(state.dashboard_type)
+          ) {
+            return false;
+          }
+
+          return true;
+        })
+        .map((i) => ({
+          ...i,
+          isActive:
+            pathname === i.url ||
+            (i.url !== "/dashboard" && pathname?.startsWith(i.url)),
+        })),
+    [state, pathname, hasRole, can]
+  );
 
   const [user, setUser] = React.useState({
     name: "Admin",

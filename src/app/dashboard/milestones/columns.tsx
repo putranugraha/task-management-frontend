@@ -21,11 +21,15 @@ export type Column<T> = {
 };
 
 export function useMilestoneColumns(
-  onDeleteOrHandlers?: ((row: MilestoneRow) => void) | { onDelete?: (row: MilestoneRow) => void; onDetail?: (row: MilestoneRow) => void; onComplete?: (row: MilestoneRow) => void }
+  options?: {
+    onDelete?: (row: MilestoneRow) => void;
+    onDetail?: (row: MilestoneRow) => void;
+    onComplete?: (row: MilestoneRow) => void;
+    canManage?: boolean;
+  }
 ): Column<MilestoneRow>[] {
-  const handlers = typeof onDeleteOrHandlers === 'function'
-    ? { onDelete: onDeleteOrHandlers }
-    : (onDeleteOrHandlers || {});
+  const handlers = options || {};
+  const canManage = handlers.canManage !== false;
 
   return [
     {
@@ -76,21 +80,25 @@ export function useMilestoneColumns(
       className: "min-w-[190px]",
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
-          <Link
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-            href={`/dashboard/milestones/${row.id}/edit`}
-            title={`Edit ${row.name}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </Link>
-          <button
-            type="button"
-            onClick={() => handlers.onDelete?.(row)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-            title={`Delete ${row.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canManage && (
+            <>
+              <Link
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+                href={`/dashboard/milestones/${row.id}/edit`}
+                title={`Edit ${row.name}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => handlers.onDelete?.(row)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+                title={`Delete ${row.name}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          )}
           {handlers.onDetail ? (
             <button
               type="button"

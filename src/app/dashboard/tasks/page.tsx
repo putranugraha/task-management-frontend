@@ -12,10 +12,13 @@ import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SlidersHorizontal, AlertCircle, X } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
 export default function TasksPage() {
+  const { can } = useAuth();
+  const canManageTasks = can("mengelola tugas");
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +142,10 @@ export default function TasksPage() {
   };
 
   // Columns
-  const columns = useTaskColumns(handleDelete, { onDetail: openDetail });
+  const columns = useTaskColumns(handleDelete, {
+    onDetail: openDetail,
+    canManage: canManageTasks,
+  });
 
   // Column menu + search + pagination (mirror from Users)
   const [search, setSearch] = useState("");
@@ -350,7 +356,14 @@ export default function TasksPage() {
                 </div>
               )}
             </div>
-            <Link href="/dashboard/tasks/create" className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]">Create Task</Link>
+            {canManageTasks && (
+              <Link
+                href="/dashboard/tasks/create"
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                Create Task
+              </Link>
+            )}
           </div>
         </div>
         <div className="p-6">

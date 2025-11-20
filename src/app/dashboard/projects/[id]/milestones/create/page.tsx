@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createForProject, MILESTONE_STATUS_OPTIONS, type CreateMilestoneDto, listByProject as listMilestonesByProject } from "@/lib/api/milestones";
 import { createForMilestone as createTaskForMilestone } from "@/lib/api/tasks";
 import { apiRequest } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
+const TASK_STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"] as const;
+const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
 
 type FormState = {
   name: string;
@@ -29,6 +35,9 @@ export default function CreateProjectMilestonePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  // Users for task assignments
+  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // Optional: create initial tasks together with milestone
   type TaskForm = {
@@ -40,6 +49,7 @@ export default function CreateProjectMilestonePage() {
     end_planned: string;
     percent_complete: number;
     dependsOnKeys?: number[];
+    assigneeIds?: number[];
   };
   const [taskForms, setTaskForms] = useState<TaskForm[]>([]);
   const nextKeyRef = useRef(1);
@@ -52,6 +62,7 @@ export default function CreateProjectMilestonePage() {
     end_planned: "",
     percent_complete: 0,
     dependsOnKeys: [],
+    assigneeIds: [],
   }]));
   const removeTask = (idx: number) => setTaskForms((s) => s.filter((_, i) => i !== idx));
 
@@ -60,6 +71,49 @@ export default function CreateProjectMilestonePage() {
     setForm((s) => ({ ...s, [name]: value }));
     setFieldErrors((errs) => ({ ...errs, [name]: '' }));
   };
+
+  // Load users for assignment options (robust across API shapes)
+  useEffect(() => {
+    (async () => {
+      setUsersLoading(true);
+      try {
+        // Try project-scoped members first, then fall back to global users
+        const pid = encodeURIComponent(String(projectId));
+        const tryPaths = [
+          `/api/projects/${pid}/users`,
+          `/api/projects/${pid}/members`,
+          `/api/projects/${pid}/team`,
+          `/api/projects/${pid}/participants`,
+          `/api/projects/${pid}/assignable-users`,
+          '/api/users/options?status=1',
+          '/api/users/options?status=Aktif',
+          '/api/users/options',
+          '/api/users?status=1',
+          '/api/users?status=Aktif',
+          '/api/users',
+        ];
+        let mapped: Array<{ id: number; name: string }>=[];
+        for (const path of tryPaths) {
+          try {
+            const rs:any = await apiRequest('GET', path);
+            let arr:any[]=[];
+            if (Array.isArray(rs)) arr=rs; else if (Array.isArray(rs?.data)) arr=rs.data; else if (Array.isArray(rs?.data?.data)) arr=rs.data.data; else if (Array.isArray(rs?.items)) arr=rs.items; else if (Array.isArray(rs?.users)) arr=rs.users;
+            // Tolerate various id/name shapes
+            mapped = (arr||[]).map((u:any)=>({
+              id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
+              name: u.name ?? u.full_name ?? u.username ?? u.email ?? String(u.id ?? u.user_id ?? '')
+            })).filter((u:any)=> Number.isFinite(u.id));
+            // Deduplicate by id
+            const seen = new Set<number>();
+            mapped = mapped.filter((u)=> (seen.has(u.id) ? false : (seen.add(u.id), true)));
+            if (mapped.length) break;
+          } catch {}
+        }
+        setUsers(mapped);
+      } catch { setUsers([]); }
+      finally { setUsersLoading(false); }
+    })();
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,9 +133,14 @@ export default function CreateProjectMilestonePage() {
         setSubmitting(false);
         return;
       }
-      // Validate each task row: start <= end when both provided
+      // Validate each task row: title required, start <= end, percent 0..100
       for (let i = 0; i < taskForms.length; i++) {
         const t = taskForms[i];
+        if (!t.title || t.title.trim().length === 0) {
+          alert(`Task #${i + 1} requires a title.`);
+          setSubmitting(false);
+          return;
+        }
         if (t.start_planned && t.end_planned) {
           const s = Date.parse(t.start_planned);
           const en = Date.parse(t.end_planned);
@@ -90,6 +149,12 @@ export default function CreateProjectMilestonePage() {
             setSubmitting(false);
             return;
           }
+        }
+        const pct = Number(t.percent_complete ?? 0);
+        if (!(pct >= 0 && pct <= 100)) {
+          alert(`Task #${i + 1} percent must be 0-100.`);
+          setSubmitting(false);
+          return;
         }
       }
 
@@ -166,6 +231,9 @@ export default function CreateProjectMilestonePage() {
               project_id: Number(projectId) || undefined,
               milestone_id: Number(milestoneId) || undefined,
             };
+            if (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) {
+              dto.assignments = t.assigneeIds.map((id) => ({ user_id: id, role_on_task: 'Member' }));
+            }
             // translate dependencies to created ids (only previous tasks allowed)
             const depIds = (t.dependsOnKeys || []).map(k => createdMap.get(k)).filter(Boolean) as number[];
             if (depIds.length) {
@@ -231,156 +299,240 @@ export default function CreateProjectMilestonePage() {
   };
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-semibold mb-3">Create Milestone for Project #{projectId}</h2>
-      {error && <div className="text-sm text-red-600 mb-2">{error}</div>}
-      <form onSubmit={onSubmit} className="space-y-3">
-        <div>
-          <label className="block text-sm mb-1">Name</label>
-          <input name="name" value={form.name} onChange={onChange} required maxLength={150} className="w-full border rounded-md px-3 py-2" />
-          {fieldErrors.name && <p className="text-xs text-red-600 mt-1">{fieldErrors.name}</p>}
+    <div className="space-y-8 w-full min-w-0 overflow-x-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-4 w-full min-w-0">
+        <div className="space-y-2">
+          <a
+            href={`/dashboard/projects/${projectId}`}
+            className="group inline-flex items-center gap-2 text-sm font-medium text-[#00674F] transition hover:text-[#008061]"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00674F]/10 text-[#00674F] transition group-hover:bg-[#008061]/20 group-hover:text-[#008061]">
+              <ChevronLeft className="h-4 w-4" />
+            </span>
+            Back to Project
+          </a>
+          <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Create Milestone</h1>
+          <p className="max-w-xl text-sm text-slate-500">Tambahkan milestone baru untuk project ini. Pastikan tanggal dan status sesuai.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm mb-1">Status</label>
-            <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-              {MILESTONE_STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            {fieldErrors.status && <p className="text-xs text-red-600 mt-1">{fieldErrors.status}</p>}
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Due Planned</label>
-            <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
-            {fieldErrors.due_planned && <p className="text-xs text-red-600 mt-1">{fieldErrors.due_planned}</p>}
-          </div>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
+          {error}
         </div>
-        <div>
-          <label className="block text-sm mb-1">Due Actual</label>
-          <input
-            type="date"
-            name="due_actual"
-            value={form.due_actual}
-            onChange={onChange}
-            className="w-full border rounded-md px-3 py-2 bg-neutral-50 text-neutral-500"
-            disabled
-            readOnly
-            placeholder="Auto-filled when milestone is completed"
-          />
-          <p className="text-xs text-neutral-500 mt-1">Nilai ini akan terisi otomatis saat kamu menandai milestone sebagai Completed.</p>
-        </div>
-        <div className="pt-2">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium">Tasks (optional)</h3>
-            <button type="button" onClick={addEmptyTask} className="px-2 py-1 rounded-md border text-sm hover:bg-neutral-50">Add Task</button>
+      )}
+
+      <div className="grid items-stretch gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Left: tips/checklist */}
+        <aside className="min-w-0 self-stretch flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">Milestone Tips</h2>
+            <ul className="space-y-2 text-sm">
+              <li className="flex items-start gap-2"><span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-white/70" />Nama singkat dan jelas.</li>
+              <li className="flex items-start gap-2"><span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-white/70" />Gunakan Due Planned sebagai target.</li>
+              <li className="flex items-start gap-2"><span className="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-white/70" />Tasks opsional; bisa ditambahkan di detail project.</li>
+            </ul>
           </div>
-          {taskForms.length === 0 ? (
-            <p className="text-xs text-neutral-500">Kamu bisa menambahkan task pertama milestone di sini. Ini opsional.</p>
-          ) : (
-            <div className="grid gap-3">
-              {taskForms.map((t, idx) => (
-                <div key={t.tempKey} className="border rounded-md p-3 grid gap-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-neutral-600">Task #{idx + 1}</div>
-                    <button type="button" onClick={() => removeTask(idx)} className="text-xs px-2 py-1 border rounded hover:bg-neutral-50">Remove</button>
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-1">Title</label>
-                    <input
-                      value={t.title}
-                      onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))}
-                      className="w-full border rounded-md px-3 py-2"
-                      placeholder="e.g. Implement Middleware RBAC"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm mb-1">Status</label>
-                      <select
-                        value={t.status}
-                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, status: e.target.value } : x))}
-                        className="w-full border rounded-md px-3 py-2"
-                      >
-                        <option>To Do</option>
-                        <option>In Progress</option>
-                        <option>Done</option>
-                        <option>On Hold</option>
-                        <option>Cancelled</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm mb-1">Priority</label>
-                      <select
-                        value={t.priority}
-                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, priority: e.target.value } : x))}
-                        className="w-full border rounded-md px-3 py-2"
-                      >
-                        <option>Low</option>
-                        <option>Medium</option>
-                        <option>High</option>
-                        <option>Critical</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm mb-1">Start Planned</label>
-                      <input type="date" value={t.start_planned}
-                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, start_planned: e.target.value } : x))}
-                        className="w-full border rounded-md px-3 py-2" />
-                    </div>
-                    <div>
-                      <label className="block text-sm mb-1">End Planned</label>
-                      <input type="date" value={t.end_planned}
-                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, end_planned: e.target.value } : x))}
-                        className="w-full border rounded-md px-3 py-2" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm mb-1">Percent Complete</label>
-                    <input type="number" min={0} max={100} value={t.percent_complete}
-                      onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, percent_complete: Number(e.target.value || 0) } : x))}
-                      className="w-full border rounded-md px-3 py-2" />
-                  </div>
-                  {idx > 0 && (
-                    <div>
-                      <label className="block text-sm mb-1">Depends On (previous tasks)</label>
-                      <div className="border rounded-md p-2 max-h-40 overflow-auto text-sm">
-                        {taskForms.slice(0, idx).map((cand, cidx) => {
-                          const checked = (t.dependsOnKeys || []).includes(cand.tempKey);
-                          const label = (cand.title && cand.title.trim()) ? cand.title : `Task #${cidx + 1}`;
-                          return (
-                            <label key={cand.tempKey} className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={checked}
-                                onChange={(e) => {
-                                  setTaskForms((s) => s.map((x, i) => {
-                                    if (i !== idx) return x;
-                                    const set = new Set(x.dependsOnKeys || []);
-                                    if (e.target.checked) set.add(cand.tempKey); else set.delete(cand.tempKey);
-                                    return { ...x, dependsOnKeys: Array.from(set) };
-                                  }));
-                                }}
-                              />
-                              <span className="truncate">{label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Dukungan tipe/lag akan ditambahkan berikutnya.</p>
-                    </div>
-                  )}
-                </div>
-              ))}
+          <div className="text-xs/5 text-white/90">
+            Project ID: <span className="font-semibold">{String(projectId)}</span>
+          </div>
+        </aside>
+
+        {/* Right: form */}
+        <form onSubmit={onSubmit} className="min-w-0 rounded-[24px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm mb-1">Name</label>
+              <input name="name" value={form.name} onChange={onChange} required maxLength={150} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="e.g. Phase 1 Delivery" />
+              {fieldErrors.name && <p className="text-xs text-red-600 mt-1">{fieldErrors.name}</p>}
             </div>
-          )}
-        </div>
-        <div className="pt-2 flex items-center gap-2">
-          <button type="submit" disabled={submitting} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{submitting ? 'Saving...' : 'Save'}</button>
-          <button type="button" onClick={() => history.back()} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
-        </div>
-      </form>
+            {/* Status hidden: default "Planned" used server-side */}
+            <div>
+              <label className="block text-sm mb-1">Due Planned</label>
+              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              {fieldErrors.due_planned && <p className="text-xs text-red-600 mt-1">{fieldErrors.due_planned}</p>}
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Due Actual</label>
+              <input
+                type="date"
+                name="due_actual"
+                value={form.due_actual}
+                onChange={onChange}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-neutral-50 px-4 text-sm font-medium text-neutral-500 shadow-inner"
+                disabled
+                readOnly
+                placeholder="Auto-filled when milestone is completed"
+              />
+              <p className="text-xs text-neutral-500 mt-1">Nilai ini akan terisi otomatis saat milestone ditandai Completed.</p>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-slate-700">Tasks (optional)</h3>
+              <button type="button" onClick={addEmptyTask} className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm hover:bg-neutral-50">Add Task</button>
+            </div>
+            {taskForms.length === 0 ? (
+              <p className="text-xs text-neutral-500">Kamu bisa menambahkan task pertama milestone di sini. Ini opsional.</p>
+            ) : (
+              <div className="grid gap-3">
+                {taskForms.map((t, idx) => (
+                  <div key={t.tempKey} className="rounded-xl border border-slate-200 p-3 grid gap-2 bg-white/50">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-neutral-600">Task #{idx + 1}</div>
+                      <button type="button" onClick={() => removeTask(idx)} className="text-xs px-2 py-1 border rounded hover:bg-neutral-50">Remove</button>
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Title</label>
+                      <input
+                        value={t.title}
+                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))}
+                        className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner"
+                        placeholder="e.g. Implement Middleware RBAC"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm mb-1">Status</label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                              <span className={t.status ? 'text-slate-700' : 'text-slate-400'}>{t.status || 'Pilih status'}</span>
+                              <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="min-w-[200px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                            {TASK_STATUS_OPTIONS.map((sopt) => (
+                              <DropdownMenuItem key={sopt} onSelect={() => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, status: sopt } : x))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                                <span>{sopt}</span>
+                                {t.status === sopt && <Check className="h-4 w-4 text-emerald-500" />}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-1">Priority</label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                              <span className={t.priority ? 'text-slate-700' : 'text-slate-400'}>{t.priority || 'Pilih priority'}</span>
+                              <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="min-w-[200px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                            {TASK_PRIORITY_OPTIONS.map((popt) => (
+                              <DropdownMenuItem key={popt} onSelect={() => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, priority: popt } : x))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                                <span>{popt}</span>
+                                {t.priority === popt && <Check className="h-4 w-4 text-emerald-500" />}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm mb-1">Start Planned</label>
+                        <input type="date" value={t.start_planned}
+                          onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, start_planned: e.target.value } : x))}
+                          className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
+                      </div>
+                      <div>
+                        <label className="block text-sm mb-1">End Planned</label>
+                        <input type="date" value={t.end_planned}
+                          onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, end_planned: e.target.value } : x))}
+                          className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Percent Complete</label>
+                      <input type="number" min={0} max={100} value={t.percent_complete}
+                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, percent_complete: Number(e.target.value || 0) } : x))}
+                        className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
+                    </div>
+                    <div>
+                      <label className="block text-sm mb-1">Assignments</label>
+                      {usersLoading ? (
+                        <Skeleton className="h-20 w-full rounded-xl bg-neutral-200/50" />
+                      ) : users.length === 0 ? (
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">No users available.</div>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-inner max-h-40 overflow-auto text-sm">
+                          {users.map((u) => {
+                            const checked = (t.assigneeIds || []).includes(u.id);
+                            return (
+                              <label key={u.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50">
+                                <span className="text-slate-700">{u.name}</span>
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setTaskForms((s) => s.map((x, i) => {
+                                      if (i !== idx) return x;
+                                      const set = new Set(x.assigneeIds || []);
+                                      if (e.target.checked) set.add(u.id); else set.delete(u.id);
+                                      return { ...x, assigneeIds: Array.from(set) };
+                                    }));
+                                  }}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {idx > 0 && (
+                      <div>
+                        <label className="block text-sm mb-1">Depends On (previous tasks)</label>
+                        <div className="border rounded-md p-2 max-h-40 overflow-auto text-sm">
+                          {taskForms.slice(0, idx).map((cand, cidx) => {
+                            const checked = (t.dependsOnKeys || []).includes(cand.tempKey);
+                            const label = (cand.title && cand.title.trim()) ? cand.title : `Task #${cidx + 1}`;
+                            return (
+                              <label key={cand.tempKey} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setTaskForms((s) => s.map((x, i) => {
+                                      if (i !== idx) return x;
+                                      const set = new Set(x.dependsOnKeys || []);
+                                      if (e.target.checked) set.add(cand.tempKey); else set.delete(cand.tempKey);
+                                      return { ...x, dependsOnKeys: Array.from(set) };
+                                    }));
+                                  }}
+                                />
+                                <span className="truncate">{label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Dukungan tipe/lag akan ditambahkan berikutnya.</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061] disabled:opacity-60"
+            >
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {submitting ? 'Saving' : 'Create Milestone'}
+            </button>
+            <a href={`/dashboard/projects/${projectId}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Cancel</a>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

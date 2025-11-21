@@ -12,7 +12,34 @@ export type TimeEntryPayload = {
 };
 
 export async function upsert(payload: TimeEntryPayload) {
-  return await apiRequest<any>("POST", "/api/time-entries/upsert", payload as any);
+  const taskId = payload.task_id;
+  // Prefer new nested route when available, but keep backward compatibility
+  const endpoints = [
+    {
+      url: `/api/tasks/${encodeURIComponent(String(taskId))}/time-entries/upsert`,
+      body: payload as any,
+    },
+    {
+      url: "/api/time-entries/upsert",
+      body: payload as any,
+    },
+  ] as const;
+
+  let lastErr: any;
+  for (const ep of endpoints) {
+    try {
+      return await apiRequest<any>("POST", ep.url, ep.body);
+    } catch (e: any) {
+      const status = e?.response?.status;
+      // Only fall back on classic "route not found / method not allowed"
+      if (status === 404 || status === 405) {
+        lastErr = e;
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr || new Error("Failed to save time entry");
 }
 
 export async function listByTask(taskId: number | string) {

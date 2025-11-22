@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 
 type FormState = {
   code: string;
@@ -65,7 +66,7 @@ export default function CreateDivisionPage() {
   }, [checklistItems]);
 
   return (
-    <div className="space-y-8 w-full">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <button
@@ -91,7 +92,8 @@ export default function CreateDivisionPage() {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+      <DetailMainCard>
+        <DetailTwoColumnGrid className="min-w-0 w-full">
         <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
           <div className="space-y-5">
             <div className="space-y-3">
@@ -123,7 +125,7 @@ export default function CreateDivisionPage() {
 
         <form
           onSubmit={onSubmit}
-          className="min-w-0 flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
+          className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
         >
           <div>
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Division Details</h2>
@@ -199,7 +201,8 @@ export default function CreateDivisionPage() {
             <p className="mt-3 text-sm font-medium text-emerald-600">{successMessage}</p>
           )}
         </form>
-      </div>
+        </DetailTwoColumnGrid>
+      </DetailMainCard>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, Sparkles, ChevronsUpDown, Check } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 
 type FormState = {
   name: string;
@@ -184,42 +185,49 @@ export default function CreateUserPage() {
         </div>
       )}
 
-      <div className="grid gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
-          <div className="space-y-5">
-            <div className="space-y-3">
-              <div className="w-full rounded-full bg-emerald-800/30">
-                <div
-                  className="h-1 rounded-full bg-white/80 transition-all duration-500"
-                  style={{ width: `${checklistProgress}%` }}
-                />
+      <DetailMainCard>
+        <DetailTwoColumnGrid className="min-w-0 w-full">
+          <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
+            <div className="space-y-5">
+              <div className="space-y-3">
+                <div className="w-full rounded-full bg-emerald-800/30">
+                  <div
+                    className="h-1 rounded-full bg-white/80 transition-all duration-500"
+                    style={{ width: `${checklistProgress}%` }}
+                  />
+                </div>
+                <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">
+                  Onboarding Checklist
+                </h2>
               </div>
-              <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">Onboarding Checklist</h2>
+              <ul className="space-y-3 text-sm leading-relaxed">
+                {checklistItems.map((item) => (
+                  <li
+                    key={item.key}
+                    className={`flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2 transition-all duration-300 hover:translate-x-1 ${
+                      item.completed ? "text-white opacity-100" : "text-white/70 opacity-60"
+                    }`}
+                  >
+                    <CheckCircleIcon
+                      className={`h-5 w-5 flex-none ${item.completed ? "text-white" : "text-white/50"}`}
+                    />
+                    <span>{item.label}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ul className="space-y-3 text-sm leading-relaxed">
-              {checklistItems.map((item) => (
-                <li
-                  key={item.key}
-                  className={`flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2 transition-all duration-300 hover:translate-x-1 ${item.completed ? "text-white opacity-100" : "text-white/70 opacity-60"}`}
-                >
-                  <CheckCircleIcon className={`h-5 w-5 flex-none ${item.completed ? "text-white" : "text-white/50"}`} />
-                  <span>{item.label}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Tip</p>
-            <p className="text-sm leading-relaxed">
-              Gunakan password sementara yang akan diminta untuk diganti saat login pertama kali.
-            </p>
-          </div>
-        </aside>
+            <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Tip</p>
+              <p className="text-sm leading-relaxed">
+                Gunakan password sementara yang akan diminta untuk diganti saat login pertama kali.
+              </p>
+            </div>
+          </aside>
 
-        <form
-          onSubmit={onSubmit}
-          className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
-        >
+          <form
+            onSubmit={onSubmit}
+            className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
+          >
           <div>
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Account Details</h2>
             <p className="text-xs text-neutral-400">Informasi dasar yang diperlukan untuk membuat akun baru.</p>
@@ -447,8 +455,9 @@ export default function CreateUserPage() {
           {successMessage && (
             <p className="mt-3 text-sm font-medium text-emerald-600">✔ {successMessage}</p>
           )}
-        </form>
-      </div>
+          </form>
+        </DetailTwoColumnGrid>
+      </DetailMainCard>
     </div>
   );
 }

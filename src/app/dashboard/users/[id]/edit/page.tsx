@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 
 type FormState = {
   id: number;
@@ -216,96 +217,96 @@ export default function EditUserPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{error}</div>
+          <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
+            {error}
+          </div>
         )}
 
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <aside className="flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
-            <div className="space-y-5">
-              <div className="space-y-3">
-                <div className="w-full rounded-full bg-emerald-800/30">
-                  <div className="h-1 w-1/2 rounded-full bg-white/70 animate-pulse" />
+        <DetailMainCard>
+          <DetailTwoColumnGrid>
+            <aside className="flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <div className="w-full rounded-full bg-emerald-800/30">
+                    <div className="h-1 w-1/2 rounded-full bg-white/70 animate-pulse" />
+                  </div>
+                  <div className="h-5 w-40 rounded-md bg-white/20" />
                 </div>
-                <div className="h-5 w-40 rounded-md bg-white/20" />
+                <ul className="space-y-3 text-sm leading-relaxed">
+                  {[1, 2, 3, 4].map((i) => (
+                    <li key={i} className="flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2">
+                      <div className="h-5 w-5 flex-none rounded-full bg-white/30 animate-pulse" />
+                      <div className="h-3 w-3/4 rounded-md bg-white/30 animate-pulse" />
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-3 text-sm leading-relaxed">
-                {[1,2,3,4].map((i) => (
-                  <li key={i} className="flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2">
-                    <div className="h-5 w-5 flex-none rounded-full bg-white/30 animate-pulse" />
-                    <div className="h-3 w-3/4 rounded-md bg-white/30 animate-pulse" />
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
-              <div className="h-3 w-16 rounded bg-white/20 mb-2" />
-              <div className="h-3 w-2/3 rounded bg-white/20" />
-            </div>
-          </aside>
-
-          <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-28 rounded" />
-              <Skeleton className="h-3 w-64 rounded" />
-            </div>
-
-            {/* Row 1 */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-20 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+                <div className="h-3 w-16 rounded bg-white/20 mb-2" />
+                <div className="h-3 w-2/3 rounded bg-white/20" />
               </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-16 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
-              </div>
-            </div>
+            </aside>
 
-            {/* Row 2 */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
               <div className="space-y-2">
                 <Skeleton className="h-4 w-28 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                <Skeleton className="h-3 w-64 rounded" />
               </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-36 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
-              </div>
-            </div>
 
-            {/* Row 3 */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-12 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-16 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-20 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
-              </div>
-            </div>
 
-            {/* Row 4 */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-16 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-28 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-36 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-14 rounded" />
-                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
-              </div>
-            </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <Skeleton className="h-3 w-64 rounded" />
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-9 w-24 rounded-full" />
-                <Skeleton className="h-9 w-32 rounded-full" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-12 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-16 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-14 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <Skeleton className="h-3 w-64 rounded" />
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-9 w-24 rounded-full" />
+                  <Skeleton className="h-9 w-32 rounded-full" />
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </DetailTwoColumnGrid>
+        </DetailMainCard>
       </div>
     );
   }
@@ -337,8 +338,9 @@ export default function EditUserPage() {
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-        <aside className="flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
+      <DetailMainCard>
+        <DetailTwoColumnGrid className="min-w-0 w-full">
+          <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
           <div className="space-y-5">
             <div className="space-y-3">
               <div className="w-full rounded-full bg-emerald-800/30">
@@ -371,7 +373,7 @@ export default function EditUserPage() {
 
         <form
           onSubmit={onSubmit}
-          className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
+          className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm"
         >
           <div>
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Account Details</h2>
@@ -600,7 +602,8 @@ export default function EditUserPage() {
             <p className="mt-3 text-sm font-medium text-emerald-600">✔ {successMessage}</p>
           )}
         </form>
-      </div>
+        </DetailTwoColumnGrid>
+      </DetailMainCard>
     </div>
   );
 }

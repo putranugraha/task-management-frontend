@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { ChevronLeft, Mail, ShieldCheck, AlertCircle } from "lucide-react";
 
 type UserDetail = {
@@ -108,33 +109,35 @@ export default function UserDetailPage() {
           </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <aside className="flex h-full flex-col gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-white/30 animate-pulse" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-40 rounded" />
-                <Skeleton className="h-3 w-48 rounded" />
+        <DetailMainCard>
+          <DetailTwoColumnGrid>
+            <aside className="flex h-full flex-col gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-white/30 animate-pulse" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-40 rounded" />
+                  <Skeleton className="h-3 w-48 rounded" />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
+            </aside>
+
+            <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-3 w-20 rounded" />
+                    <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-24 rounded-full" />
-              <Skeleton className="h-6 w-16 rounded-full" />
-            </div>
-          </aside>
-
-          <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-3 w-20 rounded" />
-                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/50" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+          </DetailTwoColumnGrid>
+        </DetailMainCard>
       </div>
     );
   }
@@ -189,63 +192,65 @@ export default function UserDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-        {/* Profile summary */}
-        <aside className="flex h-full flex-col gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-lg font-bold">
-              {getInitials(data.name, data.email)}
-            </div>
-            <div className="min-w-0">
-              <div className="text-xl font-semibold text-white">{data.name}</div>
-              <div className="mt-1 inline-flex items-center gap-2 text-sm text-white/80">
-                <Mail className="h-4 w-4" />
-                <span className="truncate max-w-[220px] md:max-w-[260px]">{data.email}</span>
+      <DetailMainCard>
+        <DetailTwoColumnGrid>
+          {/* Profile summary */}
+          <aside className="flex h-full flex-col gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 rounded-full bg-white/20 grid place-items-center text-lg font-bold">
+                {getInitials(data.name, data.email)}
+              </div>
+              <div className="min-w-0">
+                <div className="text-xl font-semibold text-white">{data.name}</div>
+                <div className="mt-1 inline-flex items-center gap-2 text-sm text-white/80">
+                  <Mail className="h-4 w-4" />
+                  <span className="truncate max-w-[220px] md:max-w-[260px]">{data.email}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {data.role && (
-              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
-                {data.role}
-              </span>
-            )}
-            {data.division?.name && (
-              <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
-                {data.division.name}
-              </span>
-            )}
-            {statusBadge}
-            {situation}
-          </div>
-          {data.job_title && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Job Title</p>
-              <p className="text-sm leading-relaxed">{data.job_title}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {data.role && (
+                <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
+                  {data.role}
+                </span>
+              )}
+              {data.division?.name && (
+                <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
+                  {data.division.name}
+                </span>
+              )}
+              {statusBadge}
+              {situation}
             </div>
-          )}
-        </aside>
+            {data.job_title && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Job Title</p>
+                <p className="text-sm leading-relaxed">{data.job_title}</p>
+              </div>
+            )}
+          </aside>
 
-        {/* Details card */}
-        <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
-          <div>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Account Information</h2>
-            <p className="text-xs text-neutral-400">Detail atribut pengguna dan metadata akun.</p>
+          {/* Details card */}
+          <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
+            <div>
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Account Information</h2>
+              <p className="text-xs text-neutral-400">Detail atribut pengguna dan metadata akun.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Row label="Name" value={data.name} />
+              <Row label="Email" value={data.email} />
+              <Row label="Role" value={data.role ?? "-"} />
+              <Row label="Division" value={data.division?.name ?? "-"} />
+              <Row label="Status" value={data.status ?? "-"} />
+              <Row label="Active" value={data.is_active ? "Yes" : "No"} />
+              <Row label="Last Login" value={data.last_login_at ?? "-"} />
+              <Row label="Email Verified" value={data.email_verified_at ?? "-"} />
+              <Row label="Created At" value={data.created_at ?? "-"} />
+              <Row label="Updated At" value={data.updated_at ?? "-"} />
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Row label="Name" value={data.name} />
-            <Row label="Email" value={data.email} />
-            <Row label="Role" value={data.role ?? "-"} />
-            <Row label="Division" value={data.division?.name ?? "-"} />
-            <Row label="Status" value={data.status ?? "-"} />
-            <Row label="Active" value={data.is_active ? "Yes" : "No"} />
-            <Row label="Last Login" value={data.last_login_at ?? "-"} />
-            <Row label="Email Verified" value={data.email_verified_at ?? "-"} />
-            <Row label="Created At" value={data.created_at ?? "-"} />
-            <Row label="Updated At" value={data.updated_at ?? "-"} />
-          </div>
-        </div>
-      </div>
+        </DetailTwoColumnGrid>
+      </DetailMainCard>
     </div>
   );
 }

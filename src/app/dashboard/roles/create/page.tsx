@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, Check, ListChecks, ChevronsUpDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 
 type FormState = {
   name: string;
@@ -124,7 +125,8 @@ export default function CreateRolePage() {
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{error}</div>
       )}
 
-      <div className="grid min-w-0 w-full items-start gap-6 md:gap-8 lg:grid-cols-[1fr_1.2fr] xl:grid-cols-[1fr_1.4fr]">
+      <DetailMainCard>
+        <DetailTwoColumnGrid>
         {/* Sidebar checklist */}
         <aside className="min-w-0 flex flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
           <div className="space-y-5">
@@ -269,7 +271,8 @@ export default function CreateRolePage() {
             <p className="mt-3 text-sm font-medium text-emerald-600">✔ {successMessage}</p>
           )}
         </form>
-      </div>
+        </DetailTwoColumnGrid>
+      </DetailMainCard>
     </div>
   );
 }

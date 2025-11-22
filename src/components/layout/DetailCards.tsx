@@ -12,7 +12,7 @@ export function DetailMainCard({ children, className }: Props) {
   return (
     <div
       className={cn(
-        "rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6",
+        "w-full min-w-0 rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6",
         className
       )}
     >
@@ -36,9 +36,8 @@ export function DetailSectionCard({ children, className }: Props) {
 
 export function DetailTwoColumnGrid({ children, className }: Props) {
   return (
-    <div className={cn("grid gap-4 md:grid-cols-2", className)}>
+    <div className={cn("grid min-w-0 w-full gap-4 md:grid-cols-2", className)}>
       {children}
     </div>
   );
 }
-

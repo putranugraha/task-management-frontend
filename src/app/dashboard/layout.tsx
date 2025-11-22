@@ -20,10 +20,8 @@ export default function DashboardLayout({
         <SidebarInset className="flex flex-1 min-w-0 flex-col md:peer-data-[variant=inset]:m-0 md:peer-data-[variant=inset]:rounded-none md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0">
           <DesktopTopBar />
           <MobileTopBar />
-          <main className="flex-1 min-w-0 w-full px-2 md:px-4 py-6 md:py-8">
-            <div className="w-full max-w-screen-2xl mx-auto">
-              {children}
-            </div>
+          <main className="flex-1 min-w-0 w-full px-4 md:px-8 py-6 md:py-8">
+            {children}
           </main>
         </SidebarInset>
       </div>

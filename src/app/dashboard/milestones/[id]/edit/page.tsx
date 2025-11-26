@@ -8,6 +8,8 @@ import { fetchProjectsList } from "@/lib/lookups";
 import { MILESTONE_STATUS_OPTIONS } from "@/lib/api/milestones";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { DetailMainCard } from "@/components/layout/DetailCards";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type MilestoneDetail = {
   id: number;
@@ -119,13 +121,101 @@ export default function EditMilestonePage() {
     return Math.round((done / total) * 100);
   }, [checklistItems]);
 
-  if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-600">{error}</div>;
-  if (!form) return <div>Not found</div>;
+
+  if (!form) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="group inline-flex items-center gap-2 text-sm font-medium text-[#00674F] transition hover:text-[#008061]"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00674F]/10 text-[#00674F] transition group-hover:bg-[#008061]/20 group-hover:text-[#008061]">
+                <ChevronLeft className="h-4 w-4" />
+              </span>
+              Back to Milestones
+            </button>
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48 rounded-md" />
+              <Skeleton className="h-4 w-80 rounded-md" />
+            </div>
+          </div>
+        </div>
+
+        <DetailMainCard>
+          <div className="grid items-stretch gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <aside className="min-w-0 self-stretch flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <div className="w-full rounded-full bg-emerald-800/30">
+                    <div className="h-1 w-1/2 rounded-full bg-white/70 animate-pulse" />
+                  </div>
+                  <Skeleton className="h-5 w-40 rounded-md bg-white/20" />
+                </div>
+                <ul className="space-y-3 text-sm leading-relaxed">
+                  {[1, 2, 3].map((i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2"
+                    >
+                      <div className="h-5 w-5 flex-none rounded-full bg-white/30 animate-pulse" />
+                      <div className="h-3 w-3/4 rounded-md bg-white/30 animate-pulse" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
+                <Skeleton className="mb-2 h-3 w-16 rounded bg-white/20" />
+                <Skeleton className="h-3 w-2/3 rounded bg-white/20" />
+              </div>
+            </aside>
+
+            <div className="flex h-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-28 rounded" />
+                <Skeleton className="h-3 w-64 rounded" />
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-24 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/60" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-24 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/60" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-24 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/60" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-24 rounded" />
+                  <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/60" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/60" />
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <Skeleton className="h-9 w-24 rounded-full" />
+                <Skeleton className="h-9 w-32 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </DetailMainCard>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8 w-full min-w-0 overflow-x-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-4 w-full min-w-0">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <button
             type="button"
@@ -148,6 +238,7 @@ export default function EditMilestonePage() {
         </div>
       )}
 
+      <DetailMainCard>
       <div className="grid items-stretch gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <aside className="min-w-0 self-stretch flex h-full flex-col justify-between gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)] transition-all duration-200 hover:-translate-y-[2px] hover:shadow-xl">
           <div className="space-y-5">
@@ -272,6 +363,7 @@ export default function EditMilestonePage() {
           </div>
         </form>
       </div>
+      </DetailMainCard>
     </div>
   );
 }

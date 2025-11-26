@@ -35,7 +35,23 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
       const list = await listByTask(taskId);
       setItems(list);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal memuat lampiran");
+      const status = e?.response?.status;
+      const code = e?.code;
+      const msg = String(e?.message || "");
+      const isTimeout =
+        code === "ECONNABORTED" ||
+        status === 408 ||
+        status === 504 ||
+        /timeout/i.test(msg) ||
+        /timed out/i.test(msg);
+
+      if (isTimeout) {
+        // Untuk timeout, treat sebagai tidak ada lampiran supaya UI tetap bersih.
+        setItems([]);
+        setError(null);
+      } else {
+        setError(e?.message ?? "Gagal memuat lampiran");
+      }
     } finally {
       setLoading(false);
     }

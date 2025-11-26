@@ -215,9 +215,7 @@ export default function MilestonesPage() {
     const orderedVisible = columnOrder.filter((key) => set.has(key));
     return [
       numberColumn,
-      ...orderedVisible
-        .map((key) => columns.find((c) => String(c.key) === key))
-        .filter(Boolean) as any[],
+      ...orderedVisible.map((key) => columns.find((c) => String(c.key) === key)).filter(Boolean) as any[],
       ...columns.filter((c) => c.key === "actions"),
     ];
   }, [columns, numberColumn, visibleKeys, columnOrder]);
@@ -269,17 +267,21 @@ export default function MilestonesPage() {
                 aria-haspopup="menu"
                 aria-expanded={columnMenuOpen}
               >
-                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-slate-50 text-slate-600 transition group-hover:bg-[#00674F]/10 group-hover:text-[#00674F]">
-                  <SlidersHorizontal className="h-4 w-4" />
+                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-slate-50 text-slate-400 transition group-hover:bg-[#00674F]/10 group-hover:text-[#00674F]">
+                  <span className="absolute inset-0 rounded-lg border border-white/40" />
+                  <SlidersHorizontal className="h-[18px] w-[18px]" />
                 </span>
-                Columns
+                Manage Columns
               </button>
               {columnMenuOpen && (
-                <div className="absolute right-0 z-10 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl" role="menu">
-                  <div className="grid gap-1">
-                    {columnOrder.map((key) => {
+                <div className="absolute right-0 z-30 mt-3 w-60 rounded-2xl border border-slate-100 bg-white/95 p-4 shadow-[0_18px_36px_rgba(15,23,42,0.14)] ring-1 ring-slate-100">
+                  <p className="px-1 pb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+                    Visible Columns
+                  </p>
+                  <div className="max-h-56 space-y-1 overflow-y-auto text-sm">
+                    {togglableColumns.map((col) => {
+                      const key = String(col.key);
                       const checked = visibleKeys.includes(key);
-                      const col = togglableColumns.find((c) => String(c.key) === key)!;
                       return (
                         <label
                           key={key}
@@ -292,7 +294,9 @@ export default function MilestonesPage() {
                             onChange={() => toggleColumn(key)}
                           />
                           <span className="flex-1 truncate text-sm font-medium">{col.header}</span>
-                          <span className="text-[10px] uppercase tracking-[0.3em] text-slate-300">{checked ? "On" : "Off"}</span>
+                          <span className="text-[10px] uppercase tracking-[0.3em] text-slate-300">
+                            {checked ? "On" : "Off"}
+                          </span>
                         </label>
                       );
                     })}
@@ -311,9 +315,9 @@ export default function MilestonesPage() {
             )}
           </div>
         </div>
-        <div className="p-6">
-          <DataTable columns={visibleColumns as any} data={paginatedRows} loading={loading} />
-        </div>
+
+        <DataTable columns={visibleColumns as any} data={paginatedRows} loading={loading} />
+
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>
             Showing {summaryStart} to {summaryEnd} of {filteredRows.length} milestone{filteredRows.length === 1 ? "" : "s"}

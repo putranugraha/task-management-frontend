@@ -255,7 +255,8 @@ export default function TaskDetailPage() {
         </Breadcrumb>
       </div>
 
-      <DetailMainCard>
+      {/* Main detail card now uses full available width */}
+      <DetailMainCard className="w-full">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <h1 className="text-2xl font-semibold text-slate-900 truncate">{data.title}</h1>

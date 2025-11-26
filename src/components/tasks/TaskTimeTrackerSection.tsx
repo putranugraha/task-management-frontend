@@ -7,6 +7,7 @@ import {
   upsert,
   type TimeEntryPayload,
 } from "@/lib/api/time-entries";
+import { apiRequest } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 
@@ -37,8 +38,13 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
   const [totalHours, setTotalHours] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [userNamesById, setUserNamesById] = useState<Record<number, string>>(
+    {}
+  );
 
   const [timerStart, setTimerStart] = useState<number | null>(null);
+  const [nowTs, setNowTs] = useState<number | null>(null);
   const storageKey = `task_timer_${taskId}`;
 
   async function fetchAll() {
@@ -50,7 +56,24 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
       const total = await totalByTask(taskId);
       setTotalHours(total);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal memuat entri waktu");
+      const status = e?.response?.status;
+      const code = e?.code;
+      const msg = String(e?.message || "");
+      const isTimeout =
+        code === "ECONNABORTED" ||
+        status === 408 ||
+        status === 504 ||
+        /timeout/i.test(msg) ||
+        /timed out/i.test(msg);
+
+      if (isTimeout) {
+        // Untuk timeout, anggap saja data kosong supaya UI tetap jalan.
+        setEntries([]);
+        setTotalHours(0);
+        setError(null);
+      } else {
+        setError(e?.message ?? "Gagal memuat entri waktu");
+      }
     } finally {
       setLoading(false);
     }
@@ -61,6 +84,111 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
+
+  // Tick waktu saat timer sedang berjalan supaya "Timer berjalan" live
+  useEffect(() => {
+    if (!timerStart) {
+      setNowTs(null);
+      return;
+    }
+    if (typeof window === "undefined") return;
+
+    setNowTs(Date.now());
+    const id = window.setInterval(() => {
+      setNowTs(Date.now());
+    }, 10_000); // update setiap 10 detik
+
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [timerStart]);
+
+  // Fetch user list so we can resolve user_id -> nama user
+  useEffect(() => {
+    (async () => {
+      try {
+        const tryPaths = [
+          "/api/users/options?status=1",
+          "/api/users/options?status=Aktif",
+          "/api/users/options",
+          "/api/users?status=1",
+          "/api/users?status=Aktif",
+          "/api/users",
+        ];
+        let mapped: Array<{ id: number; name: string }> = [];
+        for (const path of tryPaths) {
+          try {
+            const rs = await apiRequest<any>("GET", path);
+            let arr: any[] = [];
+            if (Array.isArray(rs)) arr = rs;
+            else if (Array.isArray((rs as any)?.data)) arr = (rs as any).data;
+            else if (Array.isArray((rs as any)?.data?.data))
+              arr = (rs as any).data.data;
+            else if (Array.isArray((rs as any)?.items)) arr = (rs as any).items;
+            else if (Array.isArray((rs as any)?.users)) arr = (rs as any).users;
+
+            mapped = (arr || []).map((u: any) => ({
+              id: Number(u.id),
+              name:
+                u.name ??
+                u.full_name ??
+                u.username ??
+                u.email ??
+                String(u.id),
+            }));
+            if (mapped.length) break;
+          } catch {
+            // coba path berikutnya
+          }
+        }
+        setUsers(mapped);
+      } catch {
+        setUsers([]);
+      }
+    })();
+  }, []);
+
+  // Jika masih ada user_id yang belum ketemu di daftar users,
+  // coba fetch detail user per-ID agar bisa tampilkan username lama/inaktif.
+  useEffect(() => {
+    (async () => {
+      const knownIds = new Set<number>([
+        ...users.map((u) => Number(u.id)),
+        ...Object.keys(userNamesById).map((k) => Number(k)),
+      ]);
+      const toResolve = Array.from(
+        new Set(
+          entries
+            .map((e) => Number(e.user_id ?? e.user?.id ?? 0))
+            .filter((id) => Number.isFinite(id) && id > 0 && !knownIds.has(id))
+        )
+      );
+      if (toResolve.length === 0) return;
+
+      const updates: Record<number, string> = {};
+      for (const uid of toResolve) {
+        try {
+          const res = await apiRequest<any>("GET", `/api/users/${uid}`);
+          const payload =
+            res && typeof res === "object" && "data" in (res as any)
+              ? (res as any).data
+              : res;
+          const name =
+            payload?.name ??
+            payload?.full_name ??
+            payload?.username ??
+            payload?.email ??
+            String(uid);
+          updates[uid] = name;
+        } catch {
+          // kalau gagal, biarkan fallback ke "User #id"
+        }
+      }
+      if (Object.keys(updates).length) {
+        setUserNamesById((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+  }, [entries, users, userNamesById]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -106,9 +234,29 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
     }
   }
 
-  const runningHours = timerStart
-    ? ((Date.now() - timerStart) / 3_600_000).toFixed(2)
-    : null;
+  const runningHours =
+    timerStart && nowTs
+      ? ((nowTs - timerStart) / 3_600_000).toFixed(2)
+      : null;
+
+  const userMap = useMemo(() => {
+    const map = new Map<number, string>();
+    users.forEach((u) => {
+      if (Number.isFinite(u.id)) {
+        map.set(Number(u.id), u.name);
+      }
+    });
+     Object.entries(userNamesById).forEach(([id, name]) => {
+       const uid = Number(id);
+       if (Number.isFinite(uid)) {
+         map.set(uid, name);
+       }
+     });
+     if (currentUserId && state.user?.name) {
+       map.set(currentUserId, state.user.name);
+     }
+    return map;
+  }, [users, userNamesById, currentUserId, state.user?.name]);
 
   return (
     <section className="mt-4">
@@ -122,7 +270,7 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
           <div className="p-3 text-sm text-red-600">{error}</div>
         ) : entries.length === 0 ? (
           <div className="p-3 text-sm text-neutral-500">
-            Belum ada time entry.
+            Kosong / belum ada time entry.
           </div>
         ) : (
           <table className="min-w-full text-sm">
@@ -148,9 +296,12 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
                   typeof e.hours === "string"
                     ? parseFloat(e.hours)
                     : e.hours;
+                const userId = Number(e.user_id ?? e.user?.id ?? 0);
                 const userName =
                   e.user?.name ??
-                  (e.user_id ? `User #${e.user_id}` : "-");
+                  (Number.isFinite(userId) && userId > 0
+                    ? userMap.get(userId) ?? `User #${userId}`
+                    : "-");
                 return (
                   <tr key={e.id} className="hover:bg-neutral-50">
                     <td className="px-3 py-2 border-t">
@@ -204,4 +355,3 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
     </section>
   );
 }
-

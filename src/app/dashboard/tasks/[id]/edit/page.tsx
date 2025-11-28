@@ -9,6 +9,8 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { DetailMainCard } from "@/components/layout/DetailCards";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ChevronsUpDown, Check } from "lucide-react";
 
 type TaskDetail = {
   id: number;
@@ -23,6 +25,9 @@ type TaskDetail = {
   assignments?: { user_id: number; role_on_task: string | null }[];
   dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
+
+const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
+const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
 export default function EditTaskPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
@@ -174,13 +179,13 @@ export default function EditTaskPage() {
     })();
   }, [form?.project_id]);
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target as any;
+  const applyFieldUpdate = (name: string, value: string | number) => {
+    const val = value;
     setForm((s) => {
       if (!s) return s;
       // Coerce numeric percent and clamp 0..100
       if (name === 'percent_complete') {
-        let p = Number(value);
+        let p = Number(val);
         if (!Number.isFinite(p)) p = 0;
         if (p < 0) p = 0; if (p > 100) p = 100;
         // If percent hits 100, reflect intended status 'Done' in form state.
@@ -189,7 +194,7 @@ export default function EditTaskPage() {
       }
       // If status changed to Done, force percent to 100 for consistency
       if (name === 'status') {
-        const status = value;
+        const status = String(val);
         if ((status || '').toString() === 'Done') {
           const p = 100;
           return { ...s, status, percent_complete: p };
@@ -197,10 +202,15 @@ export default function EditTaskPage() {
         return { ...s, status } as any;
       }
       if (name === 'project_id') {
-        return { ...s, project_id: value ? Number(value) : "" } as any;
+        return { ...s, project_id: val ? Number(val) : "" } as any;
       }
-      return { ...s, [name]: value } as any;
+      return { ...s, [name]: val } as any;
     });
+  };
+
+  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target as any;
+    applyFieldUpdate(name, value);
   };
 
   const selectedProjectName = useMemo(() => {
@@ -447,8 +457,8 @@ export default function EditTaskPage() {
               </div>
             )}
           </div>
-          <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-800/20 p-4 text-white/80 backdrop-blur-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-100/80">Tip</p>
+          <div className="mt-6 rounded-xl border border-[#00674F]/30 bg-[#00674F]/20 p-4 text-white/80 backdrop-blur-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[#E0F2EF]">Tip</p>
             <p className="text-sm leading-relaxed">Sesuaikan status dengan progress agar laporan akurat.</p>
           </div>
         </aside>
@@ -461,12 +471,43 @@ export default function EditTaskPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-500">Project</label>
-            <select name="project_id" value={form.project_id} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
-              <option value="">(Optional) Pilih project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                >
+                  <span className={selectedProjectName ? "text-slate-700" : "text-slate-400"}>
+                    {selectedProjectName ?? "(Optional) Pilih project"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+              >
+                <DropdownMenuItem
+                  onSelect={() => applyFieldUpdate("project_id", "")}
+                  className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                >
+                  <span>Tanpa project</span>
+                  {!form.project_id && <Check className="h-4 w-4 text-emerald-500" />}
+                </DropdownMenuItem>
+                {projects.map((p) => (
+                  <DropdownMenuItem
+                    key={p.id}
+                    onSelect={() => applyFieldUpdate("project_id", p.id)}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                  >
+                    <span>{p.name}</span>
+                    {Number(form.project_id) === Number(p.id) && (
+                      <Check className="h-4 w-4 text-emerald-500" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="space-y-2">
             <label htmlFor="title" className="text-sm font-semibold text-slate-500">Title</label>
@@ -474,22 +515,65 @@ export default function EditTaskPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-500">Priority</label>
-            <select name="priority" value={form.priority} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-              <option>Critical</option>
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                >
+                  <span className={form.priority ? "text-slate-700" : "text-slate-400"}>
+                    {form.priority || "Pilih priority"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+              >
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt}
+                    onSelect={() => applyFieldUpdate("priority", opt)}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                  >
+                    <span>{opt}</span>
+                    {form.priority === opt && <Check className="h-4 w-4 text-emerald-500" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-500">Status</label>
-            <select name="status" value={form.status} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
-              <option>To Do</option>
-              <option>In Progress</option>
-              <option>Done</option>
-              <option>On Hold</option>
-              <option>Cancelled</option>
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                >
+                  <span className={form.status ? "text-slate-700" : "text-slate-400"}>
+                    {form.status || "Pilih status"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt}
+                    onSelect={() => applyFieldUpdate("status", opt)}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                  >
+                    <span>{opt}</span>
+                    {form.status === opt && <Check className="h-4 w-4 text-emerald-500" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-500">Percent Complete</label>

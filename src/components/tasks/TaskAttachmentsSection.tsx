@@ -100,10 +100,14 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
 
   return (
     <section className="mt-4">
-      <h3 className="text-sm font-medium mb-2">Attachments</h3>
-      <div className="border rounded-lg">
+      <h3 className="text-sm font-semibold mb-2 text-slate-800">
+        Attachments
+      </h3>
+      <div className="border rounded-lg bg-white/60">
         {loading ? (
-          <div className="p-3 text-sm text-neutral-500">Loading attachments...</div>
+          <div className="p-3 text-sm text-neutral-500">
+            Loading attachments...
+          </div>
         ) : error ? (
           <div className="p-3 text-sm text-red-600">{error}</div>
         ) : items.length === 0 ? (
@@ -126,53 +130,75 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
               </tr>
             </thead>
             <tbody>
-              {items.map((a) => (
-                <tr key={a.id} className="hover:bg-neutral-50">
-                  <td className="px-3 py-2 border-t">
-                    <a
-                      href={a.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline break-all"
-                    >
-                      {a.filename}
-                    </a>
-                  </td>
-                  <td className="px-3 py-2 border-t">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${badgeClasses(
-                        a.status
-                      )}`}
-                    >
-                      {a.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 border-t">
-                    {a.uploaded_at ?? a.verified_at ?? "-"}
-                  </td>
-                  <td className="px-3 py-2 border-t">
-                    {a.size ? `${(a.size / 1024).toFixed(1)} KB` : "-"}
-                  </td>
-                  {canModerate && (
-                    <td className="px-3 py-2 border-t space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => handleStatus(a.id, "approve")}
-                        className="px-2 py-1 rounded-md border text-xs hover:bg-neutral-50"
+              {items.map((a) => {
+                const status = String(a.status || "");
+                const isPending = status.toLowerCase() === "pending";
+                return (
+                  <tr key={a.id} className="hover:bg-neutral-50">
+                    <td className="px-3 py-2 border-t align-top">
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-slate-800 hover:text-[#00674F] hover:underline break-all"
                       >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStatus(a.id, "reject")}
-                        className="px-2 py-1 rounded-md border text-xs hover:bg-neutral-50"
-                      >
-                        Reject
-                      </button>
+                        {a.filename}
+                      </a>
+                      <div className="mt-1 text-[11px] text-neutral-500">
+                        ID: {a.id} · Task #{a.entity_id}
+                      </div>
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td className="px-3 py-2 border-t align-top">
+                      <span
+                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${badgeClasses(
+                          a.status
+                        )}`}
+                      >
+                        {status || "Pending"}
+                      </span>
+                      {a.verified_by?.name && (
+                        <div className="mt-1 text-[11px] text-neutral-500">
+                          by {a.verified_by.name}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 border-t align-top">
+                      <div className="text-xs text-slate-700">
+                        {a.uploaded_at ?? a.verified_at ?? "-"}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 border-t align-top">
+                      {a.size ? `${(a.size / 1024).toFixed(1)} KB` : "-"}
+                    </td>
+                    {canModerate && (
+                      <td className="px-3 py-2 border-t align-top">
+                        {isPending ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStatus(a.id, "approve")}
+                              className="inline-flex items-center px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-500 transition"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStatus(a.id, "reject")}
+                              className="inline-flex items-center px-2.5 py-1 rounded-full border border-rose-200 bg-rose-50 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-500 transition"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inline-flex px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+                            Tidak ada aksi
+                          </span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

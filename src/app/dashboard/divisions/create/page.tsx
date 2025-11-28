@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/api";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
+import { useToast } from "@/components/ui/toast";
 
 type FormState = {
   code: string;
@@ -15,6 +16,7 @@ type FormState = {
 
 export default function CreateDivisionPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [form, setForm] = useState<FormState>({ code: "", name: "", description: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,16 +33,43 @@ export default function CreateDivisionPage() {
     setError(null);
     setSuccessMessage(null);
     try {
+      if (!form.name.trim()) {
+        const msg = "Nama division wajib diisi";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
+        setSubmitting(false);
+        return;
+      }
       const payload: Record<string, any> = {
         code: form.code || null,
         name: form.name,
         description: form.description || null,
       };
       await apiRequest("POST", "/api/divisions", payload);
-      setSuccessMessage("Division berhasil ditambahkan.");
+      const okMsg = "Division berhasil ditambahkan.";
+      setSuccessMessage(okMsg);
+      showToast({
+        variant: "success",
+        title: "Division berhasil dibuat",
+        description: okMsg,
+      });
       setTimeout(() => router.push("/dashboard/divisions"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal membuat division");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal membuat division";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal membuat division",
+        description: msg,
+      });
     } finally {
       setSubmitting(false);
     }

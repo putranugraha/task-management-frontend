@@ -9,6 +9,7 @@ import { ChevronLeft, Loader2, Check, ListChecks, ChevronsUpDown } from "lucide-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
+import { useToast } from "@/components/ui/toast";
 
 type FormState = {
   name: string;
@@ -18,6 +19,7 @@ type FormState = {
 
 export default function CreateRolePage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [form, setForm] = useState<FormState>({
     name: "",
     status: "Aktif",
@@ -55,41 +57,82 @@ export default function CreateRolePage() {
     setError(null);
     setSuccessMessage(null);
     try {
-      const nameToId = new Map(permissions.map((p) => [p.name, p.id] as const));
-      const permission_ids = form.permissions.map((n) => nameToId.get(n)).filter((v): v is number => typeof v === 'number');
+      if (!form.name.trim()) {
+        const msg = "Nama role wajib diisi";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
+        setSubmitting(false);
+        return;
+      }
+      if (form.permissions.length === 0) {
+        const msg = "Pilih minimal satu permission untuk role ini";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
+        setSubmitting(false);
+        return;
+      }
+      const nameToId = new Map(
+        permissions.map((p) => [p.name, p.id] as const)
+      );
+      const permission_ids = form.permissions
+        .map((n) => nameToId.get(n))
+        .filter((v): v is number => typeof v === "number");
       const payload: Record<string, any> = {
         name: form.name,
-        status: form.status,
+        // Status diset otomatis Aktif saat create
+        status: "Aktif",
         permissions: form.permissions,
         permission_ids,
       };
       await apiRequest("POST", "/api/roles", payload);
-      setSuccessMessage("Role berhasil dibuat.");
+      const okMsg = "Role berhasil dibuat.";
+      setSuccessMessage(okMsg);
+      showToast({
+        variant: "success",
+        title: "Role berhasil dibuat",
+        description: okMsg,
+      });
       setTimeout(() => router.push("/dashboard/roles"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal membuat role");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal membuat role";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal membuat role",
+        description: msg,
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const checklistItems = useMemo(() => ([
-    {
-      key: "name",
-      label: "Isi nama role dengan jelas",
-      completed: Boolean(form.name.trim()),
-    },
-    {
-      key: "status",
-      label: "Pilih status role (Aktif/Non Aktif)",
-      completed: Boolean(form.status),
-    },
-    {
-      key: "permissions",
-      label: "Pilih minimal 1 permission",
-      completed: form.permissions.length > 0,
-    },
-  ]), [form]);
+  const checklistItems = useMemo(
+    () => [
+      {
+        key: "name",
+        label: "Isi nama role dengan jelas",
+        completed: Boolean(form.name.trim()),
+      },
+      {
+        key: "permissions",
+        label: "Pilih minimal 1 permission",
+        completed: form.permissions.length > 0,
+      },
+    ],
+    [form]
+  );
 
   const checklistProgress = useMemo(() => {
     const total = checklistItems.length;
@@ -175,37 +218,6 @@ export default function CreateRolePage() {
                 autoComplete="off"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-500">Status</label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                  >
-                    <span className={form.status ? "text-slate-700" : "text-slate-400"}>
-                      {form.status || "Pilih status"}
-                    </span>
-                    <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
-                >
-                  {["Aktif", "Non Aktif"].map((opt) => (
-                    <DropdownMenuItem
-                      key={opt}
-                      onSelect={() => setForm((s) => ({ ...s, status: opt }))}
-                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
-                    >
-                      <span>{opt}</span>
-                      {form.status === opt && <Check className="h-4 w-4 text-emerald-500" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
           </div>
 
           <div className="space-y-2">
@@ -228,13 +240,13 @@ export default function CreateRolePage() {
                         type="button"
                         key={p.id}
                         onClick={() => onTogglePermission(p.name)}
-                        className={`group inline-flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition-all duration-200 ${checked ? "border-emerald-300 bg-emerald-50 text-emerald-700 shadow-[inset_0_1px_0_rgba(16,185,129,0.25)]" : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200"}`}
+                        className={`group inline-flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs md:text-sm transition-all duration-200 overflow-hidden ${checked ? "border-emerald-300 bg-emerald-50 text-emerald-700 shadow-[inset_0_1px_0_rgba(16,185,129,0.25)]" : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200"}`}
                       >
-                        <span className="inline-flex items-center gap-2">
+                        <span className="inline-flex min-w-0 flex-1 items-center gap-2">
                           <ListChecks className={`h-4 w-4 ${checked ? "text-emerald-500" : "text-slate-400"}`} />
-                          <span className="truncate max-w-[260px] text-left">{p.name}</span>
+                          <span className="truncate text-left">{p.name}</span>
                         </span>
-                        <span className={`grid h-5 w-5 place-items-center rounded-full border transition ${checked ? "border-emerald-300 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>
+                        <span className={`ml-2 grid h-5 w-5 flex-none place-items-center rounded-full border transition ${checked ? "border-emerald-300 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>
                           <Check className="h-3 w-3" />
                         </span>
                       </button>

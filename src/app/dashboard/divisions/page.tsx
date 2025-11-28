@@ -10,6 +10,8 @@ import { useDivisionColumns, type DivisionRow, type Column } from "./columns";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SlidersHorizontal, Plus, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> =
   | T[]
@@ -25,6 +27,9 @@ export default function DivisionsPage() {
   const [search, setSearch] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [page, setPage] = useState(1);
+  const { showToast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState<DivisionRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const pickList = (res: any): any[] => {
     if (Array.isArray(res)) return res;
@@ -61,7 +66,17 @@ export default function DivisionsPage() {
       });
       setRows(mapped);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load divisions");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Failed to load divisions";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat divisions",
+        description: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -69,14 +84,35 @@ export default function DivisionsPage() {
 
   useEffect(() => { fetchDivisions(); }, []);
 
-  const handleDelete = async (row: DivisionRow) => {
-    const ok = confirm(`Hapus division ${row.name}?`);
-    if (!ok) return;
+  const handleDelete = (row: DivisionRow) => {
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await apiRequest("DELETE", `/api/divisions/${row.id}`);
+      await apiRequest("DELETE", `/api/divisions/${deleteTarget.id}`);
       await fetchDivisions();
+      showToast({
+        variant: "success",
+        title: "Division dihapus",
+        description: `Division ${deleteTarget.name} berhasil dihapus.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menghapus division");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menghapus division";
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus division",
+        description: msg,
+      });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -208,7 +244,17 @@ export default function DivisionsPage() {
         updated_at: d.updated_at ?? '',
       });
     } catch (e: any) {
-      setDetailError(e?.message ?? 'Gagal memuat division');
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal memuat division";
+      setDetailError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat division",
+        description: msg,
+      });
     } finally {
       setDetailLoading(false);
     }
@@ -305,6 +351,21 @@ export default function DivisionsPage() {
       )}
 
       <DataTable columns={visibleColumns as any} data={paginatedRows} loading={loading} />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Hapus division ini?"
+        description={deleteTarget ? `Division "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        loading={deleteLoading}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          if (deleteLoading) return;
+          setDeleteTarget(null);
+        }}
+      />
 
       {detailOpen && (
         (typeof document !== 'undefined') ? createPortal(

@@ -9,6 +9,7 @@ import { ChevronLeft, Loader2, Check, ListChecks, ChevronsUpDown } from "lucide-
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
+import { useToast } from "@/components/ui/toast";
 
 type RoleDetail = {
   id: number;
@@ -21,6 +22,7 @@ export default function EditRolePage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
+  const { showToast } = useToast();
 
   const [form, setForm] = useState<RoleDetail | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -113,10 +115,26 @@ export default function EditRolePage() {
       };
 
       await apiRequest("PUT", `/api/roles/${form.id}`, payload);
-      setSuccessMessage("Perubahan role berhasil disimpan.");
+      const okMsg = "Perubahan role berhasil disimpan.";
+      setSuccessMessage(okMsg);
+      showToast({
+        variant: "success",
+        title: "Role berhasil diperbarui",
+        description: okMsg,
+      });
       setTimeout(() => router.push("/dashboard/roles"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal menyimpan role");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menyimpan role";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal menyimpan role",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }
@@ -385,13 +403,13 @@ export default function EditRolePage() {
                           type="button"
                           key={p.id}
                           onClick={() => onTogglePermission(p.name)}
-                          className={`group inline-flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition-all duration-200 ${
+                          className={`group inline-flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs md:text-sm transition-all duration-200 overflow-hidden ${
                             checked
                               ? "border-emerald-300 bg-emerald-50 text-emerald-700 shadow-[inset_0_1px_0_rgba(16,185,129,0.25)]"
                               : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200"
                           }`}
                         >
-                          <span className="inline-flex items-center gap-2">
+                          <span className="inline-flex min-w-0 flex-1 items-center gap-2">
                             <ListChecks
                               className={`h-4 w-4 ${
                                 checked
@@ -399,12 +417,12 @@ export default function EditRolePage() {
                                   : "text-slate-400"
                               }`}
                             />
-                            <span className="truncate max-w-[260px] text-left">
+                            <span className="truncate text-left">
                               {p.name}
                             </span>
                           </span>
                           <span
-                            className={`grid h-5 w-5 place-items-center rounded-full border transition ${
+                            className={`ml-2 grid h-5 w-5 flex-none place-items-center rounded-full border transition ${
                               checked
                                 ? "border-emerald-300 bg-emerald-500 text-white"
                                 : "border-slate-300 text-transparent"

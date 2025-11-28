@@ -14,6 +14,8 @@ import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -29,6 +31,9 @@ export default function UsersPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -57,7 +62,13 @@ export default function UsersPage() {
       });
       setRows(mapped);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load users");
+      const msg = e?.message ?? "Failed to load users";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat users",
+        description: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -65,14 +76,35 @@ export default function UsersPage() {
 
   useEffect(() => { fetchUsers(); }, []);
 
-  const handleDelete = async (row: UserRow) => {
-    const ok = confirm(`Hapus user ${row.name}?`);
-    if (!ok) return;
+  const handleDelete = (row: UserRow) => {
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await apiRequest("DELETE", `/api/users/${row.id}`);
+      await apiRequest("DELETE", `/api/users/${deleteTarget.id}`);
       await fetchUsers();
+      showToast({
+        variant: "success",
+        title: "User dihapus",
+        description: `User ${deleteTarget.name} berhasil dihapus.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menghapus user");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menghapus user";
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus user",
+        description: msg,
+      });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -105,7 +137,17 @@ export default function UsersPage() {
         email_verified_at: u.email_verified_at ?? null,
       });
     } catch (e: any) {
-      setDetailError(e?.message ?? "Gagal memuat detail user");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal memuat detail user";
+      setDetailError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat detail user",
+        description: msg,
+      });
     } finally {
       setDetailLoading(false);
     }
@@ -357,6 +399,21 @@ export default function UsersPage() {
         </div>
 
         <DataTable columns={visibleColumns as Column<UserRow>[]} data={paginatedRows} loading={loading} />
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="Hapus user ini?"
+          description={deleteTarget ? `User "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
+          confirmLabel="Hapus"
+          cancelLabel="Batal"
+          variant="danger"
+          loading={deleteLoading}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            if (deleteLoading) return;
+            setDeleteTarget(null);
+          }}
+        />
 
         {detailOpen && (
           (typeof document !== 'undefined') ? createPortal(

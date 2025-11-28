@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
+import { useToast } from "@/components/ui/toast";
 
 type FormState = {
   id: number;
@@ -27,6 +28,7 @@ export default function EditUserPage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
+  const { showToast } = useToast();
 
   const [form, setForm] = useState<FormState | null>(null);
   const [password, setPassword] = useState("");
@@ -123,16 +125,26 @@ export default function EditUserPage() {
     setSuccessMessage(null);
     try {
       if ((password || password_confirmation) && password !== password_confirmation) {
-        setError("Password dan konfirmasi tidak sama");
+        const msg = "Password dan konfirmasi tidak sama";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
         setSubmitting(false);
         return;
       }
+      const statusValue = (form.status || "").toString();
+      const isActive = /^aktif/i.test(statusValue);
+
       const payload: Record<string, any> = {
         name: form.name,
         email: form.email,
         job_title: form.job_title || null,
-        is_active: form.is_active,
-        status: form.status,
+        // is_active mengikuti dropdown status
+        is_active: isActive,
+        status: statusValue,
         division_id: form.division_id || null,
       };
       if (form.role_name) payload.role = form.role_name;
@@ -142,10 +154,26 @@ export default function EditUserPage() {
         payload.password_confirmation = password_confirmation;
       }
       await apiRequest("PUT", `/api/users/${form.id}`, payload);
-      setSuccessMessage("Perubahan user berhasil disimpan.");
+      const okMsg = "Perubahan user berhasil disimpan.";
+      setSuccessMessage(okMsg);
+      showToast({
+        variant: "success",
+        title: "User berhasil diperbarui",
+        description: okMsg,
+      });
       setTimeout(() => router.push("/dashboard/users"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal menyimpan user");
+      const rawMsg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menyimpan user";
+      setError(rawMsg);
+      showToast({
+        variant: "error",
+        title: "Gagal menyimpan user",
+        description: rawMsg,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -173,7 +201,7 @@ export default function EditUserPage() {
       {
         key: "status",
         label: "Pastikan status aktif sesuai kebutuhan",
-        completed: Boolean(form?.is_active),
+        completed: Boolean(form?.status),
       },
     ];
   }, [form, password, password_confirmation]);
@@ -550,28 +578,38 @@ export default function EditUserPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-500">Status</label>
-              <div className="flex h-11 items-center gap-3 rounded-xl border border-slate-200 px-4 shadow-inner">
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
-                  <input
-                    type="checkbox"
-                    name="is_active"
-                    checked={form.is_active}
-                    onChange={onChange}
-                    className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
-                  />
-                  Active
-                </label>
-                <span className="h-4 w-px bg-slate-200" />
-                <select
-                  name="status"
-                  value={form.status}
-                  onChange={onChange}
-                  className="rounded-lg border border-transparent bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition-all duration-300 hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_12px_24px_rgba(16,185,129,0.2)] focus:outline-none"
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  >
+                    <span className={form.status ? "text-slate-700" : "text-slate-400"}>
+                      {form.status || "Pilih status"}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
                 >
-                  <option value="Aktif">Aktif</option>
-                  <option value="Non Aktif">Non Aktif</option>
-                </select>
-              </div>
+                  {["Aktif", "Non Aktif"].map((opt) => (
+                    <DropdownMenuItem
+                      key={opt}
+                      onSelect={() =>
+                        setForm((s) => (s ? { ...s, status: opt } : s))
+                      }
+                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                    >
+                      <span>{opt}</span>
+                      {form.status === opt && (
+                        <Check className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

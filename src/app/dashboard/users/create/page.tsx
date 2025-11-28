@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Loader2, Sparkles, ChevronsUpDown, Check } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
+import { useToast } from "@/components/ui/toast";
 
 type FormState = {
   name: string;
@@ -24,8 +25,11 @@ type FormState = {
   role_name: string;
 };
 
+const STATUS_OPTIONS = ["Aktif", "Non Aktif"] as const;
+
 export default function CreateUserPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
@@ -57,7 +61,13 @@ export default function CreateUserPage() {
     setSuccessMessage(null);
     try {
       if (form.password !== form.password_confirmation) {
-        setError("Password dan konfirmasi tidak sama");
+        const msg = "Password dan konfirmasi tidak sama";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
         setSubmitting(false);
         return;
       }
@@ -69,15 +79,34 @@ export default function CreateUserPage() {
         role: form.role_name || undefined, // name for BE that expects string
         role_id: form.role_id || undefined, // id for BE that expects id
         job_title: form.job_title || null,
-        is_active: form.is_active,
-        status: form.status,
+        // On create, user is always active by default
+        is_active: true,
+        status: "Aktif",
         division_id: form.division_id || null,
       };
       await apiRequest("POST", "/api/users", payload);
+      showToast({
+        variant: "success",
+        title: "User berhasil dibuat",
+        description: "Akun baru berhasil ditambahkan dan diaktifkan.",
+      });
       setSuccessMessage("User berhasil ditambahkan.");
       setTimeout(() => router.push("/dashboard/users"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal membuat user");
+      const rawMsg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal membuat user";
+      setError(rawMsg);
+      const isDuplicate =
+        typeof rawMsg === "string" &&
+        /already|exist|sudah ada|sudah terdaftar|telah terdaftar/i.test(rawMsg);
+      showToast({
+        variant: "error",
+        title: isDuplicate ? "User sudah terdaftar" : "Gagal membuat user",
+        description: rawMsg,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -401,31 +430,6 @@ export default function CreateUserPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-500">Status</label>
-              <div className="flex h-11 items-center gap-3 rounded-xl border border-slate-200 px-4 shadow-inner">
-                <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
-                  <input
-                    type="checkbox"
-                    name="is_active"
-                    checked={form.is_active}
-                    onChange={onChange}
-                    className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
-                  />
-                  Active
-                </label>
-                <span className="h-4 w-px bg-slate-200" />
-                <select
-                  name="status"
-                  value={form.status}
-                  onChange={onChange}
-                  className="rounded-lg border border-transparent bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition-all duration-300 hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_12px_24px_rgba(16,185,129,0.2)] focus:outline-none"
-                >
-                  <option value="Aktif">Aktif</option>
-                  <option value="Non Aktif">Non Aktif</option>
-                </select>
-              </div>
             </div>
           </div>
 

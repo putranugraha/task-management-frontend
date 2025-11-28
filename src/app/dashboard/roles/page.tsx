@@ -13,6 +13,8 @@ import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Plus, SlidersHorizontal } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -28,6 +30,9 @@ export default function RolesPage() {
   const [rows, setRows] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchRoles = async () => {
     try {
@@ -98,7 +103,17 @@ export default function RolesPage() {
         }
       }
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load roles");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Failed to load roles";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat roles",
+        description: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -106,14 +121,35 @@ export default function RolesPage() {
 
   useEffect(() => { fetchRoles(); }, []);
 
-  const handleDelete = async (row: RoleRow) => {
-    const ok = confirm(`Hapus role ${row.name}?`);
-    if (!ok) return;
+  const handleDelete = (row: RoleRow) => {
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await apiRequest("DELETE", `/api/roles/${row.id}`);
+      await apiRequest("DELETE", `/api/roles/${deleteTarget.id}`);
       await fetchRoles();
+      showToast({
+        variant: "success",
+        title: "Role dihapus",
+        description: `Role ${deleteTarget.name} berhasil dihapus.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menghapus role");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menghapus role";
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus role",
+        description: msg,
+      });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -159,7 +195,17 @@ export default function RolesPage() {
         description: r.description ?? null,
       });
     } catch (e: any) {
-      setDetailError(e?.message ?? 'Gagal memuat detail role');
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal memuat detail role";
+      setDetailError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat detail role",
+        description: msg,
+      });
     } finally {
       setDetailLoading(false);
     }
@@ -431,6 +477,21 @@ export default function RolesPage() {
         </div>
 
         <DataTable columns={visibleColumns as Column<RoleRow>[]} data={paginatedRows} loading={loading} />
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="Hapus role ini?"
+          description={deleteTarget ? `Role "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
+          confirmLabel="Hapus"
+          cancelLabel="Batal"
+          variant="danger"
+          loading={deleteLoading}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            if (deleteLoading) return;
+            setDeleteTarget(null);
+          }}
+        />
 
         {detailOpen && (
           (typeof document !== 'undefined') ? createPortal(

@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { ChevronLeft, Mail, ShieldCheck, AlertCircle } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
 
 type UserDetail = {
   id: number;
@@ -49,6 +50,7 @@ export default function UserDetailPage() {
   const [data, setData] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -76,7 +78,17 @@ export default function UserDetailPage() {
         };
         if (mounted) setData(detail);
       } catch (e: any) {
-        setError(e?.message ?? "Gagal memuat user");
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.message ||
+          "Gagal memuat user";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat user",
+          description: msg,
+        });
       } finally {
         setLoading(false);
       }

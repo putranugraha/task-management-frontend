@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/api";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 type DivisionDetail = {
   id: number;
@@ -24,6 +25,7 @@ export default function EditDivisionPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -64,16 +66,43 @@ export default function EditDivisionPage() {
     setError(null);
     setSuccessMessage(null);
     try {
+      if (!form.name.trim()) {
+        const msg = "Nama division wajib diisi";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
+        setSaving(false);
+        return;
+      }
       const payload: Record<string, any> = {
         code: form.code || null,
         name: form.name,
         description: form.description || null,
       };
       await apiRequest("PUT", `/api/divisions/${form.id}`, payload);
-      setSuccessMessage("Perubahan division berhasil disimpan.");
+      const okMsg = "Perubahan division berhasil disimpan.";
+      setSuccessMessage(okMsg);
+      showToast({
+        variant: "success",
+        title: "Division berhasil diperbarui",
+        description: okMsg,
+      });
       setTimeout(() => router.push("/dashboard/divisions"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal menyimpan division");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menyimpan division";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal menyimpan division",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }

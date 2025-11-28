@@ -336,7 +336,7 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
               <button
                 type="button"
                 onClick={handleStart}
-                className="px-3 py-1.5 rounded-md border text-sm hover:bg-neutral-50"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
               >
                 Start Timer
               </button>
@@ -344,7 +344,7 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
               <button
                 type="button"
                 onClick={handleStop}
-                className="px-3 py-1.5 rounded-md border text-sm hover:bg-neutral-50"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
               >
                 Stop &amp; Save
               </button>

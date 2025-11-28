@@ -229,6 +229,48 @@ export default function EditTaskPage() {
       .filter((n): n is string => Boolean(n));
   }, [form?.assignments, users]);
 
+  const checklistItems = useMemo(() => {
+    const title = (form?.title ?? "").trim();
+    const startPlanned = form?.start_planned ?? "";
+    const endPlanned = form?.end_planned ?? "";
+    const hasDates = Boolean(startPlanned && endPlanned);
+
+    let planCompleted = false;
+    if (hasDates) {
+      const startTs = Date.parse(startPlanned);
+      const endTs = Date.parse(endPlanned);
+      planCompleted =
+        Number.isFinite(startTs) &&
+        Number.isFinite(endTs) &&
+        startTs <= endTs;
+    }
+
+    return [
+      { key: "title", label: "Isi judul task", completed: Boolean(title) },
+      { key: "plan", label: "Atur tanggal rencana", completed: planCompleted },
+      {
+        key: "progress",
+        label: "Set progress 0-100",
+        completed:
+          typeof form?.percent_complete === "number" &&
+          form.percent_complete >= 0 &&
+          form.percent_complete <= 100,
+      },
+      {
+        key: "project",
+        label: "Opsional: pilih project/milestone",
+        completed: Boolean(form?.project_id),
+      },
+    ];
+  }, [form?.title, form?.start_planned, form?.end_planned, form?.percent_complete, form?.project_id]);
+
+  const checklistProgress = useMemo(() => {
+    const total = checklistItems.length;
+    if (!total) return 0;
+    const done = checklistItems.filter((i) => i.completed).length;
+    return Math.round((done / total) * 100);
+  }, [checklistItems]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -411,7 +453,7 @@ export default function EditTaskPage() {
           <div className="space-y-5">
             <div className="space-y-3">
               <div className="w-full rounded-full bg-emerald-800/30">
-                <div className="h-1 rounded-full bg-white/80 transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, Number(form.percent_complete ?? 0)))}%` }} />
+                <div className="h-1 rounded-full bg-white/80 transition-all duration-500" style={{ width: `${checklistProgress}%` }} />
               </div>
               <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-emerald-50">Task Overview</h2>
             </div>
@@ -439,6 +481,24 @@ export default function EditTaskPage() {
                 <div className="text-[11px] uppercase tracking-wide text-white/60">End Planned</div>
                 <div className="font-semibold">{form.end_planned || '-'}</div>
               </div>
+            </div>
+            <div className="pt-4 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-50">Task Checklist</h3>
+              <ul className="space-y-2 text-sm leading-relaxed">
+                {checklistItems.map((item) => (
+                  <li
+                    key={item.key}
+                    className={`flex items-start gap-3 rounded-xl bg-white/5 px-3 py-2 transition-all duration-300 ${item.completed ? "text-white opacity-100" : "text-white/70 opacity-60"}`}
+                  >
+                    <span
+                      className={`mt-0.5 inline-block h-5 w-5 rounded-full ${
+                        item.completed ? "bg-white" : "bg-white/40"
+                      }`}
+                    />
+                    <span>{item.label}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
             {assigneeNames.length > 0 && (
               <div>
@@ -645,24 +705,6 @@ export default function EditTaskPage() {
               })}
             </div>
           )}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm mb-1">Priority</label>
-            <select name="priority" value={form.priority} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Status</label>
-            <select name="status" value={form.status} onChange={onChange} className="w-full border rounded-md px-3 py-2">
-              <option>To Do</option>
-              <option>In Progress</option>
-              <option>Done</option>
-            </select>
-          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>

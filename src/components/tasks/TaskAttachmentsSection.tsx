@@ -93,9 +93,9 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
 
   const badgeClasses = (status: TaskAttachment["status"]) => {
     const s = String(status || "").toLowerCase();
-    if (s === "approved") return "bg-green-100 text-green-700";
-    if (s === "rejected") return "bg-red-100 text-red-700";
-    return "bg-yellow-100 text-yellow-700";
+    if (s === "approved") return "bg-[#00674F]/10 text-[#00674F]";
+    if (s === "rejected") return "bg-rose-50 text-rose-700";
+    return "bg-amber-50 text-amber-700";
   };
 
   return (
@@ -177,14 +177,14 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
                             <button
                               type="button"
                               onClick={() => handleStatus(a.id, "approve")}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-500 transition"
+                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border border-[#00674F] bg-[#00674F]/5 text-xs font-semibold text-[#00674F] hover:bg-[#00674F]/10 hover:border-[#00674F] transition min-w-[96px]"
                             >
                               Approve
                             </button>
                             <button
                               type="button"
                               onClick={() => handleStatus(a.id, "reject")}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full border border-rose-200 bg-rose-50 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-500 transition"
+                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border border-rose-300 bg-rose-50 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-400 transition min-w-[96px]"
                             >
                               Reject
                             </button>
@@ -217,7 +217,7 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
           <button
             type="submit"
             disabled={!file || uploading}
-            className="px-3 py-1.5 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? "Uploading..." : "Upload Attachment"}
           </button>

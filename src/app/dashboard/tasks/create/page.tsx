@@ -26,6 +26,9 @@ type FormState = {
   dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
 
+const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
+const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
+
 export default function CreateTaskPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
     "mengelola tugas",
@@ -237,11 +240,22 @@ export default function CreateTaskPage() {
   };
 
   const checklistItems = useMemo(() => {
+    const hasDates = Boolean(form.start_planned && form.end_planned);
+    let planCompleted = false;
+    if (hasDates) {
+      const startTs = Date.parse(form.start_planned);
+      const endTs = Date.parse(form.end_planned);
+      planCompleted =
+        Number.isFinite(startTs) &&
+        Number.isFinite(endTs) &&
+        startTs <= endTs;
+    }
+
     return [
-      { key: 'title', label: 'Isi judul task', completed: Boolean(form.title.trim()) },
-      { key: 'plan', label: 'Atur tanggal rencana', completed: Boolean(form.start_planned && form.end_planned) },
-      { key: 'progress', label: 'Set progress 0-100', completed: form.percent_complete >= 0 && form.percent_complete <= 100 },
-      { key: 'project', label: 'Opsional: pilih project/milestone', completed: Boolean(form.project_id || milestoneId) },
+      { key: "title", label: "Isi judul task", completed: Boolean(form.title.trim()) },
+      { key: "plan", label: "Atur tanggal rencana", completed: planCompleted },
+      { key: "progress", label: "Set progress 0-100", completed: form.percent_complete >= 0 && form.percent_complete <= 100 },
+      { key: "project", label: "Opsional: pilih project/milestone", completed: Boolean(form.project_id || milestoneId) },
     ];
   }, [form.title, form.start_planned, form.end_planned, form.percent_complete, form.project_id, milestoneId]);
 
@@ -370,23 +384,41 @@ export default function CreateTaskPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-500">Priority</label>
-              <select name="priority" value={form.priority} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-                <option>Critical</option>
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  >
+                    <span className={form.priority ? "text-slate-700" : "text-slate-400"}>
+                      {form.priority || "Pilih priority"}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+                >
+                  {PRIORITY_OPTIONS.map((opt) => (
+                    <DropdownMenuItem
+                      key={opt}
+                      onSelect={() =>
+                        setForm((s) => ({
+                          ...s,
+                          priority: opt,
+                        }))
+                      }
+                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                    >
+                      <span>{opt}</span>
+                      {form.priority === opt && <Check className="h-4 w-4 text-emerald-500" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-500">Status</label>
-              <select name="status" value={form.status} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300">
-                <option>To Do</option>
-                <option>In Progress</option>
-                <option>Done</option>
-                <option>On Hold</option>
-                <option>Cancelled</option>
-              </select>
-            </div>
+            {/* Status hidden on create; default "To Do" from form state is sent in payload */}
             {false && (
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-500">Percent Complete</label>

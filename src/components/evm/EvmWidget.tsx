@@ -233,10 +233,10 @@ function Kpi({ label, value, badge }: { label: string; value: any; badge?: { tex
             className={
               `text-[10px] px-1.5 py-0.5 rounded-full border ` +
               (badge.tone === "red"
-                ? "bg-red-50 text-red-700 border-red-200"
+                ? "bg-rose-50 text-rose-700 border-rose-200"
                 : badge.tone === "yellow"
-                ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                : "bg-green-50 text-green-700 border-green-200")
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-[#00674F]/10 text-[#00674F] border-[#00674F]/20")
             }
           >
             {badge.text}

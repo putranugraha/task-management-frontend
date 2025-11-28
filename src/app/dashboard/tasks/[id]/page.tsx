@@ -269,7 +269,7 @@ export default function TaskDetailPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#00674F]">
               {data.status ?? "To Do"}
             </span>
             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">

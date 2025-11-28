@@ -50,7 +50,7 @@ export default function TaskProgressEditor({ taskId, initialPercent = 0, onSaved
           type="button"
           onClick={save}
           disabled={loading}
-          className="bg-green-600 text-white px-2 py-1 rounded text-sm hover:bg-green-700 transition disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-full bg-[#00674F] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#008061] disabled:opacity-50"
         >
           {loading ? "Saving..." : "Save Progress"}
         </button>
@@ -59,4 +59,3 @@ export default function TaskProgressEditor({ taskId, initialPercent = 0, onSaved
     </div>
   );
 }
-

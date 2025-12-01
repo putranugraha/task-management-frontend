@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, MoreHorizontal } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
 
 type ProjectDetail = {
   id: number;
@@ -71,6 +72,7 @@ export default function ProjectDetailPage() {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
   })() : null;
   const currentUserId = Number((currentUser?.id ?? currentUser?.user_id) ?? 0);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -131,7 +133,13 @@ export default function ProjectDetailPage() {
         });
         if (mounted) setBaselines(arr as ProjectBaseline[]);
       } catch (e: any) {
-        setBaselinesError(e?.message ?? 'Failed to load baselines');
+        const msg = e?.message ?? "Failed to load baselines";
+        setBaselinesError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat baselines",
+          description: msg,
+        });
       } finally {
         setBaselinesLoading(false);
       }
@@ -162,7 +170,13 @@ export default function ProjectDetailPage() {
           setMilestones(arr);
         }
       } catch (e: any) {
-        setMilestonesError(e?.message ?? 'Gagal memuat milestones');
+        const msg = e?.message ?? "Gagal memuat milestones";
+        setMilestonesError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat milestones",
+          description: msg,
+        });
       } finally {
         setMilestonesLoading(false);
       }
@@ -195,7 +209,13 @@ export default function ProjectDetailPage() {
           setTasks(arr);
         }
       } catch (e: any) {
-        setTasksError(e?.message ?? 'Gagal memuat tasks proyek');
+        const msg = e?.message ?? "Gagal memuat tasks proyek";
+        setTasksError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat tasks proyek",
+          description: msg,
+        });
       } finally {
         setTasksLoading(false);
       }
@@ -722,59 +742,85 @@ export default function ProjectDetailPage() {
                                   <button
                                     type="button"
                                     className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                    disabled={taskBaselineLoading[t.id] || !t.start_planned || !t.end_planned}
-                                    onClick={async () => {
-                                      if (!t.start_planned || !t.end_planned) {
-                                        alert('Task ini belum memiliki Start/End Planned.');
-                                        return;
-                                      }
-                                      setTaskBaselineLoading(s => ({ ...s, [t.id]: true }));
-                                      try {
-                                        // Cari project baseline terbaru (sudah ada di state baselines dan disortir desc saat load)
-                                        let baselineId: number | undefined = undefined;
-                                        if (Array.isArray(baselines) && baselines.length > 0) {
-                                          baselineId = Number(baselines[0].id);
+                                      disabled={taskBaselineLoading[t.id] || !t.start_planned || !t.end_planned}
+                                      onClick={async () => {
+                                        if (!t.start_planned || !t.end_planned) {
+                                          showToast({
+                                            variant: "warning",
+                                            title: "Tidak dapat membuat task baseline",
+                                            description: "Task ini belum memiliki Start/End Planned.",
+                                          });
+                                          return;
                                         }
-                                        // Dedup: jika sudah ada task baseline untuk baseline ini, abaikan
-                                        if (baselineId) {
-                                          try {
-                                            const existing = await listTaskBaselines(t.id);
-                                            const found = (existing || []).some((b: any) => Number(b?.baseline_id) === baselineId);
-                                            if (found) {
-                                              alert('Task baseline untuk baseline project terbaru sudah ada.');
-                                              setTaskBaselineLoading(s => ({ ...s, [t.id]: false }));
-                                              return;
-                                            }
-                                          } catch {}
+                                        setTaskBaselineLoading((s) => ({ ...s, [t.id]: true }));
+                                        try {
+                                          let baselineId: number | undefined = undefined;
+                                          if (Array.isArray(baselines) && baselines.length > 0) {
+                                            baselineId = Number(baselines[0].id);
+                                          }
+                                          if (baselineId) {
+                                            try {
+                                              const existing = await listTaskBaselines(t.id);
+                                              const found = (existing || []).some((b: any) => Number(b?.baseline_id) === baselineId);
+                                              if (found) {
+                                                showToast({
+                                                  variant: "info",
+                                                  title: "Task baseline sudah ada",
+                                                  description: "Task baseline untuk baseline project terbaru sudah tersedia.",
+                                                });
+                                                return;
+                                              }
+                                            } catch {}
+                                          }
+                                          const startBase: string = t.start_planned as any;
+                                          const endBase: string = t.end_planned as any;
+                                          const duration =
+                                            Number.isFinite(Date.parse(endBase)) &&
+                                            Number.isFinite(Date.parse(startBase))
+                                              ? Math.max(
+                                                  0,
+                                                  Math.round(
+                                                    (Date.parse(endBase) - Date.parse(startBase)) /
+                                                      (24 * 60 * 60 * 1000)
+                                                  )
+                                                ) + 1
+                                              : null;
+                                          const hoursPerDay = 8;
+                                          const plannedHours = duration != null ? duration * hoursPerDay : null;
+                                          await createTaskBaseline(t.id, {
+                                            start_planned_base: startBase,
+                                            end_planned_base: endBase,
+                                            duration_planned_base: duration as any,
+                                            weight: 1 as any,
+                                            planned_effort_hours: plannedHours as any,
+                                            planned_hours: plannedHours as any,
+                                            effort_hours: plannedHours as any,
+                                            planned_effort: plannedHours as any,
+                                            effort_planned: plannedHours as any,
+                                            baseline_id: baselineId as any,
+                                          } as any);
+                                          showToast({
+                                            variant: "success",
+                                            title: "Task baseline dibuat",
+                                            description: "Task baseline berhasil dibuat untuk task ini.",
+                                          });
+                                        } catch (e: any) {
+                                          const msg =
+                                            e?.response?.data?.message ||
+                                            e?.message ||
+                                            "Gagal membuat task baseline";
+                                          showToast({
+                                            variant: "error",
+                                            title: "Gagal membuat task baseline",
+                                            description: msg,
+                                          });
+                                        } finally {
+                                          setTaskBaselineLoading((s) => ({ ...s, [t.id]: false }));
                                         }
-                                        const startBase: string = t.start_planned as any;
-                                        const endBase: string = t.end_planned as any;
-                                        const duration = (Number.isFinite(Date.parse(endBase)) && Number.isFinite(Date.parse(startBase)))
-                                          ? (Math.max(0, Math.round((Date.parse(endBase) - Date.parse(startBase)) / (24*60*60*1000))) + 1)
-                                          : null;
-                                        const hoursPerDay = 8;
-                                        const plannedHours = (duration != null) ? (duration * hoursPerDay) : null;
-                                        await createTaskBaseline(t.id, {
-                                          start_planned_base: startBase,
-                                          end_planned_base: endBase,
-                                          duration_planned_base: duration as any,
-                                          weight: 1 as any,
-                                          planned_effort_hours: plannedHours as any,
-                                          planned_hours: plannedHours as any,
-                                          effort_hours: plannedHours as any,
-                                          planned_effort: plannedHours as any,
-                                          effort_planned: plannedHours as any,
-                                          baseline_id: baselineId as any,
-                                        } as any);
-                                        alert('Task baseline berhasil dibuat.');
-                                      } catch (e: any) {
-                                        const msg = e?.response?.data?.message || e?.message || 'Gagal membuat task baseline';
-                                        alert(msg);
-                                      } finally {
-                                        setTaskBaselineLoading(s => ({ ...s, [t.id]: false }));
-                                      }
-                                    }}
-                                  >Create Baseline</button>
+                                      }}
+                                    >
+                                      Create Baseline
+                                    </button>
                                   <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${t.id}/edit`}>Edit</a>
                                 </td>
                               </tr>

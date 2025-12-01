@@ -10,6 +10,8 @@ import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import { useMilestoneColumns, type MilestoneRow } from "./columns";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function ProjectMilestonesPage() {
   const params = useParams();
@@ -17,6 +19,7 @@ export default function ProjectMilestonesPage() {
   const { can } = useAuth();
   const canManageProject = can("mengelola project");
   const canManageTasks = can("mengelola tugas");
+  const { showToast } = useToast();
 
   const [rows, setRows] = useState<MilestoneRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,6 +38,10 @@ export default function ProjectMilestonesPage() {
   const [projectTasksFull, setProjectTasksFull] = useState<Task[]>([]);
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MilestoneRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState<MilestoneRow | null>(null);
+  const [completeLoading, setCompleteLoading] = useState(false);
 
   const fetchList = async () => {
     try {
@@ -61,7 +68,13 @@ export default function ProjectMilestonesPage() {
       }));
       setRows(mapped);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load milestones");
+      const msg = e?.message ?? "Failed to load milestones";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat milestones",
+        description: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -94,7 +107,13 @@ export default function ProjectMilestonesPage() {
       setTaskRows(mapped);
       setProjectTasksFull(sorted);
     } catch (e: any) {
-      setTaskError(e?.message ?? "Failed to load project tasks");
+      const msg = e?.message ?? "Failed to load project tasks";
+      setTaskError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat tasks proyek",
+        description: msg,
+      });
     } finally {
       setTaskLoading(false);
     }
@@ -102,20 +121,49 @@ export default function ProjectMilestonesPage() {
 
   useEffect(() => { if (projectId) { fetchList(); fetchProjectTasks(); } }, [projectId]);
 
-  const handleDelete = async (row: MilestoneRow) => {
-    const ok = confirm(`Hapus milestone ${row.name}?`);
-    if (!ok) return;
+  const handleDelete = (row: MilestoneRow) => {
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await remove(row.id);
+      await remove(deleteTarget.id);
       await fetchList();
+      showToast({
+        variant: "success",
+        title: "Milestone dihapus",
+        description: `Milestone "${deleteTarget.name}" berhasil dihapus.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menghapus milestone");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menghapus milestone";
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus milestone",
+        description: msg,
+      });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
-  const handleComplete = async (row: MilestoneRow) => {
+  const handleComplete = (row: MilestoneRow) => {
+    setCompleteTarget(row);
+  };
+
+  const confirmComplete = async () => {
+    if (!completeTarget) return;
     try {
-      const tasks = projectTasksFull.filter(t => (t.milestone?.id ?? t.milestone_id) === row.id);
+      setCompleteLoading(true);
+      const tasks = projectTasksFull.filter(
+        (t) => (t.milestone?.id ?? t.milestone_id) === completeTarget.id
+      );
       let candidate: string | null = null;
       const actuals = tasks.map((t: any) => t.end_actual).filter(Boolean) as string[];
       if (actuals.length) {
@@ -124,14 +172,26 @@ export default function ProjectMilestonesPage() {
         const planned = tasks.map(t => t.end_planned).filter(Boolean) as string[];
         if (planned.length) candidate = planned.sort((a,b) => Date.parse(b)-Date.parse(a))[0];
       }
-      const msg = `Mark milestone "${row.name}" as completed` + (candidate ? ` (actual: ${candidate})?` : '?');
-      const ok = confirm(msg);
-      if (!ok) return;
-      await complete(row.id);
+      await complete(completeTarget.id);
       await fetchList();
       await fetchProjectTasks();
+      showToast({
+        variant: "success",
+        title: "Milestone completed",
+        description: candidate
+          ? `Milestone "${completeTarget.name}" ditandai selesai (actual: ${candidate}).`
+          : `Milestone "${completeTarget.name}" ditandai selesai.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? 'Failed to complete milestone');
+      const msg = e?.message ?? "Failed to complete milestone";
+      showToast({
+        variant: "error",
+        title: "Gagal menyelesaikan milestone",
+        description: msg,
+      });
+    } finally {
+      setCompleteLoading(false);
+      setCompleteTarget(null);
     }
   };
 
@@ -195,8 +255,40 @@ export default function ProjectMilestonesPage() {
                   >
                     Edit
                   </a>
-                )}
-              </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Hapus milestone ini?"
+        description={
+          deleteTarget
+            ? `Milestone "${deleteTarget.name}" akan dihapus dari project ini.`
+            : ""
+        }
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        loading={deleteLoading}
+        onConfirm={confirmDelete}
+        onCancel={() => !deleteLoading && setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={!!completeTarget}
+        title="Selesaikan milestone ini?"
+        description={
+          completeTarget
+            ? `Milestone "${completeTarget.name}" akan ditandai sebagai completed. Pastikan semua tasks terkait sudah selesai.`
+            : ""
+        }
+        confirmLabel="Mark as Completed"
+        cancelLabel="Batal"
+        variant="default"
+        loading={completeLoading}
+        onConfirm={confirmComplete}
+        onCancel={() => !completeLoading && setCompleteTarget(null)}
+      />
             ),
           },
         ] as any}

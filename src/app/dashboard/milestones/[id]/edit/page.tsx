@@ -10,6 +10,7 @@ import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard } from "@/components/layout/DetailCards";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 type MilestoneDetail = {
   id: number;
@@ -30,6 +31,7 @@ export default function EditMilestonePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -52,7 +54,13 @@ export default function EditMilestonePage() {
           });
         }
       } catch (e: any) {
-        setError(e?.message ?? "Gagal memuat data milestone");
+        const msg = e?.message ?? "Gagal memuat data milestone";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat milestone",
+          description: msg,
+        });
       } finally {
         setLoading(false);
       }
@@ -92,9 +100,24 @@ export default function EditMilestonePage() {
         status: form.status,
       };
       await apiRequest("PUT", `/api/milestones/${form.id}`, payload);
+      showToast({
+        variant: "success",
+        title: "Perubahan disimpan",
+        description: `Milestone "${form.name}" berhasil diperbarui.`,
+      });
       router.push("/dashboard/milestones");
     } catch (e: any) {
-      setError(e?.message ?? "Gagal menyimpan milestone");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menyimpan milestone";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal menyimpan milestone",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }

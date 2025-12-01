@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
+import { Loader2 } from "lucide-react";
 import { getById as getMilestoneById } from "@/lib/api/milestones";
 import { listByMilestone, createForMilestone, remove as deleteTask } from "@/lib/api/tasks";
 import type { Milestone } from "@/types/milestone";
 import type { Task } from "@/types/task";
 import DataTable from "@/app/dashboard/users/data-table";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type TaskRow = Pick<Task, 'id' | 'title' | 'status' | 'start_planned' | 'end_planned' | 'percent_complete'>;
 
@@ -17,6 +21,7 @@ export default function MilestoneDetailPage() {
   const id = Number(params?.id);
   const { can } = useAuth();
   const canManageTasks = can("mengelola tugas");
+  const { showToast } = useToast();
 
   const [milestone, setMilestone] = useState<Milestone | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +81,13 @@ export default function MilestoneDetailPage() {
       }));
       setTasks(mapped);
     } catch (e: any) {
-      setTError(e?.message ?? 'Failed to load tasks');
+      const msg = e?.message ?? 'Failed to load tasks';
+      setTError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat tasks",
+        description: msg,
+      });
     } finally {
       setTLoading(false);
     }
@@ -110,6 +121,11 @@ export default function MilestoneDetailPage() {
       setModalOpen(false);
       setNewTask({ title: "", status: "To Do", priority: "Medium", start_planned: "", end_planned: "", percent_complete: 0 });
       await fetchTasks();
+      showToast({
+        variant: "success",
+        title: "Task dibuat",
+        description: `Task "${newTask.title}" berhasil dibuat pada milestone ini.`,
+      });
     } catch (e: any) {
       const errors = e?.response?.data?.errors;
       if (errors && typeof errors === 'object') {
@@ -121,7 +137,13 @@ export default function MilestoneDetailPage() {
       } else if (e?.response?.status === 401 || e?.response?.status === 403) {
         setModalErr('Not authorized to perform this action');
       } else {
-        setModalErr(e?.message ?? 'Failed to create task');
+        const msg = e?.message ?? 'Failed to create task';
+        setModalErr(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal membuat task",
+          description: msg,
+        });
       }
     } finally {
       setSaving(false);
@@ -198,56 +220,174 @@ export default function MilestoneDetailPage() {
         {tError && <div className="mt-2 text-sm text-red-600">{tError}</div>}
       </section>
 
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/30 grid place-items-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-4">
-            <h4 className="text-base font-semibold mb-2">Create Task</h4>
-            {modalErr && <div className="text-sm text-red-600 mb-2">{modalErr}</div>}
-            <form onSubmit={onCreateTask} className="space-y-3">
-              <div>
-                <label className="block text-sm mb-1">Title</label>
-                <input className="w-full border rounded-md px-3 py-2" value={newTask.title} onChange={(e) => setNewTask(s => ({ ...s, title: e.target.value }))} required />
+      {modalOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[1100] flex items-center justify-center px-4">
+              <div
+                className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+                onClick={() => !saving && setModalOpen(false)}
+              />
+              <div className="relative z-10 w-full max-w-lg transform rounded-3xl bg-white/95 p-6 shadow-[0_24px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-100 animate-[fade-in-down_0.22s_ease-out]">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Create Task
+                    </p>
+                    <h2 className="text-base font-semibold text-slate-900">
+                      Tambahkan task baru untuk milestone ini
+                    </h2>
+                    {modalErr && (
+                      <p className="mt-2 text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">
+                        {modalErr}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    disabled={saving}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
+                    aria-label="Close"
+                  >
+                    <span className="text-lg leading-none">&times;</span>
+                  </button>
+                </div>
+
+                <form onSubmit={onCreateTask} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-600 mb-1">
+                      Title
+                    </label>
+                    <input
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                      value={newTask.title}
+                      onChange={(e) =>
+                        setNewTask((s) => ({ ...s, title: e.target.value }))
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-600 mb-1">
+                        Status
+                      </label>
+                      <select
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        value={newTask.status}
+                        onChange={(e) =>
+                          setNewTask((s) => ({
+                            ...s,
+                            status: e.target.value,
+                          }))
+                        }
+                      >
+                        <option>To Do</option>
+                        <option>In Progress</option>
+                        <option>Done</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-600 mb-1">
+                        Priority
+                      </label>
+                      <select
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        value={newTask.priority}
+                        onChange={(e) =>
+                          setNewTask((s) => ({
+                            ...s,
+                            priority: e.target.value,
+                          }))
+                        }
+                      >
+                        <option>Low</option>
+                        <option>Medium</option>
+                        <option>High</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-600 mb-1">
+                        Percent
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        value={newTask.percent_complete}
+                        onChange={(e) =>
+                          setNewTask((s) => ({
+                            ...s,
+                            percent_complete: Number(e.target.value || 0),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-600 mb-1">
+                        Start Planned
+                      </label>
+                      <input
+                        type="date"
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        value={newTask.start_planned}
+                        onChange={(e) =>
+                          setNewTask((s) => ({
+                            ...s,
+                            start_planned: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-600 mb-1">
+                        End Planned
+                      </label>
+                      <input
+                        type="date"
+                        className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        value={newTask.end_planned}
+                        onChange={(e) =>
+                          setNewTask((s) => ({
+                            ...s,
+                            end_planned: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      disabled={saving}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 transition hover:border-slate-300 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061] disabled:opacity-60"
+                    >
+                      {saving && (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      )}
+                      {saving ? "Saving" : "Save Task"}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm mb-1">Status</label>
-                  <select className="w-full border rounded-md px-3 py-2" value={newTask.status} onChange={(e) => setNewTask(s => ({ ...s, status: e.target.value }))}>
-                    <option>To Do</option>
-                    <option>In Progress</option>
-                    <option>Done</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">Priority</label>
-                  <select className="w-full border rounded-md px-3 py-2" value={newTask.priority} onChange={(e) => setNewTask(s => ({ ...s, priority: e.target.value }))}>
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">Percent</label>
-                  <input type="number" min={0} max={100} className="w-full border rounded-md px-3 py-2" value={newTask.percent_complete} onChange={(e) => setNewTask(s => ({ ...s, percent_complete: Number(e.target.value || 0) }))} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm mb-1">Start Planned</label>
-                  <input type="date" className="w-full border rounded-md px-3 py-2" value={newTask.start_planned} onChange={(e) => setNewTask(s => ({ ...s, start_planned: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">End Planned</label>
-                  <input type="date" className="w-full border rounded-md px-3 py-2" value={newTask.end_planned} onChange={(e) => setNewTask(s => ({ ...s, end_planned: e.target.value }))} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-3 py-2 rounded-md border text-sm">Cancel</button>
-                <button type="submit" disabled={saving} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">{saving ? 'Saving...' : 'Save'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
@@ -262,11 +402,35 @@ function TaskActions({
   canManage: boolean;
 }) {
   const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   
   const doDelete = async () => {
-    const ok = confirm(`Delete task "${row.title}"?`); if (!ok) return;
-    try { setSaving(true); await deleteTask(row.id); onChanged(); } catch (e: any) { alert(e?.message ?? 'Failed'); } finally { setSaving(false); }
+    if (!deleteOpen) {
+      setDeleteOpen(true);
+      return;
+    }
+    try {
+      setSaving(true);
+      await deleteTask(row.id);
+      onChanged();
+      showToast({
+        variant: "success",
+        title: "Task dihapus",
+        description: `Task "${row.title}" berhasil dihapus.`,
+      });
+    } catch (e: any) {
+      const msg = e?.message ?? 'Failed';
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus task",
+        description: msg,
+      });
+    } finally {
+      setSaving(false);
+      setDeleteOpen(false);
+    }
   };
 
   return (
@@ -287,10 +451,21 @@ function TaskActions({
           </a>
           <button
             className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50 text-sm"
-            onClick={doDelete}
+            onClick={() => setDeleteOpen(true)}
           >
             Delete
           </button>
+          <ConfirmDialog
+            open={deleteOpen}
+            title="Hapus task ini?"
+            description={`Task "${row.title}" akan dihapus dari milestone ini.`}
+            confirmLabel="Hapus"
+            cancelLabel="Batal"
+            variant="danger"
+            loading={saving}
+            onConfirm={doDelete}
+            onCancel={() => !saving && setDeleteOpen(false)}
+          />
         </>
       )}
     </div>

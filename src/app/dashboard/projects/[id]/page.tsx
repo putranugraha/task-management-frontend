@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
@@ -16,8 +18,9 @@ import { totalByTask as totalHoursByTask } from "@/lib/api/time-entries";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MoreHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
 
 type ProjectDetail = {
   id: number;
@@ -67,6 +70,8 @@ export default function ProjectDetailPage() {
   const [taskTotalHoursError, setTaskTotalHoursError] = useState<Record<number, string | null>>({});
   // Local UI tab state
   const [activeTab, setActiveTab] = useState<"overview" | "evm" | "milestones" | "baselines" | "tasks">("overview");
+  // Detail text modal for long fields like scope/objective
+  const [detailModal, setDetailModal] = useState<{ label: string; text: string } | null>(null);
   // Current user id for time entries (from localStorage user object)
   const currentUser = (typeof window !== 'undefined') ? (() => {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
@@ -310,6 +315,7 @@ export default function ProjectDetailPage() {
   })();
 
   return (
+    <>
     <div className="w-full space-y-6">
       <div className="px-1">
         <Breadcrumb>
@@ -328,7 +334,7 @@ export default function ProjectDetailPage() {
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6">
+      <DetailMainCard>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-slate-900 truncate">{data.name}</h1>
@@ -375,8 +381,18 @@ export default function ProjectDetailPage() {
         </div>
         {/* Detail rows: 2 columns on desktop, 1 on mobile */}
         <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
-          <Row label="Scope" value={data.scope ?? '-'} />
-          <Row label="Objective" value={data.objective ?? '-'} />
+          <Row
+            label="Scope"
+            value={data.scope ?? '-'}
+            onShowMore={data.scope ? () => setDetailModal({ label: "Scope", text: data.scope ?? "-" }) : undefined}
+            showMoreLabel={data.scope ? "Show more" : undefined}
+          />
+          <Row
+            label="Objective"
+            value={data.objective ?? '-'}
+            onShowMore={data.objective ? () => setDetailModal({ label: "Objective", text: data.objective ?? "-" }) : undefined}
+            showMoreLabel={data.objective ? "Show more" : undefined}
+          />
           <Row label="Created At" value={data.created_at ?? '-'} />
           <Row label="Updated At" value={data.updated_at ?? '-'} />
         </div>
@@ -400,76 +416,93 @@ export default function ProjectDetailPage() {
             ))}
           </div>
         </div>
-      </div>
+      </DetailMainCard>
 
-      {activeTab === 'overview' && (
-        <section>
-          <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4">
-            <div className="text-sm text-slate-600">Select a tab above to view EVM, Milestones, Baselines, or Tasks.</div>
+      {activeTab === "overview" && (
+        <DetailSectionCard>
+          <div className="text-sm text-slate-600">
+            Select a tab above to view EVM, Milestones, Baselines, or Tasks.
           </div>
-        </section>
+        </DetailSectionCard>
       )}
 
-      {activeTab === 'evm' && (
-        <section>
-          <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4">
-            <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
-          </div>
-        </section>
+      {activeTab === "evm" && (
+        <DetailSectionCard>
+          <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
+        </DetailSectionCard>
       )}
 
-      {activeTab === 'milestones' && (
-      <section>
-        <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100">
+      {activeTab === "milestones" && (
+        <DetailSectionCard>
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-700">Project Milestones</h3>
-            <a href={`/dashboard/projects/${data.id}/milestones`} className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50">View All</a>
+            <a
+              href={`/dashboard/projects/${data.id}/milestones`}
+              className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
+            >
+              View All
+            </a>
           </div>
           <div className="overflow-x-auto">
             {milestonesLoading ? (
-            <div className="p-3 text-sm text-neutral-500">Loading milestones...</div>
-          ) : milestonesError ? (
-            <div className="p-3 text-sm text-red-600">{milestonesError}</div>
-          ) : milestones.length === 0 ? (
-            <div className="p-3 text-sm text-neutral-500">No milestones</div>
-          ) : (
-            <table className="min-w-full text-sm table-fixed">
-              <thead className="bg-neutral-50 text-neutral-700">
-                <tr>
-                  <th className="text-left font-medium px-3 py-2 border-b w-[50%]">Name</th>
-                  <th className="text-left font-medium px-3 py-2 border-b w-[20%]">Status</th>
-                  <th className="text-left font-medium px-3 py-2 border-b w-[30%]">Due Planned</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(milestones.slice(0, 5)).map((m) => (
-                  <tr key={m.id} className="hover:bg-neutral-50">
-                    <td className="px-3 py-2 border-t align-top truncate"><span className="block truncate" title={m.name}>{m.name}</span></td>
-                    <td className="px-3 py-2 border-t align-top whitespace-nowrap">{m.status}</td>
-                    <td className="px-3 py-2 border-t align-top whitespace-nowrap">{m.due_planned ?? '-'}</td>
+              <div className="p-3 text-sm text-neutral-500">Loading milestones...</div>
+            ) : milestonesError ? (
+              <div className="p-3 text-sm text-red-600">{milestonesError}</div>
+            ) : milestones.length === 0 ? (
+              <div className="p-3 text-sm text-neutral-500">No milestones</div>
+            ) : (
+              <table className="min-w-full text-sm table-fixed">
+                <thead className="bg-neutral-50 text-neutral-700">
+                  <tr>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[50%]">Name</th>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[20%]">Status</th>
+                    <th className="text-left font-medium px-3 py-2 border-b w-[30%]">Due Planned</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {milestones.slice(0, 5).map((m) => (
+                    <tr key={m.id} className="hover:bg-neutral-50">
+                      <td className="px-3 py-2 border-t align-top truncate">
+                        <span className="block truncate" title={m.name}>
+                          {m.name}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{m.status}</td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">
+                        {m.due_planned ?? "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
-        </div>
-      </section>
+        </DetailSectionCard>
       )}
 
-      {activeTab === 'baselines' && (
-      <section>
-        <div className="rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100">
+      {activeTab === "baselines" && (
+        <DetailSectionCard>
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-700">Project Baselines</h3>
             <div className="flex items-center gap-2">
-              <a href={`/dashboard/projects/${data.id}/baselines`} className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50">View All</a>
+              <a
+                href={`/dashboard/projects/${data.id}/baselines`}
+                className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
+              >
+                View All
+              </a>
               <button
                 className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => setBaselineModalOpen(true)}
                 disabled={!canBaseline}
-                title={canBaseline ? 'Create baseline' : 'Requires: ≥1 milestone, ≥1 task with start & end planned'}
-              >Create</button>
+                title={
+                  canBaseline
+                    ? "Create baseline"
+                    : "Requires: ≥1 milestone, ≥1 task with start & end planned"
+                }
+              >
+                Create
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -493,19 +526,30 @@ export default function ProjectDetailPage() {
                 <tbody>
                   {baselines.map((b) => (
                     <tr key={b.id} className="hover:bg-neutral-50">
-                      <td className="px-3 py-2 border-t align-top truncate"><span className="block truncate" title={b.baseline_name}>{b.baseline_name}</span></td>
-                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{b.taken_at ?? '-'}</td>
-                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{(b as any).start_planned_base ?? '-'}</td>
-                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{(b as any).end_planned_base ?? '-'}</td>
-                      <td className="px-3 py-2 border-t align-top truncate"><span className="block truncate" title={b.note ?? ''}>{b.note ?? '-'}</span></td>
+                      <td className="px-3 py-2 border-t align-top truncate">
+                        <span className="block truncate" title={b.baseline_name}>
+                          {b.baseline_name}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">{b.taken_at ?? "-"}</td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">
+                        {(b as any).start_planned_base ?? "-"}
+                      </td>
+                      <td className="px-3 py-2 border-t align-top whitespace-nowrap">
+                        {(b as any).end_planned_base ?? "-"}
+                      </td>
+                      <td className="px-3 py-2 border-t align-top truncate">
+                        <span className="block truncate" title={b.note ?? ""}>
+                          {b.note ?? "-"}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
           </div>
-        </div>
-      </section>
+        </DetailSectionCard>
       )}
 
       {baselineModalOpen && (
@@ -576,6 +620,11 @@ export default function ProjectDetailPage() {
                     start_planned: startBase,
                     end_planned: endBase,
                   } as any);
+                  showToast({
+                    variant: "success",
+                    title: "Project baseline dibuat",
+                    description: `Baseline "${baselineForm.baseline_name.trim()}" berhasil dibuat.`,
+                  });
                   setBaselineModalOpen(false);
                   setBaselineForm({ baseline_name: '', note: '' });
                   // Refresh baselines after creation
@@ -607,7 +656,13 @@ export default function ProjectDetailPage() {
                   } else if (e?.response?.status === 401 || e?.response?.status === 403) {
                     setBaselineFormErr('Not authorized to create baseline');
                   } else {
-                    setBaselineFormErr(e?.message ?? 'Failed to create baseline');
+                    const msg = e?.message ?? 'Failed to create baseline';
+                    setBaselineFormErr(msg);
+                    showToast({
+                      variant: "error",
+                      title: "Gagal membuat baseline",
+                      description: msg,
+                    });
                   }
                 } finally {
                   setBaselineSaving(false);
@@ -645,17 +700,23 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {activeTab === 'tasks' && (
-      <section className="mt-6">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">Milestone Tasks</h3>
-          <a href={`/dashboard/projects/${data.id}/milestones`} className="text-sm px-2 py-1 border rounded-md hover:bg-neutral-50">View All</a>
+      {activeTab === "tasks" && (
+      <DetailSectionCard className="mt-2">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h3 className="text-sm font-semibold text-slate-700">Milestone Tasks</h3>
+          <a
+            href={`/dashboard/projects/${data.id}/milestones`}
+            className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
+          >
+            View All
+          </a>
         </div>
 
+        <div className="overflow-x-auto">
         {tasksLoading ? (
-          <div className="p-3 text-sm text-neutral-500 border rounded-lg">Loading tasks...</div>
+          <div className="p-3 text-sm text-neutral-500">Loading tasks...</div>
         ) : tasksError ? (
-          <div className="p-3 text-sm text-red-600 border rounded-lg">{tasksError}</div>
+          <div className="p-3 text-sm text-red-600">{tasksError}</div>
         ) : (() => {
           // Build map milestone_id -> tasks[] (only tasks that belong to a milestone)
           const map: Record<number, Task[]> = {};
@@ -670,24 +731,26 @@ export default function ProjectDetailPage() {
           const topWithTasks = milestones.filter(m => map[m.id] && map[m.id].length > 0).slice(0, 5);
 
           if (topWithTasks.length === 0) {
-            return <div className="p-3 text-sm text-neutral-500 border rounded-lg">No tasks from milestones</div>;
+            return <div className="p-3 text-sm text-neutral-500">No tasks from milestones</div>;
           }
 
           return (
-            <div className="space-y-4">
+            <div className="space-y-4 p-3">
               {topWithTasks.map((m) => {
                 const list = map[m.id] || [];
                 const topTasks = list; // show all tasks for the milestone (was limited to 3)
                 return (
-                  <div key={m.id} className="border rounded-lg">
-                    <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50">
-                      <div className="text-sm font-medium">
+                  <div key={m.id} className="overflow-hidden rounded-2xl border border-slate-100 bg-white/80">
+                    <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50/80">
+                      <div className="text-sm font-semibold text-slate-800">
                         <a className="hover:underline" href={`/dashboard/milestones/${m.id}`}>{m.name}</a>
                       </div>
-                      <div className="text-xs text-neutral-600">{m.status} • Due: {m.due_planned ?? '-'}</div>
+                      <div className="text-xs text-neutral-600">
+                        {m.status} • Due: {m.due_planned ?? "-"}
+                      </div>
                     </div>
                     <table className="min-w-full text-sm">
-                      <thead className="text-neutral-700">
+                      <thead className="bg-neutral-50 text-neutral-700">
                         <tr>
                           <th className="text-left font-medium px-3 py-2 border-b">Title</th>
                           <th className="text-left font-medium px-3 py-2 border-b">Status</th>
@@ -736,12 +799,16 @@ export default function ProjectDetailPage() {
                                 <td className="px-3 py-2 border-t">{t.status}</td>
                                 <td className="px-3 py-2 border-t">{(t.percent_complete ?? 0)}%</td>
                                 <td className="px-3 py-2 border-t space-x-2">
-                                  <button type="button" onClick={toggle} className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm">
-                                    {open ? 'Hide' : 'Details'}
+                                  <button
+                                    type="button"
+                                    onClick={toggle}
+                                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
+                                  >
+                                    {open ? "Hide" : "Details"}
                                   </button>
                                   <button
                                     type="button"
-                                    className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="inline-flex items-center rounded-full border border-[#00674F] bg-[#00674F]/5 px-3 py-1 text-xs font-semibold text-[#00674F] shadow-sm transition hover:bg-[#008061]/15 disabled:opacity-50 disabled:cursor-not-allowed"
                                       disabled={taskBaselineLoading[t.id] || !t.start_planned || !t.end_planned}
                                       onClick={async () => {
                                         if (!t.start_planned || !t.end_planned) {
@@ -821,74 +888,125 @@ export default function ProjectDetailPage() {
                                     >
                                       Create Baseline
                                     </button>
-                                  <a className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm" href={`/dashboard/tasks/${t.id}/edit`}>Edit</a>
+                                  <a
+                                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
+                                    href={`/dashboard/tasks/${t.id}/edit`}
+                                  >
+                                    Edit
+                                  </a>
                                 </td>
                               </tr>
                               {open && (
                                 <tr key={`detail-${t.id}`} className="bg-neutral-50/60">
                                   <td colSpan={4} className="px-3 py-3 border-t">
-                                    <div className="grid gap-1 text-xs text-neutral-700">
-                                      <div><span className="text-neutral-500">Description:</span> <span className="text-neutral-900">{(raw.description ?? '-') || '-'}</span></div>
-                                      <div className="flex flex-wrap gap-4">
-                                        <span><span className="text-neutral-500">Priority:</span> {raw.priority ?? 'Medium'}</span>
-                                        <span><span className="text-neutral-500">Start:</span> {raw.start_planned ?? '-'}</span>
-                                        <span><span className="text-neutral-500">End:</span> {raw.end_planned ?? '-'}</span>
+                                    <div className="grid gap-4 text-xs text-neutral-700 md:grid-cols-2">
+                                      <div className="space-y-1">
+                                        <div>
+                                          <span className="text-neutral-500">Description:</span>{" "}
+                                          <span className="text-neutral-900">
+                                            {(raw.description ?? "-") || "-"}
+                                          </span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-4">
+                                          <span>
+                                            <span className="text-neutral-500">Priority:</span>{" "}
+                                            {raw.priority ?? "Medium"}
+                                          </span>
+                                          <span>
+                                            <span className="text-neutral-500">Start:</span>{" "}
+                                            {raw.start_planned ?? "-"}
+                                          </span>
+                                          <span>
+                                            <span className="text-neutral-500">End:</span>{" "}
+                                            {raw.end_planned ?? "-"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-neutral-500">Assignees:</span>{" "}
+                                          {assignees.length === 0 ? (
+                                            <span className="text-neutral-900">No assignees</span>
+                                          ) : (
+                                            <span className="text-neutral-900">
+                                              {assignees
+                                                .map((a) => {
+                                                  const role = (a.role ?? "").trim();
+                                                  const showRole =
+                                                    role && role.toLowerCase() !== "member";
+                                                  return showRole ? `${a.name} (${role})` : a.name;
+                                                })
+                                                .join(", ")}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                      <div>
-                                        <span className="text-neutral-500">Assignees:</span>{' '}
-                                        {assignees.length === 0 ? (
-                                          <span className="text-neutral-900">No assignees</span>
-                                        ) : (
-                                          <span className="text-neutral-900">{
-                                            assignees
-                                              .map((a) => {
-                                                const role = (a.role ?? '').trim();
-                                                const showRole = role && role.toLowerCase() !== 'member';
-                                                return showRole ? `${a.name} (${role})` : a.name;
-                                              })
-                                              .join(', ')
-                                          }</span>
-                                        )}
-                                      </div>
-                                      <div className="mt-3 pt-3 border-t">
-                                        <div className="text-neutral-900 font-medium mb-2">Update & Log</div>
-                                        <div className="flex flex-wrap items-start gap-4">
+                                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
+                                        <div className="text-neutral-900 font-medium mb-2">
+                                          Update & Log
+                                        </div>
+                                        <div className="space-y-3">
                                           <TaskProgressEditor
                                             taskId={t.id}
                                             initialPercent={t.percent_complete ?? 0}
-                                            onSaved={() => setEvmReloadKey(k => k + 1)}
+                                            onSaved={() => setEvmReloadKey((k) => k + 1)}
+                                            className="text-xs"
                                           />
                                           {currentUserId > 0 ? (
                                             <TimeEntryForm
                                               taskId={t.id}
                                               userId={currentUserId}
+                                              className="text-xs"
                                               onSaved={async () => {
-                                                setEvmReloadKey(k => k + 1);
+                                                setEvmReloadKey((k) => k + 1);
                                                 const tid = Number(t.id);
                                                 if (Number.isFinite(tid)) {
-                                                  setTaskTotalHoursLoading(s => ({ ...s, [tid]: true }));
+                                                  setTaskTotalHoursLoading((s) => ({
+                                                    ...s,
+                                                    [tid]: true,
+                                                  }));
                                                   try {
                                                     const total = await totalHoursByTask(tid);
-                                                    const value = typeof total === 'number' ? total : Number((total as any)?.total ?? 0);
-                                                    setTaskTotalHours(s => ({ ...s, [tid]: Number.isFinite(value) ? value : 0 }));
+                                                    const value =
+                                                      typeof total === "number"
+                                                        ? total
+                                                        : Number((total as any)?.total ?? 0);
+                                                    setTaskTotalHours((s) => ({
+                                                      ...s,
+                                                      [tid]: Number.isFinite(value) ? value : 0,
+                                                    }));
                                                   } catch (e: any) {
-                                                    setTaskTotalHoursError(s => ({ ...s, [tid]: e?.message ?? 'Gagal memuat total jam' }));
+                                                    setTaskTotalHoursError((s) => ({
+                                                      ...s,
+                                                      [tid]:
+                                                        e?.message ?? "Gagal memuat total jam",
+                                                    }));
                                                   } finally {
-                                                    setTaskTotalHoursLoading(s => ({ ...s, [tid]: false }));
+                                                    setTaskTotalHoursLoading((s) => ({
+                                                      ...s,
+                                                      [tid]: false,
+                                                    }));
                                                   }
                                                 }
                                               }}
                                             />
                                           ) : (
-                                            <div className="text-[11px] text-neutral-500">Login required to log time.</div>
+                                            <div className="text-[11px] text-neutral-500">
+                                              Login required to log time.
+                                            </div>
                                           )}
-                                          <div className="text-xs text-neutral-700 mt-1">
+                                          <div className="text-[11px] text-neutral-700">
                                             {taskTotalHoursLoading[Number(t.id)] ? (
-                                              <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">Loading hours…</span>
+                                              <span className="inline-block px-2 py-0.5 rounded-full border bg-neutral-50">
+                                                Loading hours…
+                                              </span>
                                             ) : taskTotalHoursError[Number(t.id)] ? (
-                                              <span className="inline-block px-2 py-0.5 rounded border bg-red-50 text-red-700">{taskTotalHoursError[Number(t.id)]}</span>
+                                              <span className="inline-block px-2 py-0.5 rounded-full border bg-red-50 text-red-700">
+                                                {taskTotalHoursError[Number(t.id)]}
+                                              </span>
                                             ) : (
-                                              <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">Total Hours: <b>{taskTotalHours[Number(t.id)] ?? 0}</b></span>
+                                              <span className="inline-flex items-center gap-1 rounded-full border bg-neutral-50 px-2 py-0.5">
+                                                <span>Total Hours:</span>
+                                                <b>{taskTotalHours[Number(t.id)] ?? 0}</b>
+                                              </span>
                                             )}
                                           </div>
                                         </div>
@@ -908,21 +1026,103 @@ export default function ProjectDetailPage() {
             </div>
           );
         })()}
-      </section>
+        </div>
+      </DetailSectionCard>
+      )}
+    </div>
+
+    <DetailTextModal
+      open={!!detailModal}
+      label={detailModal?.label ?? ""}
+      text={detailModal?.text ?? ""}
+      onClose={() => setDetailModal(null)}
+    />
+    </>
+  );
+}
+
+type RowProps = {
+  label: string;
+  value: ReactNode;
+  onShowMore?: () => void;
+  showMoreLabel?: string;
+};
+
+function Row({ label, value, onShowMore, showMoreLabel }: RowProps) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
+        <span className="truncate text-left w-full">{value}</span>
+      </div>
+      {onShowMore && (
+        <button
+          type="button"
+          onClick={onShowMore}
+          className="text-xs font-semibold text-[#00674F] hover:text-[#008061]"
+        >
+          {showMoreLabel ?? "Show more"}
+        </button>
       )}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
-      <div className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
-        <span className="truncate w-full whitespace-nowrap">{value}</span>
+type DetailTextModalProps = {
+  open: boolean;
+  label: string;
+  text: string;
+  onClose: () => void;
+};
+
+function DetailTextModal({ open, label, text, onClose }: DetailTextModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center px-4">
+      <div
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative z-10 w-full max-w-2xl transform rounded-3xl bg-white/95 p-6 shadow-[0_24px_48px_rgba(15,23,42,0.22)] ring-1 ring-slate-100 animate-[fade-in-down_0.22s_ease-out]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+              Project {label}
+            </p>
+            <h2 className="text-base font-semibold text-slate-900">
+              {label} Detail
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-4 max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+          {text || "-"}
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+          >
+            Close
+          </button>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
-
-// old Row variant removed to avoid duplicate declaration; unified above

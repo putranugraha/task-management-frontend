@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import { listByTask as listTaskBaselines, listByBaseline as listTaskBaselinesByBaseline, create as createTaskBaseline } from "@/lib/api/task-baselines";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type ProjectBaseline = {
   id: number;
@@ -26,6 +28,8 @@ export default function ProjectBaselinesPage() {
   const [taskBaselinesMap, setTaskBaselinesMap] = useState<Record<number, any[]>>({});
   const [taskBaselinesLoading, setTaskBaselinesLoading] = useState<Record<number, boolean>>({});
   const [taskBaselinesError, setTaskBaselinesError] = useState<Record<number, string | null>>({});
+  const { showToast } = useToast();
+  const [massCreateTarget, setMassCreateTarget] = useState<ProjectBaseline | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -42,7 +46,13 @@ export default function ProjectBaselinesPage() {
         });
         if (mounted) setRows(arr as ProjectBaseline[]);
       } catch (e: any) {
-        setError(e?.message ?? 'Failed to load baselines');
+        const msg = e?.message ?? "Failed to load baselines";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat project baselines",
+          description: msg,
+        });
       } finally {
         setLoading(false);
       }
@@ -69,8 +79,6 @@ export default function ProjectBaselinesPage() {
 
   const createTaskBaselinesFor = async (baseline: ProjectBaseline) => {
     if (!projectId) return;
-    const ok = confirm(`Create Task Baselines for baseline "${baseline.baseline_name}"?`);
-    if (!ok) return;
     setBusyRow(baseline.id);
     try {
       const tasks: any[] = await listTasksByProject(projectId);
@@ -106,7 +114,11 @@ export default function ProjectBaselinesPage() {
           failed++;
         }
       }
-      alert(`Done. Created: ${createdCount}, Skipped: ${skipped}, Failed: ${failed}`);
+      showToast({
+        variant: failed > 0 ? "warning" : "success",
+        title: "Generate Task Baselines selesai",
+        description: `Created: ${createdCount}, Skipped: ${skipped}, Failed: ${failed}`,
+      });
     } finally {
       setBusyRow(null);
     }
@@ -176,7 +188,7 @@ export default function ProjectBaselinesPage() {
                       <button
                         className="px-2 py-1 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={busyRow === r.id}
-                        onClick={() => createTaskBaselinesFor(r)}
+                        onClick={() => setMassCreateTarget(r)}
                       >Create Task Baselines</button>
                     </td>
                   </tr>
@@ -226,6 +238,22 @@ export default function ProjectBaselinesPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={!!massCreateTarget}
+        title="Generate Task Baselines?"
+        description={
+          massCreateTarget
+            ? `Task baselines akan dibuat untuk semua task dalam project ini yang memiliki Start/End Planned, menggunakan baseline "${massCreateTarget.baseline_name}".`
+            : ""
+        }
+        confirmLabel="Generate"
+        cancelLabel="Batal"
+        variant="default"
+        loading={busyRow === massCreateTarget?.id}
+        onConfirm={() => massCreateTarget && createTaskBaselinesFor(massCreateTarget)}
+        onCancel={() => busyRow === null && setMassCreateTarget(null)}
+      />
     </div>
   );
 }

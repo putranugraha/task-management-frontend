@@ -11,6 +11,7 @@ import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard } from "@/components/layout/DetailCards";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 type FormState = {
   project_id: number | "";
@@ -38,6 +39,7 @@ export default function CreateMilestonePage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lookupsLoading, setLookupsLoading] = useState(true);
+  const { showToast } = useToast();
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target as any;
@@ -62,9 +64,24 @@ export default function CreateMilestonePage() {
       };
       await apiRequest("POST", "/api/milestones", payload);
       setSuccessMessage("Milestone berhasil ditambahkan.");
+      showToast({
+        variant: "success",
+        title: "Milestone dibuat",
+        description: `Milestone "${form.name}" berhasil ditambahkan.`,
+      });
       setTimeout(() => router.push("/dashboard/milestones"), 900);
     } catch (e: any) {
-      setError(e?.message ?? "Gagal membuat milestone");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal membuat milestone";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal membuat milestone",
+        description: msg,
+      });
     } finally {
       setSubmitting(false);
     }

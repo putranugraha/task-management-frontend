@@ -13,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SlidersHorizontal, AlertCircle, X } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -22,6 +24,9 @@ export default function TasksPage() {
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState<TaskRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchTasks = async () => {
     try {
@@ -41,7 +46,13 @@ export default function TasksPage() {
       }));
       setRows(mapped);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load tasks");
+      const msg = e?.message ?? "Failed to load tasks";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat tasks",
+        description: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -49,14 +60,35 @@ export default function TasksPage() {
 
   useEffect(() => { fetchTasks(); }, []);
 
-  const handleDelete = async (row: TaskRow) => {
-    const ok = confirm(`Hapus task ${row.title}?`);
-    if (!ok) return;
+  const handleDelete = (row: TaskRow) => {
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await apiRequest("DELETE", `/api/tasks/${row.id}`);
+      await apiRequest("DELETE", `/api/tasks/${deleteTarget.id}`);
       await fetchTasks();
+      showToast({
+        variant: "success",
+        title: "Task dihapus",
+        description: `Task "${deleteTarget.title}" berhasil dihapus.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menghapus task");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menghapus task";
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus task",
+        description: msg,
+      });
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -135,7 +167,13 @@ export default function TasksPage() {
         assignees,
       });
     } catch (e: any) {
-      setDetailError(e?.message ?? "Gagal memuat detail task");
+      const msg = e?.message ?? "Gagal memuat detail task";
+      setDetailError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat detail task",
+        description: msg,
+      });
     } finally {
       setDetailLoading(false);
     }
@@ -520,6 +558,18 @@ export default function TasksPage() {
             </div>
           </div>
         </div>, document.body)}
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title="Hapus task ini?"
+          description={deleteTarget ? `Task "${deleteTarget.title}" akan dihapus dari sistem.` : ""}
+          confirmLabel="Hapus"
+          cancelLabel="Batal"
+          variant="danger"
+          loading={deleteLoading}
+          onConfirm={confirmDelete}
+          onCancel={() => !deleteLoading && setDeleteTarget(null)}
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>

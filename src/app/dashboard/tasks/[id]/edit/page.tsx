@@ -11,6 +11,7 @@ import { DetailMainCard } from "@/components/layout/DetailCards";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronsUpDown, Check } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
 
 type TaskDetail = {
   id: number;
@@ -51,6 +52,7 @@ export default function EditTaskPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string; status?: string }>>([]);
   const [depsLoading, setDepsLoading] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let mounted = true;
@@ -99,7 +101,13 @@ export default function EditTaskPage() {
           });
         }
       } catch (e: any) {
-        setError(e?.message ?? "Gagal memuat data task");
+        const msg = e?.message ?? "Gagal memuat data task";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat task",
+          description: msg,
+        });
       } finally {
         setLoading(false);
       }
@@ -338,13 +346,28 @@ export default function EditTaskPage() {
       }
       await apiRequest("PUT", `/api/tasks/${form.id}`, payload);
       const pid = form.project_id && Number(form.project_id);
+      showToast({
+        variant: "success",
+        title: "Perubahan disimpan",
+        description: `Task "${form.title}" berhasil diperbarui.`,
+      });
       if (Number.isFinite(pid)) {
         router.push(`/dashboard/projects/${pid}`);
       } else {
         router.push("/dashboard/tasks");
       }
     } catch (e: any) {
-      setError(e?.message ?? "Gagal menyimpan task");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menyimpan task";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal menyimpan task",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }

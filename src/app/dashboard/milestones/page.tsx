@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { SlidersHorizontal, X, Plus } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import type { Milestone } from "@/types/milestone";
 import DataTable from "../users/data-table";
 import { useMilestoneColumns, type MilestoneRow } from "./columns";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { SlidersHorizontal, X, Plus } from "lucide-react";
-import { createPortal } from "react-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 import MilestoneStatsRow from "@/components/dashboard/MilestoneStatsRow";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -25,6 +27,10 @@ export default function MilestonesPage() {
   const [search, setSearch] = useState("");
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const { showToast } = useToast();
+  const [deleteTarget, setDeleteTarget] = useState<MilestoneRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchMilestones = async () => {
     try {
@@ -42,7 +48,13 @@ export default function MilestonesPage() {
       }));
       setRows(mapped);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load milestones");
+      const msg = e?.message ?? "Failed to load milestones";
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat milestones",
+        description: msg,
+      });
     } finally {
       setLoading(false);
     }
@@ -52,14 +64,36 @@ export default function MilestonesPage() {
     fetchMilestones();
   }, []);
 
-  const handleDelete = async (row: MilestoneRow) => {
-    const ok = confirm(`Hapus milestone ${row.name}?`);
-    if (!ok) return;
+  const handleDelete = (row: MilestoneRow) => {
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await apiRequest("DELETE", `/api/milestones/${row.id}`);
+      await apiRequest("DELETE", `/api/milestones/${deleteTarget.id}`);
       await fetchMilestones();
+      showToast({
+        variant: "success",
+        title: "Milestone dihapus",
+        description: `Milestone "${deleteTarget.name}" berhasil dihapus.`,
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menghapus milestone");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menghapus milestone";
+      showToast({
+        variant: "error",
+        title: "Gagal menghapus milestone",
+        description: msg,
+      });
+    }
+    finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -452,6 +486,18 @@ export default function MilestonesPage() {
           </div>
         </div>, document.body) : null
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Hapus milestone ini?"
+        description={deleteTarget ? `Milestone "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        loading={deleteLoading}
+        onConfirm={confirmDelete}
+        onCancel={() => !deleteLoading && setDeleteTarget(null)}
+      />
     </div>
   );
 }

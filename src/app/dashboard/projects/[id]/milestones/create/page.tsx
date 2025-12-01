@@ -10,6 +10,7 @@ import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
+import { useToast } from "@/components/ui/toast";
 
 const TASK_STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"] as const;
 const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
@@ -75,6 +76,7 @@ export default function CreateProjectMilestonePage() {
     assigneeIds?: number[];
   };
   const [taskForms, setTaskForms] = useState<TaskForm[]>([]);
+  const [collapsedTaskKeys, setCollapsedTaskKeys] = useState<Record<number, boolean>>({});
   const nextKeyRef = useRef(1);
   const addEmptyTask = () => setTaskForms((s) => ([...s, {
     tempKey: nextKeyRef.current++,
@@ -88,6 +90,10 @@ export default function CreateProjectMilestonePage() {
     assigneeIds: [],
   }]));
   const removeTask = (idx: number) => setTaskForms((s) => s.filter((_, i) => i !== idx));
+  const toggleTaskCollapsed = (key: number) => {
+    setCollapsedTaskKeys((s) => ({ ...s, [key]: !s[key] }));
+  };
+  const { showToast } = useToast();
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target as any;
@@ -147,12 +153,22 @@ export default function CreateProjectMilestonePage() {
       // Validate basic fields
       // Basic client-side validation
       if (!form.name || form.name.length > 150) {
-        setFieldErrors((e) => ({ ...e, name: 'Name is required and must be <= 150 chars' }));
+        setFieldErrors((e) => ({ ...e, name: "Name is required and must be <= 150 chars" }));
+        showToast({
+          variant: "error",
+          title: "Form milestone tidak valid",
+          description: "Name wajib diisi dan maksimal 150 karakter.",
+        });
         setSubmitting(false);
         return;
       }
       if (!MILESTONE_STATUS_OPTIONS.includes(form.status as any)) {
-        setFieldErrors((e) => ({ ...e, status: 'Invalid status' }));
+        setFieldErrors((e) => ({ ...e, status: "Invalid status" }));
+        showToast({
+          variant: "error",
+          title: "Status milestone tidak valid",
+          description: "Pilih status milestone yang tersedia.",
+        });
         setSubmitting(false);
         return;
       }
@@ -160,7 +176,11 @@ export default function CreateProjectMilestonePage() {
       for (let i = 0; i < taskForms.length; i++) {
         const t = taskForms[i];
         if (!t.title || t.title.trim().length === 0) {
-          alert(`Task #${i + 1} requires a title.`);
+          showToast({
+            variant: "error",
+            title: "Task tidak valid",
+            description: `Task #${i + 1} wajib memiliki judul.`,
+          });
           setSubmitting(false);
           return;
         }
@@ -168,14 +188,22 @@ export default function CreateProjectMilestonePage() {
           const s = Date.parse(t.start_planned);
           const en = Date.parse(t.end_planned);
           if (Number.isFinite(s) && Number.isFinite(en) && s > en) {
-            alert(`Task #${i + 1} has Start after End. Please fix the dates.`);
+            showToast({
+              variant: "error",
+              title: "Tanggal task tidak valid",
+              description: `Task #${i + 1} memiliki Start setelah End. Periksa kembali tanggalnya.`,
+            });
             setSubmitting(false);
             return;
           }
         }
         const pct = Number(t.percent_complete ?? 0);
         if (!(pct >= 0 && pct <= 100)) {
-          alert(`Task #${i + 1} percent must be 0-100.`);
+          showToast({
+            variant: "error",
+            title: "Persentase task tidak valid",
+            description: `Task #${i + 1} harus memiliki persen 0–100.`,
+          });
           setSubmitting(false);
           return;
         }
@@ -289,13 +317,20 @@ export default function CreateProjectMilestonePage() {
             failures.push({ title: t.title, error: e });
           }
         }
-        if (failures.length) {
-          try {
-            console.error('Some tasks failed to create:', failures);
-            alert(`Warning: ${failures.length} task(s) gagal dibuat. Cek konsol untuk detail.`);
-          } catch {}
+        if (failures.length > 0) {
+          console.error("Some tasks failed to create:", failures);
+          showToast({
+            variant: "warning",
+            title: "Beberapa task gagal dibuat",
+            description: `${failures.length} task gagal dibuat. Cek konsol untuk detail teknis.`,
+          });
         }
       }
+      showToast({
+        variant: "success",
+        title: "Milestone dibuat",
+        description: "Milestone baru berhasil dibuat untuk project ini.",
+      });
       // Redirect back to Project Detail so the new milestone appears in the detail page section
       router.push(`/dashboard/projects/${projectId}`);
     } catch (e: any) {
@@ -310,11 +345,29 @@ export default function CreateProjectMilestonePage() {
         setFieldErrors(mapped);
       } else if (e?.response?.status === 404) {
         // Some backends use 404 for unauthorized project access (policy hides existence)
-        setError('Project not found or you may not have permission');
+        const msg = "Project tidak ditemukan atau kamu tidak punya akses.";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal membuat milestone",
+          description: msg,
+        });
       } else if (e?.response?.status === 401 || e?.response?.status === 403) {
-        setError('Not authorized to perform this action');
+        const msg = "Kamu tidak diizinkan untuk membuat milestone.";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Tidak berizin",
+          description: msg,
+        });
       } else {
-        setError(e?.message ?? 'Failed to create milestone');
+        const msg = e?.message ?? "Failed to create milestone";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal membuat milestone",
+          description: msg,
+        });
       }
     } finally {
       setSubmitting(false);
@@ -400,13 +453,63 @@ export default function CreateProjectMilestonePage() {
               <p className="text-xs text-neutral-500">Kamu bisa menambahkan task pertama milestone di sini. Ini opsional.</p>
             ) : (
               <div className="grid gap-3">
-                {taskForms.map((t, idx) => (
+                {taskForms.map((t, idx) => {
+                  const hasContent =
+                    (t.title || "").trim().length > 0 ||
+                    (t.start_planned || "").trim().length > 0 ||
+                    (t.end_planned || "").trim().length > 0 ||
+                    Number(t.percent_complete || 0) > 0 ||
+                    (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) ||
+                    (Array.isArray(t.dependsOnKeys) && t.dependsOnKeys.length > 0);
+                  const collapsed = !!collapsedTaskKeys[t.tempKey];
+                  return (
                   <div key={t.tempKey} className="relative overflow-hidden rounded-2xl border border-slate-200 p-4 grid gap-3 bg-white/95 ring-1 ring-slate-100 shadow-[0_12px_24px_rgba(15,23,42,0.06),0_10px_24px_rgba(0,103,79,0.12)] transition hover:shadow-[0_16px_32px_rgba(15,23,42,0.08),0_14px_32px_rgba(0,103,79,0.18)]">
                     <div className="absolute inset-x-0 top-0 h-1.5 rounded-t-2xl" style={{ backgroundColor: TASK_CARD_COLORS[idx % TASK_CARD_COLORS.length] }} />
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-neutral-600">Task #{idx + 1}</div>
-                      <button type="button" onClick={() => removeTask(idx)} className="text-xs px-2 py-1 border rounded hover:bg-neutral-50">Remove</button>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs text-neutral-600 min-w-0">
+                        <span>Task #{idx + 1}</span>
+                        {hasContent && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            {(t.status || 'To Do')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasContent && (
+                          <button
+                            type="button"
+                            onClick={() => toggleTaskCollapsed(t.tempKey)}
+                            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
+                          >
+                            {collapsed ? "Show task" : "Hide task"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeTask(idx)}
+                          className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-100"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
+                    {hasContent && collapsed ? (
+                      <div className="rounded-2xl border border-emerald-50 bg-emerald-50/60 px-3 py-2 text-xs text-slate-700 flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-slate-900 truncate max-w-[220px]">{t.title}</span>
+                        <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          {(t.start_planned || 'Start ?')} — {(t.end_planned || 'End ?')}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                          {Number(t.percent_complete ?? 0)}%
+                        </span>
+                        {Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0 && (
+                          <span className="text-[11px] text-slate-600">
+                            {t.assigneeIds.length} assignee{t.assigneeIds.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                    <>
                     <div>
                       <label className="block text-sm mb-1">Title</label>
                       <input
@@ -416,27 +519,7 @@ export default function CreateProjectMilestonePage() {
                         placeholder="e.g. Implement Middleware RBAC"
                       />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm mb-1">Status</label>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                              <span className={t.status ? 'text-slate-700' : 'text-slate-400'}>{t.status || 'Pilih status'}</span>
-                              <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="min-w-[200px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
-                            {TASK_STATUS_OPTIONS.map((sopt) => (
-                              <DropdownMenuItem key={sopt} onSelect={() => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, status: sopt } : x))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
-                                <span>{sopt}</span>
-                                {t.status === sopt && <Check className="h-4 w-4 text-emerald-500" />}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      <div>
+                    <div>
                         <label className="block text-sm mb-1">Priority</label>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -455,7 +538,6 @@ export default function CreateProjectMilestonePage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-sm mb-1">Start Planned</label>
@@ -538,8 +620,11 @@ export default function CreateProjectMilestonePage() {
                         <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Dukungan tipe/lag akan ditambahkan berikutnya.</p>
                       </div>
                     )}
+                    </>
+                    )}
                   </div>
-                ))}
+                );
+                })}
               </div>
             )}
           </div>

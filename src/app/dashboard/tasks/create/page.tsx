@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
+import { useToast } from "@/components/ui/toast";
 
 type FormState = {
   project_id: number | "";
@@ -61,6 +62,7 @@ export default function CreateTaskPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string }>>([]);
   const [depsLoading, setDepsLoading] = useState(false);
+  const { showToast } = useToast();
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as any;
@@ -136,11 +138,22 @@ export default function CreateTaskPage() {
         }
       }
       setSuccessMessage("Task berhasil dibuat.");
+      showToast({
+        variant: "success",
+        title: "Task dibuat",
+        description: `Task "${form.title}" berhasil dibuat.`,
+      });
       setTimeout(() => router.push("/dashboard/tasks"), 900);
     } catch (e: any) {
       const status = e?.response?.status;
       const msg = e?.response?.data?.message || e?.message;
-      setError(msg ? `Gagal membuat task (${status ?? 'error'}): ${msg}` : "Gagal membuat task");
+      const fullMsg = msg ? `Gagal membuat task (${status ?? "error"}): ${msg}` : "Gagal membuat task";
+      setError(fullMsg);
+      showToast({
+        variant: "error",
+        title: "Gagal membuat task",
+        description: fullMsg,
+      });
     } finally {
       setSubmitting(false);
     }

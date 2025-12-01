@@ -10,6 +10,8 @@ import {
 } from "@/lib/api/task-attachments";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Props = {
   taskId: number;
@@ -27,6 +29,13 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
   ]);
   const canModerate =
     !permLoading && allowed && (hasRole("Admin") || hasRole("Manager"));
+  const { showToast } = useToast();
+  const [moderateTarget, setModerateTarget] = useState<{
+    id: number;
+    action: "approve" | "reject";
+    filename?: string | null;
+  } | null>(null);
+  const [moderateLoading, setModerateLoading] = useState(false);
 
   async function fetchAttachments() {
     setLoading(true);
@@ -72,7 +81,16 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
       setFile(null);
       await fetchAttachments();
     } catch (e: any) {
-      alert(e?.message ?? "Gagal upload lampiran");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal upload lampiran";
+      showToast({
+        variant: "error",
+        title: "Gagal upload lampiran",
+        description: msg,
+      });
     } finally {
       setUploading(false);
     }
@@ -80,14 +98,54 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
 
   async function handleStatus(id: number, action: "approve" | "reject") {
     try {
+      setModerateLoading(true);
+      const target = items.find((i) => i.id === id);
+      if (!target) {
+        showToast({
+          variant: "error",
+          title: "Lampiran tidak ditemukan",
+          description: "Lampiran mungkin sudah dihapus atau tidak tersedia.",
+        });
+        return;
+      }
+      const currentStatus = String(target.status || "").toLowerCase();
+      if (currentStatus !== "pending") {
+        showToast({
+          variant: "warning",
+          title: "Aksi tidak dapat dilakukan",
+          description: "Lampiran ini sudah tidak berstatus pending.",
+        });
+        return;
+      }
+
       if (action === "approve") {
         await approveAttachment(id);
       } else {
         await rejectAttachment(id);
       }
       await fetchAttachments();
+      showToast({
+        variant: "success",
+        title: action === "approve" ? "Lampiran disetujui" : "Lampiran ditolak",
+        description:
+          action === "approve"
+            ? "Status lampiran berhasil diubah menjadi Approved."
+            : "Status lampiran berhasil diubah menjadi Rejected.",
+      });
     } catch (e: any) {
-      alert(e?.message ?? "Gagal mengubah status lampiran");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal mengubah status lampiran";
+      showToast({
+        variant: "error",
+        title: "Gagal mengubah status lampiran",
+        description: msg,
+      });
+    } finally {
+      setModerateLoading(false);
+      setModerateTarget(null);
     }
   }
 
@@ -176,14 +234,26 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
                           <div className="flex flex-wrap gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleStatus(a.id, "approve")}
+                              onClick={() =>
+                                setModerateTarget({
+                                  id: a.id,
+                                  action: "approve",
+                                  filename: a.filename,
+                                })
+                              }
                               className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border border-[#00674F] bg-[#00674F]/5 text-xs font-semibold text-[#00674F] hover:bg-[#00674F]/10 hover:border-[#00674F] transition min-w-[96px]"
                             >
                               Approve
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleStatus(a.id, "reject")}
+                              onClick={() =>
+                                setModerateTarget({
+                                  id: a.id,
+                                  action: "reject",
+                                  filename: a.filename,
+                                })
+                              }
                               className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border border-rose-300 bg-rose-50 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-400 transition min-w-[96px]"
                             >
                               Reject
@@ -223,6 +293,28 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
           </button>
         </form>
       )}
+
+      <ConfirmDialog
+        open={!!moderateTarget}
+        title={
+          moderateTarget?.action === "approve"
+            ? "Setujui lampiran ini?"
+            : "Tolak lampiran ini?"
+        }
+        description={
+          moderateTarget
+            ? `Lampiran "${moderateTarget.filename ?? moderateTarget.id}" akan diubah statusnya menjadi "${moderateTarget.action === "approve" ? "Approved" : "Rejected"}".`
+            : ""
+        }
+        confirmLabel={moderateTarget?.action === "approve" ? "Setujui" : "Tolak"}
+        cancelLabel="Batal"
+        variant={moderateTarget?.action === "reject" ? "danger" : "default"}
+        loading={moderateLoading}
+        onConfirm={() =>
+          moderateTarget && handleStatus(moderateTarget.id, moderateTarget.action)
+        }
+        onCancel={() => !moderateLoading && setModerateTarget(null)}
+      />
     </section>
   );
 }

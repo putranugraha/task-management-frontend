@@ -10,6 +10,8 @@ import {
 import { apiRequest } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Props = {
   taskId: number;
@@ -46,6 +48,10 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
   const [timerStart, setTimerStart] = useState<number | null>(null);
   const [nowTs, setNowTs] = useState<number | null>(null);
   const storageKey = `task_timer_${taskId}`;
+  const { showToast } = useToast();
+  const [startConfirmOpen, setStartConfirmOpen] = useState(false);
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  const [savingTimer, setSavingTimer] = useState(false);
 
   async function fetchAll() {
     setLoading(true);
@@ -208,19 +214,47 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
   }
 
   async function handleStop() {
-    if (!timerStart || !currentUserId || !allowed) return;
+    if (!timerStart) {
+      showToast({
+        variant: "warning",
+        title: "Timer belum berjalan",
+        description: "Tidak ada timer aktif untuk disimpan.",
+      });
+      setStopConfirmOpen(false);
+      return;
+    }
+    if (!allowed || permLoading) {
+      showToast({
+        variant: "error",
+        title: "Tidak memiliki izin",
+        description: "Kamu tidak diizinkan menyimpan entri waktu untuk task ini.",
+      });
+      setStopConfirmOpen(false);
+      return;
+    }
+    if (!currentUserId) {
+      showToast({
+        variant: "error",
+        title: "User tidak valid",
+        description: "User yang aktif tidak dikenali, entri waktu tidak dapat disimpan.",
+      });
+      setStopConfirmOpen(false);
+      return;
+    }
+
+    setSavingTimer(true);
     const now = Date.now();
     const diffMs = now - timerStart;
     const hours = Math.max(0, parseFloat((diffMs / 3_600_000).toFixed(2)));
     const date = new Date().toISOString().slice(0, 10);
 
-    const payload: TimeEntryPayload = {
-      task_id: Number(taskId),
-      user_id: currentUserId,
-      date,
-      hours,
-      note: "Timer dari UI",
-    };
+      const payload: TimeEntryPayload = {
+        task_id: Number(taskId),
+        user_id: currentUserId,
+        date,
+        hours,
+        note: "Timer dari UI",
+      };
 
     try {
       await upsert(payload);
@@ -229,8 +263,20 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
         window.localStorage.removeItem(storageKey);
       }
       await fetchAll();
+      setStopConfirmOpen(false);
     } catch (e: any) {
-      alert(e?.message ?? "Gagal menyimpan entri waktu");
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal menyimpan entri waktu";
+      showToast({
+        variant: "error",
+        title: "Gagal menyimpan entri waktu",
+        description: msg,
+      });
+    } finally {
+      setSavingTimer(false);
     }
   }
 
@@ -335,7 +381,25 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
             {!timerStart ? (
               <button
                 type="button"
-                onClick={handleStart}
+                onClick={() => {
+                  if (!allowed || permLoading) {
+                    showToast({
+                      variant: "error",
+                      title: "Tidak memiliki izin",
+                      description: "Kamu tidak diizinkan memulai timer untuk task ini.",
+                    });
+                    return;
+                  }
+                  if (!currentUserId || currentUserId <= 0) {
+                    showToast({
+                      variant: "error",
+                      title: "User tidak valid",
+                      description: "User yang aktif tidak dikenali, timer tidak dapat dimulai.",
+                    });
+                    return;
+                  }
+                  setStartConfirmOpen(true);
+                }}
                 className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
               >
                 Start Timer
@@ -343,7 +407,7 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
             ) : (
               <button
                 type="button"
-                onClick={handleStop}
+                onClick={() => setStopConfirmOpen(true)}
                 className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
               >
                 Stop &amp; Save
@@ -352,6 +416,33 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={startConfirmOpen}
+        title="Mulai timer untuk task ini?"
+        description="Timer waktu akan mulai berjalan dan dicatat hingga kamu menekan Stop & Save."
+        confirmLabel="Mulai"
+        cancelLabel="Batal"
+        variant="default"
+        loading={false}
+        onConfirm={() => {
+          setStartConfirmOpen(false);
+          handleStart();
+        }}
+        onCancel={() => setStartConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={stopConfirmOpen}
+        title="Hentikan dan simpan waktu?"
+        description="Timer akan dihentikan dan entri waktu baru akan disimpan berdasarkan durasi yang sudah berjalan."
+        confirmLabel="Stop & Save"
+        cancelLabel="Batal"
+        variant="default"
+        loading={savingTimer}
+        onConfirm={handleStop}
+        onCancel={() => !savingTimer && setStopConfirmOpen(false)}
+      />
     </section>
   );
 }

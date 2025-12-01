@@ -423,7 +423,13 @@ export default function TaskDetailPage() {
         </DetailSectionCard>
 
         <DetailSectionCard>
-          <TaskTimeTrackerSection taskId={id} />
+          <TaskTimeTrackerSection
+            taskId={id}
+            initialStatus={data.status}
+            onStatusChange={(status) =>
+              setData((prev) => (prev ? { ...prev, status } : prev))
+            }
+          />
         </DetailSectionCard>
       </DetailTwoColumnGrid>
     </div>

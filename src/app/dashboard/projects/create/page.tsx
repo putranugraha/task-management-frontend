@@ -9,6 +9,7 @@ import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { RichTextArea } from "@/components/ui/RichTextArea";
 
 type SimpleUser = { id: number; name: string };
 
@@ -125,6 +126,43 @@ export default function CreateProjectPage() {
     return owners.find((o) => o.id === Number(form.division_owner_id)) ?? null;
   }, [owners, form.division_owner_id]);
 
+  if (authLoading || ownersLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32 rounded-md" />
+            <Skeleton className="h-8 w-64 rounded-md" />
+          </div>
+          <Skeleton className="h-9 w-28 rounded-full" />
+        </div>
+
+        <div className="grid items-stretch gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="space-y-4">
+            <Skeleton className="h-40 w-full rounded-3xl" />
+            <Skeleton className="h-10 w-2/3 rounded-full" />
+            <Skeleton className="h-2 w-full rounded-full" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-40 rounded-md" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+            </div>
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <div className="flex justify-end gap-2">
+              <Skeleton className="h-9 w-20 rounded-full" />
+              <Skeleton className="h-9 w-28 rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -239,12 +277,24 @@ export default function CreateProjectPage() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2 md:col-span-3">
-              <label htmlFor="scope" className="text-sm font-semibold text-slate-500">Scope</label>
-              <textarea id="scope" name="scope" value={form.scope} onChange={onChange} rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="Deskripsikan cakupan proyek" />
+              <RichTextArea
+                id="scope"
+                label="Scope"
+                placeholder="Deskripsikan cakupan proyek"
+                value={form.scope}
+                onChange={(val) => setForm((s) => ({ ...s, scope: val }))}
+                rows={4}
+              />
             </div>
             <div className="space-y-2 md:col-span-3">
-              <label htmlFor="objective" className="text-sm font-semibold text-slate-500">Objective</label>
-              <textarea id="objective" name="objective" value={form.objective} onChange={onChange} rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="Tujuan utama proyek" />
+              <RichTextArea
+                id="objective"
+                label="Objective"
+                placeholder="Tujuan utama proyek"
+                value={form.objective}
+                onChange={(val) => setForm((s) => ({ ...s, objective: val }))}
+                rows={4}
+              />
             </div>
           </div>
 

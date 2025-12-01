@@ -7,7 +7,7 @@ import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import { listByProject } from "@/lib/api/milestones";
-import { listByProject as listTasksByProject } from "@/lib/api/tasks";
+import { listByProject as listTasksByProject, updateStatus as updateTaskStatus } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
@@ -314,6 +314,12 @@ export default function ProjectDetailPage() {
     return Number.isFinite(max) ? toISODate(new Date(max)) : null;
   })();
 
+  const stripHtml = (input: string | null | undefined): string => {
+    if (!input) return "-";
+    const withoutTags = input.replace(/<[^>]+>/g, " ");
+    return withoutTags.replace(/&nbsp;/gi, " ").trim() || "-";
+  };
+
   return (
     <>
     <div className="w-full space-y-6">
@@ -383,13 +389,13 @@ export default function ProjectDetailPage() {
         <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
           <Row
             label="Scope"
-            value={data.scope ?? '-'}
+            value={stripHtml(data.scope)}
             onShowMore={data.scope ? () => setDetailModal({ label: "Scope", text: data.scope ?? "-" }) : undefined}
             showMoreLabel={data.scope ? "Show more" : undefined}
           />
           <Row
             label="Objective"
-            value={data.objective ?? '-'}
+            value={stripHtml(data.objective)}
             onShowMore={data.objective ? () => setDetailModal({ label: "Objective", text: data.objective ?? "-" }) : undefined}
             showMoreLabel={data.objective ? "Show more" : undefined}
           />
@@ -973,6 +979,32 @@ export default function ProjectDetailPage() {
                                                       ...s,
                                                       [tid]: Number.isFinite(value) ? value : 0,
                                                     }));
+                                                    // Auto-update status to In Progress when logging time
+                                                    const currentStatus = String(
+                                                      (t.status ?? "") as string
+                                                    ).toLowerCase();
+                                                    const isOngoing =
+                                                      currentStatus.includes("progress") ||
+                                                      currentStatus.includes("done") ||
+                                                      currentStatus.includes("complete") ||
+                                                      currentStatus.includes("selesai") ||
+                                                      currentStatus.includes("cancel") ||
+                                                      currentStatus.includes("hold");
+                                                    if (!isOngoing) {
+                                                      try {
+                                                        await updateTaskStatus(tid, "In Progress");
+                                                      } catch (e: any) {
+                                                        const msg =
+                                                          e?.response?.data?.message ||
+                                                          e?.message ||
+                                                          "Gagal mengubah status task";
+                                                        showToast({
+                                                          variant: "error",
+                                                          title: "Status task tidak terbarui",
+                                                          description: msg,
+                                                        });
+                                                      }
+                                                    }
                                                   } catch (e: any) {
                                                     setTaskTotalHoursError((s) => ({
                                                       ...s,
@@ -1109,8 +1141,15 @@ function DetailTextModal({ open, label, text, onClose }: DetailTextModalProps) {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-4 max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
-          {text || "-"}
+        <div className="mt-4 max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm leading-relaxed text-slate-700">
+          {text ? (
+            <div
+              className="prose prose-sm max-w-none text-slate-700"
+              dangerouslySetInnerHTML={{ __html: text }}
+            />
+          ) : (
+            "-"
+          )}
         </div>
         <div className="mt-5 flex justify-end">
           <button

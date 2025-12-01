@@ -8,6 +8,7 @@ import {
   type TimeEntryPayload,
 } from "@/lib/api/time-entries";
 import { apiRequest } from "@/lib/api";
+import { updateStatus as updateTaskStatus } from "@/lib/api/tasks";
 import { useAuth } from "@/contexts/auth-context";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useToast } from "@/components/ui/toast";
@@ -15,6 +16,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Props = {
   taskId: number;
+  initialStatus?: string;
+  onStatusChange?: (status: string) => void;
 };
 
 type TimeEntry = {
@@ -26,7 +29,7 @@ type TimeEntry = {
   user_id?: number;
 };
 
-export default function TaskTimeTrackerSection({ taskId }: Props) {
+export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange }: Props) {
   const { state } = useAuth();
   const currentUserId = useMemo(
     () => Number(state.user?.id ?? (state.user as any)?.user_id ?? 0),
@@ -52,6 +55,11 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
   const [startConfirmOpen, setStartConfirmOpen] = useState(false);
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const [savingTimer, setSavingTimer] = useState(false);
+  const [taskStatus, setTaskStatus] = useState<string | null>(initialStatus ?? null);
+
+  useEffect(() => {
+    setTaskStatus(initialStatus ?? null);
+  }, [initialStatus]);
 
   async function fetchAll() {
     setLoading(true);
@@ -108,6 +116,35 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
       window.clearInterval(id);
     };
   }, [timerStart]);
+
+  async function ensureInProgress() {
+    const current = String(taskStatus ?? "").toLowerCase().trim();
+    const isOngoing =
+      current.includes("progress") ||
+      current.includes("done") ||
+      current.includes("complete") ||
+      current.includes("selesai") ||
+      current.includes("cancel") ||
+      current.includes("hold");
+    if (isOngoing || current === "in progress") return;
+    try {
+      const updated = await updateTaskStatus(taskId, "In Progress");
+      const next = updated.status ?? "In Progress";
+      setTaskStatus(next);
+      onStatusChange?.(next);
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal mengubah status task";
+      showToast({
+        variant: "error",
+        title: "Status task tidak terbarui",
+        description: msg,
+      });
+    }
+  }
 
   // Fetch user list so we can resolve user_id -> nama user
   useEffect(() => {
@@ -205,7 +242,8 @@ export default function TaskTimeTrackerSection({ taskId }: Props) {
     }
   }, [storageKey]);
 
-  function handleStart() {
+  async function handleStart() {
+    await ensureInProgress();
     const now = Date.now();
     setTimerStart(now);
     if (typeof window !== "undefined") {

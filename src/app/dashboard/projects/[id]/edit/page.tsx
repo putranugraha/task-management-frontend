@@ -9,6 +9,7 @@ import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { RichTextArea } from "@/components/ui/RichTextArea";
 
 type SimpleUser = { id: number; name: string };
 
@@ -154,6 +155,47 @@ export default function EditProjectPage() {
   if (loading) return <div>Loading...</div>;
   if (!form) return <div>Not found</div>;
 
+  if (authLoading || loading || ownersLoading || !form) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32 rounded-md" />
+            <Skeleton className="h-8 w-64 rounded-md" />
+          </div>
+          <Skeleton className="h-9 w-28 rounded-full" />
+        </div>
+
+        <div className="grid items-stretch gap-8 min-w-0 w-full lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="space-y-4">
+            <Skeleton className="h-40 w-full rounded-3xl" />
+            <Skeleton className="h-10 w-2/3 rounded-full" />
+            <Skeleton className="h-2 w-full rounded-full" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-40 rounded-md" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+              <Skeleton className="h-11 w-full rounded-xl" />
+            </div>
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <div className="flex justify-end gap-2">
+              <Skeleton className="h-9 w-20 rounded-full" />
+              <Skeleton className="h-9 w-28 rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {error && (
@@ -263,22 +305,67 @@ export default function EditProjectPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-500">Status</label>
-              <div className="flex h-11 items-center gap-3 rounded-xl border border-slate-200 px-4 shadow-inner">
-                <select name="status" value={form.status} onChange={onChange} className="rounded-lg border border-transparent bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition-all duration-300 hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_12px_24px_rgba(16,185,129,0.2)] focus:outline-none">
-                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  >
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                      {form.status || "Planned"}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="min-w-[200px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <DropdownMenuItem
+                      key={s}
+                      onSelect={() =>
+                        setForm((prev) =>
+                          prev ? { ...prev, status: s } : prev
+                        )
+                      }
+                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                    >
+                      <span>{s}</span>
+                      {form.status === s && (
+                        <Check className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2 md:col-span-3">
-              <label htmlFor="scope" className="text-sm font-semibold text-slate-500">Scope</label>
-              <textarea id="scope" name="scope" value={form.scope ?? ''} onChange={onChange} rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              <RichTextArea
+                id="scope"
+                label="Scope"
+                placeholder="Deskripsikan cakupan proyek"
+                value={form.scope ?? ""}
+                onChange={(val) =>
+                  setForm((s) => (s ? { ...s, scope: val } : s))
+                }
+                rows={4}
+              />
             </div>
             <div className="space-y-2 md:col-span-3">
-              <label htmlFor="objective" className="text-sm font-semibold text-slate-500">Objective</label>
-              <textarea id="objective" name="objective" value={form.objective ?? ''} onChange={onChange} rows={3} className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              <RichTextArea
+                id="objective"
+                label="Objective"
+                placeholder="Tujuan utama proyek"
+                value={form.objective ?? ""}
+                onChange={(val) =>
+                  setForm((s) => (s ? { ...s, objective: val } : s))
+                }
+                rows={4}
+              />
             </div>
           </div>
 

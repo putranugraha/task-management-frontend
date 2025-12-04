@@ -58,8 +58,9 @@ export default function CreateMilestonePage() {
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
         name: form.name,
+        // Explicitly send default status so backend validation passes
+        status: "Planned",
         due_planned: form.due_planned || null,
-        // status sengaja TIDAK dikirim (default Planned di backend)
         due_actual: form.due_actual || null,
       };
       await apiRequest("POST", "/api/milestones", payload);

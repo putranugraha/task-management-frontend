@@ -201,6 +201,23 @@ export default function ProjectMilestonesPage() {
     canManage: canManageProject,
   });
 
+  const activeTasksCountForTarget =
+    completeTarget && projectTasksFull.length > 0
+      ? projectTasksFull
+          .filter(
+            (t) => (t.milestone?.id ?? t.milestone_id) === completeTarget.id
+          )
+          .filter((t) => {
+            const s = String(t.status ?? "").toLowerCase();
+            const isDoneLike =
+              s.includes("done") ||
+              s.includes("complete") ||
+              s.includes("selesai");
+            const isCancelled = s.includes("cancel");
+            return !(isDoneLike || isCancelled);
+          }).length
+      : 0;
+
   return (
     <div className="w-full">
       <div className="mb-3">
@@ -279,7 +296,9 @@ export default function ProjectMilestonesPage() {
         title="Selesaikan milestone ini?"
         description={
           completeTarget
-            ? `Milestone "${completeTarget.name}" akan ditandai sebagai completed. Pastikan semua tasks terkait sudah selesai.`
+            ? activeTasksCountForTarget > 0
+              ? `Milestone "${completeTarget.name}" akan ditandai sebagai completed. Peringatan: masih ada ${activeTasksCountForTarget} task terkait yang statusnya belum selesai (bukan Done/Completed/Cancelled). Lanjutkan?`
+              : `Milestone "${completeTarget.name}" akan ditandai sebagai completed. Pastikan semua tasks terkait sudah selesai.`
             : ""
         }
         confirmLabel="Mark as Completed"

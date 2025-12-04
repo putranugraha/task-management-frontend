@@ -30,7 +30,7 @@ type TimeEntry = {
 };
 
 export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange }: Props) {
-  const { state } = useAuth();
+  const { state, hasRole } = useAuth();
   const currentUserId = useMemo(
     () => Number(state.user?.id ?? (state.user as any)?.user_id ?? 0),
     [state.user]
@@ -60,6 +60,22 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
   useEffect(() => {
     setTaskStatus(initialStatus ?? null);
   }, [initialStatus]);
+
+  const normalizedStatus = useMemo(
+    () => String(taskStatus ?? initialStatus ?? "").toLowerCase().trim(),
+    [taskStatus, initialStatus]
+  );
+  const isOnHold = normalizedStatus.includes("hold");
+   const isDoneLike =
+    normalizedStatus.includes("done") ||
+    normalizedStatus.includes("complete") ||
+    normalizedStatus.includes("selesai");
+  const isCancelled = normalizedStatus.includes("cancel");
+  const isClosed = isDoneLike || isCancelled;
+  const isAdminOrManager = hasRole("Admin") || hasRole("Manager");
+  const isBlockedByHold = isOnHold && !isAdminOrManager;
+  const isBlockedByClosed = isClosed && !isAdminOrManager;
+  const isStartBlocked = isBlockedByHold || isBlockedByClosed;
 
   async function fetchAll() {
     setLoading(true);
@@ -117,7 +133,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
     };
   }, [timerStart]);
 
-  async function ensureInProgress() {
+  async function ensureInProgress(force = false) {
     const current = String(taskStatus ?? "").toLowerCase().trim();
     const isOngoing =
       current.includes("progress") ||
@@ -126,7 +142,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
       current.includes("selesai") ||
       current.includes("cancel") ||
       current.includes("hold");
-    if (isOngoing || current === "in progress") return;
+    if (!force && (isOngoing || current === "in progress")) return;
     try {
       const updated = await updateTaskStatus(taskId, "In Progress");
       const next = updated.status ?? "In Progress";
@@ -242,8 +258,10 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
     }
   }, [storageKey]);
 
-  async function handleStart() {
-    await ensureInProgress();
+  async function handleStart(skipStatusCheck = false) {
+    if (!skipStatusCheck) {
+      await ensureInProgress();
+    }
     const now = Date.now();
     setTimerStart(now);
     if (typeof window !== "undefined") {
@@ -404,9 +422,9 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
       <div className="mt-3 flex items-center justify-between text-sm">
         <div>
-          <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">
-            Total Hours: <b>{totalHours}</b>
-          </span>
+            <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">
+              Total Hours: <b>{totalHours}</b>
+            </span>
           {runningHours && (
             <span className="ml-2 text-xs text-neutral-600">
               Timer berjalan: {runningHours} jam
@@ -436,9 +454,29 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
                     });
                     return;
                   }
+                  if (isStartBlocked) {
+                    if (isBlockedByHold) {
+                      showToast({
+                        variant: "warning",
+                        title: "Task sedang On Hold",
+                        description:
+                          "Hubungi Admin/Manager untuk melanjutkan task sebelum memulai timer.",
+                      });
+                    } else if (isBlockedByClosed) {
+                      showToast({
+                        variant: "warning",
+                        title: "Task sudah selesai/dibatalkan",
+                        description:
+                          "Hubungi Admin/Manager jika perlu membuka kembali task sebelum memulai timer.",
+                      });
+                    }
+                    return;
+                  }
                   setStartConfirmOpen(true);
                 }}
-                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                className={`inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] ${
+                  isStartBlocked ? "opacity-60 cursor-not-allowed" : ""
+                }`}
               >
                 Start Timer
               </button>
@@ -457,15 +495,30 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
       <ConfirmDialog
         open={startConfirmOpen}
-        title="Mulai timer untuk task ini?"
-        description="Timer waktu akan mulai berjalan dan dicatat hingga kamu menekan Stop & Save."
+        title={
+          isAdminOrManager && (isOnHold || isClosed)
+            ? isOnHold
+              ? "Task sedang On Hold. Ubah ke In Progress dan mulai timer?"
+              : "Task sudah selesai/dibatalkan. Ubah ke In Progress dan mulai timer lagi?"
+            : "Mulai timer untuk task ini?"
+        }
+        description={
+          isAdminOrManager && (isOnHold || isClosed)
+            ? "Status task akan diubah ke In Progress lalu timer waktu akan mulai berjalan hingga kamu menekan Stop & Save."
+            : "Timer waktu akan mulai berjalan dan dicatat hingga kamu menekan Stop & Save."
+        }
         confirmLabel="Mulai"
         cancelLabel="Batal"
         variant="default"
         loading={false}
-        onConfirm={() => {
+        onConfirm={async () => {
           setStartConfirmOpen(false);
-          handleStart();
+          if (isAdminOrManager && (isOnHold || isClosed)) {
+            await ensureInProgress(true);
+            await handleStart(true);
+          } else {
+            await handleStart();
+          }
         }}
         onCancel={() => setStartConfirmOpen(false)}
       />

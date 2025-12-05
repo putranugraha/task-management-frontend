@@ -412,14 +412,38 @@ export default function MilestonesPage() {
             <div className="rounded-3xl bg-white/95 shadow-[0_25px_45px_rgba(15,23,42,0.18)] ring-1 ring-slate-100 overflow-hidden">
               <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
                 <h3 className="text-lg font-semibold text-slate-900">Milestone Detail</h3>
-                <button
-                  type="button"
-                  onClick={() => setDetailOpen(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100"
-                  aria-label="Close"
-                >
-                  <X className="h-5 w-5 text-slate-500" />
-                </button>
+                <div className="flex items-center gap-3">
+                  {detailData && (
+                    <>
+                      {canManageProject && (detailData.project?.id || detailData.project_id) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            (location.href = `/dashboard/projects/${detailData.project?.id ?? detailData.project_id}/milestones`)
+                          }
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                        >
+                          View project milestones
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => (location.href = `/dashboard/milestones/${detailData.id}`)}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                      >
+                        Open milestone page
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDetailOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5 text-slate-500" />
+                  </button>
+                </div>
               </div>
               <div className="grid gap-8 p-6 lg:grid-cols-[0.9fr_1.1fr]">
                 <aside className="flex h-full flex-col gap-6 rounded-3xl bg-gradient-to-br from-emerald-600 via-emerald-500 to-emerald-700 p-7 text-white shadow-[0_4px_25px_-8px_rgba(0,128,96,0.25)]">
@@ -471,10 +495,6 @@ export default function MilestonesPage() {
                       <Row label="Due Actual" value={detailData.due_actual ?? '-'} />
                       <Row label="Created At" value={detailData.created_at ?? '-'} />
                       <Row label="Updated At" value={detailData.updated_at ?? '-'} />
-                      <div className="flex gap-2 pt-2">
-                        <a className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50" href={`/dashboard/milestones/${detailData.id}`}>Open Detail Page</a>
-                        <a className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50" href={`/dashboard/milestones/${detailData.id}/edit`}>Edit</a>
-                      </div>
                       {detailError && (
                         <div className="text-sm text-red-600">{detailError}</div>
                       )}

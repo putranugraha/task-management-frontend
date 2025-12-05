@@ -419,13 +419,26 @@ export default function TasksPage() {
                     <h3 className="text-lg font-semibold text-slate-900">Task Detail</h3>
                     <div className="flex items-center gap-3">
                       {detailData && (
-                        <button
-                          type="button"
-                          onClick={() => (location.href = `/dashboard/tasks/${detailData.id}`)}
-                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
-                        >
-                          Open task page
-                        </button>
+                        <>
+                          {detailData.project?.id && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                (location.href = `/dashboard/projects/${detailData.project?.id}/milestones`)
+                              }
+                              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                            >
+                              View project milestones
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => (location.href = `/dashboard/tasks/${detailData.id}`)}
+                            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                          >
+                            Open task page
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"

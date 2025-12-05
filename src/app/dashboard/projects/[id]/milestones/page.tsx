@@ -12,6 +12,7 @@ import { useMilestoneColumns, type MilestoneRow } from "./columns";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProjectMilestonesPage() {
   const params = useParams();
@@ -219,60 +220,133 @@ export default function ProjectMilestonesPage() {
       : 0;
 
   return (
-    <div className="w-full">
-      <div className="mb-3">
-        <Link href={`/dashboard/projects/${projectId}`} className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50">Back</Link>
-      </div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xl font-semibold">Project Milestones</h2>
+    <div className="w-full space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-1">
+          <Link
+            href={`/dashboard/projects/${projectId}`}
+            className="inline-flex items-center gap-2 text-sm font-medium text-[#00674F] hover:text-[#008061]"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#00674F]/10 text-[#00674F]">
+              ←
+            </span>
+            Back to Project
+          </Link>
+          <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
+            Project Milestones
+          </h1>
+          <p className="text-sm text-slate-500">
+            Kelola milestones dan tasks yang terkait dalam project ini.
+          </p>
+        </div>
         {canManageProject && (
           <Link
             href={`/dashboard/projects/${projectId}/milestones/create`}
-            className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50"
+            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
           >
             Create Milestone
           </Link>
         )}
       </div>
-      {error && (
-        <div className="mb-3 text-sm text-red-600">{error}</div>
-      )}
-      <DataTable columns={columns as any} data={rows} loading={loading} />
 
-      <div className="flex items-center justify-between mt-8 mb-3">
-        <h2 className="text-xl font-semibold">Project Tasks</h2>
-        {canManageTasks && (
-          <Link
-            href={`/dashboard/tasks/create?project_id=${projectId}`}
-            className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50"
-          >
-            Create Task
-          </Link>
-        )}
-      </div>
-      {taskError && (
-        <div className="mb-3 text-sm text-red-600">{taskError}</div>
+      {error && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
+          {error}
+        </div>
       )}
-      <DataTable
-        columns={[
-          { key: 'title', header: 'Title' },
-          { key: 'milestone', header: 'Milestone', render: (r: TaskRow) => r.milestone?.name ?? '-' },
-          { key: 'priority', header: 'Priority' },
-          { key: 'status', header: 'Status' },
-          { key: 'percent_complete', header: '%', render: (r: TaskRow) => `${r.percent_complete ?? 0}%` },
-          {
-            key: 'actions',
-            header: 'Actions',
-            render: (r: TaskRow) => (
-              <div className="flex gap-2 text-sm">
-                {canManageTasks && (
-                  <a
-                    className="px-2 py-1 rounded-md border hover:bg-neutral-50"
-                    href={`/dashboard/tasks/${r.id}/edit`}
-                  >
-                    Edit
-                  </a>
+
+      <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              Milestones
+            </h2>
+            <p className="text-xs text-slate-400">
+              Daftar milestones untuk project ini beserta statusnya.
+            </p>
+          </div>
+        </div>
+        <div className="p-6">
+          {loading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
+          ) : (
+            <DataTable columns={columns as any} data={rows} loading={loading} />
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-100 px-6 py-4 gap-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+              Project Tasks
+            </h2>
+            <p className="text-xs text-slate-400">
+              Tasks dalam project ini beserta milestone yang terkait.
+            </p>
+          </div>
+          {canManageTasks && (
+            <Link
+              href={`/dashboard/tasks/create?project_id=${projectId}`}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
+            >
+              Create Task
+            </Link>
+          )}
+        </div>
+        {taskError && (
+          <div className="px-6 pt-3 text-sm text-red-600">{taskError}</div>
         )}
+        <div className="p-6">
+          {taskLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "title", header: "Title" },
+                {
+                  key: "milestone",
+                  header: "Milestone",
+                  render: (r: TaskRow) => r.milestone?.name ?? "-",
+                },
+                { key: "priority", header: "Priority" },
+                { key: "status", header: "Status" },
+                {
+                  key: "percent_complete",
+                  header: "%",
+                  render: (r: TaskRow) => `${r.percent_complete ?? 0}%`,
+                },
+                {
+                  key: "actions",
+                  header: "Actions",
+                  render: (r: TaskRow) => (
+                    <div className="flex justify-end gap-2 text-sm">
+                      {canManageTasks && (
+                        <a
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                          href={`/dashboard/tasks/${r.id}/edit`}
+                        >
+                          Edit
+                        </a>
+                      )}
+                    </div>
+                  ),
+                },
+              ] as any}
+              data={taskRows}
+              loading={taskLoading}
+              emptyText="No tasks in this project"
+            />
+          )}
+        </div>
       </div>
 
       <ConfirmDialog
@@ -307,13 +381,6 @@ export default function ProjectMilestonesPage() {
         loading={completeLoading}
         onConfirm={confirmComplete}
         onCancel={() => !completeLoading && setCompleteTarget(null)}
-      />
-            ),
-          },
-        ] as any}
-        data={taskRows}
-        loading={taskLoading}
-        emptyText="No tasks in this project"
       />
     </div>
   );

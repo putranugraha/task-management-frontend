@@ -12,6 +12,16 @@ import DataTable from "@/app/dashboard/users/data-table";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type TaskRow = Pick<Task, 'id' | 'title' | 'status' | 'start_planned' | 'end_planned' | 'percent_complete'>;
 
@@ -183,42 +193,152 @@ export default function MilestoneDetailPage() {
     ] as any;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageTasks]);
+  if (loading) {
+    return (
+      <div className="w-full space-y-6">
+        <div className="px-1">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href="/dashboard/milestones">Milestones</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Loading…</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+        <DetailMainCard>
+          <div className="space-y-3">
+            <Skeleton className="h-7 w-64 rounded-md" />
+            <Skeleton className="h-4 w-40 rounded-md" />
+            <div className="grid gap-3 grid-cols-1 md:grid-cols-2 mt-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-3 w-24 rounded" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </DetailMainCard>
+      </div>
+    );
+  }
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
-  if (!milestone) return <div className="text-neutral-500">No milestone</div>;
+  if (error) {
+    return <div className="text-red-600">{error}</div>;
+  }
+
+  if (!milestone) {
+    return <div className="text-neutral-500">No milestone</div>;
+  }
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="text-xl font-semibold">Milestone: {milestone.name}</h2>
-          <div className="text-sm text-neutral-600">Status: {milestone.status} • Due: {milestone.due_planned ?? '-'}</div>
-        </div>
-        <div className="flex gap-2">
-          <button className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50" onClick={async () => {
-            try { const m = await getMilestoneById(milestone.id); setMilestone(m); } catch {} finally { await fetchTasks(); }
-          }}>
-            Refresh
-          </button>
-        </div>
+    <div className="w-full space-y-6">
+      <div className="px-1">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard/milestones">Milestones</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{milestone.name ?? `Milestone #${id}`}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
 
-      <section className="mb-6">
+      <DetailMainCard className="w-full">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-2xl font-semibold text-slate-900 truncate">
+              {milestone.name}
+            </h1>
+            <p className="text-sm text-slate-500">
+              {milestone.project?.name
+                ? `Project: ${milestone.project.name}`
+                : "Milestone detail overview"}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#00674F]">
+              {milestone.status}
+            </span>
+            {milestone.due_planned && (
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                Due {milestone.due_planned}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
+          <InfoRow
+            label="Project"
+            value={milestone.project?.name ?? milestone.project_id ?? "-"}
+          />
+          <InfoRow label="Status" value={milestone.status ?? "-"} />
+          <InfoRow
+            label="Due Planned"
+            value={milestone.due_planned ?? "-"}
+          />
+          <InfoRow label="Due Actual" value={milestone.due_actual ?? "-"} />
+          <InfoRow label="Created At" value={milestone.created_at ?? "-"} />
+          <InfoRow label="Updated At" value={milestone.updated_at ?? "-"} />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {milestone.project?.id && (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(
+                  `/dashboard/projects/${milestone.project?.id}/milestones`
+                )
+              }
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+            >
+              View project milestones
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
+          >
+            Back
+          </button>
+        </div>
+      </DetailMainCard>
+
+      <DetailSectionCard>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">Tasks</h3>
+          <h3 className="text-sm font-semibold text-slate-800">Tasks</h3>
           {canManageTasks && (
             <button
               onClick={() => setModalOpen(true)}
-              className="px-3 py-2 rounded-md border text-sm hover:bg-neutral-50"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
             >
               Add Task
             </button>
           )}
         </div>
-        <DataTable columns={columns} data={tasks} loading={tLoading} />
+        <div className="border rounded-lg overflow-hidden">
+          <DataTable columns={columns} data={tasks} loading={tLoading} />
+        </div>
         {tError && <div className="mt-2 text-sm text-red-600">{tError}</div>}
-      </section>
+      </DetailSectionCard>
 
       {modalOpen && typeof document !== "undefined"
         ? createPortal(
@@ -388,6 +508,19 @@ export default function MilestoneDetailPage() {
             document.body
           )
         : null}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+        {label}
+      </div>
+      <div className="min-h-[40px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
+        <span className="truncate w-full whitespace-nowrap">{value}</span>
+      </div>
     </div>
   );
 }

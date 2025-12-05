@@ -272,13 +272,18 @@ export default function CreateProjectMilestonePage() {
         const failures: Array<{ title: string; error: unknown }> = [];
         for (const t of rows) {
           try {
+            const pctVal = Number.isFinite(t.percent_complete)
+              ? Number(t.percent_complete)
+              : Number(t.percent_complete || 0);
+            const effectiveStatus =
+              pctVal >= 100 ? "Done" : (t.status || "To Do");
             const dto: any = {
               title: t.title,
-              status: t.status || 'To Do',
+              status: effectiveStatus,
               priority: t.priority || 'Medium',
               start_planned: t.start_planned || null,
               end_planned: t.end_planned || null,
-              percent_complete: Number.isFinite(t.percent_complete) ? Number(t.percent_complete) : 0,
+              percent_complete: Number.isFinite(pctVal) ? pctVal : 0,
               project_id: Number(projectId) || undefined,
               milestone_id: Number(milestoneId) || undefined,
             };
@@ -555,7 +560,21 @@ export default function CreateProjectMilestonePage() {
                     <div>
                       <label className="block text-sm mb-1">Percent Complete</label>
                       <input type="number" min={0} max={100} value={t.percent_complete}
-                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, percent_complete: Number(e.target.value || 0) } : x))}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value || 0);
+                          const pct = Number.isFinite(raw) ? raw : 0;
+                          setTaskForms((s) =>
+                            s.map((x, i) =>
+                              i === idx
+                                ? {
+                                    ...x,
+                                    percent_complete: pct,
+                                    status: pct >= 100 ? "Done" : x.status || "To Do",
+                                  }
+                                : x
+                            )
+                          );
+                        }}
                         className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                     </div>
                     <div>

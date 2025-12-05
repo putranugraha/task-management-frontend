@@ -6,11 +6,17 @@ import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
 import { fetchProjectsList } from "@/lib/lookups";
 import { MILESTONE_STATUS_OPTIONS } from "@/lib/api/milestones";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard } from "@/components/layout/DetailCards";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type MilestoneDetail = {
   id: number;
@@ -349,18 +355,39 @@ export default function EditMilestonePage() {
             </div>
           </div>
           <div className="space-y-2">
-            <label htmlFor="status" className="text-sm font-semibold text-slate-500">Status</label>
-            <select
-              id="status"
-              name="status"
-              value={form.status}
-              onChange={onChange}
-              className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-            >
-              {MILESTONE_STATUS_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
+            <label className="text-sm font-semibold text-slate-500">Status</label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                >
+                  <span className={form.status ? "text-slate-700" : "text-slate-400"}>
+                    {form.status || "Pilih status"}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="min-w-[220px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+              >
+                {MILESTONE_STATUS_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt}
+                    onSelect={() =>
+                      setForm((s) => (s ? { ...s, status: opt } : s))
+                    }
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                  >
+                    <span>{opt}</span>
+                    {form.status === opt && (
+                      <Check className="h-4 w-4 text-emerald-500" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Settings as SettingsIconLucide,
   Building2,
+  ListChecks,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -44,6 +45,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Reports", url: "/dashboard/reports", icon: BarChart2 },
     { title: "Users", url: "/dashboard/users", icon: UsersIconLucide },
     { title: "Roles", url: "/dashboard/roles", icon: ShieldCheck },
+    { title: "Activity Log", url: "/dashboard/activity-log", icon: ListChecks },
     { title: "Settings", url: "/dashboard/settings", icon: SettingsIconLucide },
   ];
 

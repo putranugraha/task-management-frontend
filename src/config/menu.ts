@@ -50,9 +50,13 @@ export const MENU_ITEMS: MenuItem[] = [
     permissions: ["mengelola roles"],
   },
   {
+    label: "Activity Log",
+    path: "/dashboard/activity-log",
+    roles: ["Admin"],
+  },
+  {
     label: "Settings",
     path: "/dashboard/settings",
     roles: ["Admin"],
   },
 ];
-

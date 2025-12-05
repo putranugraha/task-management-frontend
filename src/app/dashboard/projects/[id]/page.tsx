@@ -389,13 +389,13 @@ export default function ProjectDetailPage() {
         <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
           <Row
             label="Scope"
-            value={stripHtml(data.scope)}
+            value={<HtmlInlinePreview html={data.scope} />}
             onShowMore={data.scope ? () => setDetailModal({ label: "Scope", text: data.scope ?? "-" }) : undefined}
             showMoreLabel={data.scope ? "Show more" : undefined}
           />
           <Row
             label="Objective"
-            value={stripHtml(data.objective)}
+            value={<HtmlInlinePreview html={data.objective} />}
             onShowMore={data.objective ? () => setDetailModal({ label: "Objective", text: data.objective ?? "-" }) : undefined}
             showMoreLabel={data.objective ? "Show more" : undefined}
           />
@@ -1085,7 +1085,7 @@ function Row({ label, value, onShowMore, showMoreLabel }: RowProps) {
     <div className="space-y-1">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
-        <span className="truncate text-left w-full">{value}</span>
+        <div className="truncate text-left w-full">{value}</div>
       </div>
       {onShowMore && (
         <button
@@ -1106,6 +1106,16 @@ type DetailTextModalProps = {
   text: string;
   onClose: () => void;
 };
+
+function HtmlInlinePreview({ html }: { html: string | null | undefined }) {
+  if (!html) return <span>-</span>;
+  return (
+    <div
+      className="prose prose-sm max-w-none text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 function DetailTextModal({ open, label, text, onClose }: DetailTextModalProps) {
   const [mounted, setMounted] = useState(false);

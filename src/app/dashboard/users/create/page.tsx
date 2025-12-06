@@ -188,7 +188,7 @@ export default function CreateUserPage() {
   }, [divisions, form.division_id]);
 
   return (
-    <div className="space-y-8">
+    <div className="w-full space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <button

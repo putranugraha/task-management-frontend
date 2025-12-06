@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiRequest } from "@/lib/api";
+import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import type { Division } from "@/types/division";
 import DataTable from "../users/data-table";
 import { useDivisionColumns, type DivisionRow, type Column } from "./columns";
@@ -454,18 +455,10 @@ export default function DivisionsPage() {
           Showing {filteredRows.length === 0 ? 0 : startIndex + 1} to {filteredRows.length === 0 ? 0 : startIndex + paginatedRows.length} of {filteredRows.length} division{filteredRows.length === 1 ? '' : 's'}
         </span>
         <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Rows per page
-            <select
-              value={rowsPerPage}
-              onChange={(e) => setRowsPerPage(Number(e.target.value))}
-              className="h-10 rounded-full border-0 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {[10, 25, 50].map((size) => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
-          </label>
+          <RowsPerPageControl
+            value={rowsPerPage}
+            onChange={(next) => setRowsPerPage(next)}
+          />
           <div className="flex items-center gap-1 text-slate-500">
             <button
               className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold transition hover:border-blue-200 hover:text-blue-500 disabled:opacity-40"

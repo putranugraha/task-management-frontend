@@ -660,7 +660,17 @@ export default function EditTaskPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-500">Percent Complete</label>
-            <input type="number" min={0} max={100} name="percent_complete" value={form.percent_complete} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+            <input
+              type="text"
+              inputMode="numeric"
+              name="percent_complete"
+              value={String(form.percent_complete ?? "")}
+              onChange={(e) => {
+                const digitsOnly = e.target.value.replace(/\D/g, "");
+                applyFieldUpdate("percent_complete", digitsOnly === "" ? 0 : Number(digitsOnly));
+              }}
+              className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+            />
           </div>
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-semibold text-slate-500">Description</label>

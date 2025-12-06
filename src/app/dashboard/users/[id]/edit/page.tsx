@@ -224,7 +224,7 @@ export default function EditUserPage() {
 
   if (!form) {
     return (
-      <div className="space-y-8">
+      <div className="w-full space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-2">
             <button
@@ -340,7 +340,7 @@ export default function EditUserPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <button

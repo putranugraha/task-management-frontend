@@ -559,10 +559,16 @@ export default function CreateProjectMilestonePage() {
                     </div>
                     <div>
                       <label className="block text-sm mb-1">Percent Complete</label>
-                      <input type="number" min={0} max={100} value={t.percent_complete}
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={String(t.percent_complete ?? "")}
                         onChange={(e) => {
-                          const raw = Number(e.target.value || 0);
-                          const pct = Number.isFinite(raw) ? raw : 0;
+                          const digitsOnly = e.target.value.replace(/\D/g, "");
+                          let pct = digitsOnly === "" ? 0 : Number(digitsOnly);
+                          if (!Number.isFinite(pct)) pct = 0;
+                          if (pct < 0) pct = 0;
+                          if (pct > 100) pct = 100;
                           setTaskForms((s) =>
                             s.map((x, i) =>
                               i === idx
@@ -575,7 +581,8 @@ export default function CreateProjectMilestonePage() {
                             )
                           );
                         }}
-                        className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
+                        className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm mb-1">Assignments</label>

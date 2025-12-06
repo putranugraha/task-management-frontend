@@ -9,6 +9,7 @@ import DataTable from "../users/data-table";
 import { useTaskColumns, type TaskRow } from "./columns";
 import type { Column } from "../users/columns";
 import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
+import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SlidersHorizontal, AlertCircle, X } from "lucide-react";
@@ -589,18 +590,10 @@ export default function TasksPage() {
             Showing {summaryStart} to {summaryEnd} of {filteredRows.length} task{filteredRows.length === 1 ? "" : "s"}
           </span>
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Rows per page
-              <select
-                value={rowsPerPage}
-                onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                className="h-10 rounded-full border-0 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
-              >
-                {[10, 25, 50].map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-            </label>
+            <RowsPerPageControl
+              value={rowsPerPage}
+              onChange={(next) => setRowsPerPage(next)}
+            />
             <div className="flex items-center gap-1 text-slate-500">
               <button
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-semibold transition hover:border-blue-200 hover:text-blue-500 disabled:opacity-40"

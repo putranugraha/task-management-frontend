@@ -42,6 +42,8 @@ export default function EditProjectPage() {
   const id = Number(params?.id);
 
   const [form, setForm] = useState<ProjectDetail | null>(null);
+  // Simpan angka mentah tanpa format (hanya digit) agar input bertambah per digit dengan benar
+  const [valueAmountRaw, setValueAmountRaw] = useState<string>("");
   const [owners, setOwners] = useState<SimpleUser[]>([]);
   const [ownersLoading, setOwnersLoading] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -58,11 +60,29 @@ export default function EditProjectPage() {
         const payload = (data && typeof data === 'object' && 'data' in data) ? (data as any).data : data;
         const p = Array.isArray(payload) ? payload[0] : payload;
         if (mounted) {
+          const rawDigits = String(
+            typeof p.value_amount === "number"
+              ? p.value_amount
+              : p.value_amount ?? ""
+          ).replace(/\D/g, "");
+          let formattedValue = "";
+          if (rawDigits) {
+            const numeric = Number(rawDigits);
+            const formattedRaw = new Intl.NumberFormat("id-ID", {
+              style: "currency",
+              currency: "IDR",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(numeric);
+            const withSpace = formattedRaw.replace("Rp", "Rp ");
+            formattedValue = withSpace.replace(/\s+/g, " ");
+          }
+          setValueAmountRaw(rawDigits);
           setForm({
             id: Number(p.id),
             name: p.name,
             client_name: p.client_name ?? p.client ?? '',
-            value_amount: typeof p.value_amount === 'string' ? p.value_amount : Number(p.value_amount ?? 0),
+            value_amount: formattedValue || "",
             scope: p.scope ?? '',
             objective: p.objective ?? '',
             division_owner_id: (p.division_owner_id != null) ? Number(p.division_owner_id) : (p.division_owner?.id ? Number(p.division_owner.id) : null),
@@ -98,7 +118,43 @@ export default function EditProjectPage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setForm((s) => s ? { ...s, [name]: value } as ProjectDetail : s);
+    // Khusus untuk value_amount, format sebagai Rupiah saat user mengetik
+    if (name === "value_amount") {
+      const inputEvent = e.nativeEvent as InputEvent;
+      let raw = valueAmountRaw;
+
+      if (inputEvent?.inputType === "insertText" && /\d/.test(inputEvent.data ?? "")) {
+        // Tambah digit di belakang (5 -> 50 -> 500)
+        raw = raw + (inputEvent.data ?? "");
+      } else if (inputEvent?.inputType === "deleteContentBackward") {
+        // Backspace: hapus digit terakhir
+        raw = raw.slice(0, -1);
+      } else {
+        // Fallback (misal paste): ambil semua digit dari value sekarang
+        raw = value.replace(/\D/g, "");
+      }
+
+      setValueAmountRaw(raw);
+
+      if (!raw) {
+        setForm((s) => (s ? { ...s, value_amount: "" } : s));
+        return;
+      }
+
+      const numeric = Number(raw);
+      const formattedRaw = new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(numeric);
+      const withSpace = formattedRaw.replace("Rp", "Rp ");
+      const normalized = withSpace.replace(/\s+/g, " ");
+      setForm((s) => (s ? { ...s, value_amount: normalized } : s));
+      return;
+    }
+
+    setForm((s) => (s ? { ...s, [name]: value } as ProjectDetail : s));
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -107,10 +163,15 @@ export default function EditProjectPage() {
     setSaving(true);
     setError(null);
     try {
+      const rawValueDigits =
+        valueAmountRaw ||
+        String(form.value_amount ?? "").replace(/\D/g, "");
+      const numericValue = rawValueDigits ? Number(rawValueDigits) : 0;
+
       const payload: Record<string, any> = {
         name: form.name,
         client_name: form.client_name,
-        value_amount: typeof form.value_amount === 'string' ? (form.value_amount ? parseFloat(form.value_amount) : 0) : form.value_amount,
+        value_amount: numericValue,
         scope: form.scope || null,
         objective: form.objective || null,
         division_owner_id: form.division_owner_id || null,

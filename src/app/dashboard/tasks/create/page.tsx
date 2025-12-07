@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
@@ -30,7 +30,7 @@ type FormState = {
 const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
-export default function CreateTaskPage() {
+function CreateTaskPageContent() {
   const { loading: authLoading, allowed } = usePermissionGuard([
     "mengelola tugas",
   ]);
@@ -589,5 +589,13 @@ export default function CreateTaskPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function CreateTaskPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading…</div>}>
+      <CreateTaskPageContent />
+    </Suspense>
   );
 }

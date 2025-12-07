@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
-import TaskAttachmentsSection from "@/components/tasks/TaskAttachmentsSection";
-import TaskTimeTrackerSection from "@/components/tasks/TaskTimeTrackerSection";
 import { DetailMainCard, DetailSectionCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import {
   Breadcrumb,
@@ -16,6 +15,26 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const TaskAttachmentsSection = dynamic(
+  () => import("@/components/tasks/TaskAttachmentsSection"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="text-sm text-neutral-500">Loading attachments…</div>
+    ),
+  }
+);
+
+const TaskTimeTrackerSection = dynamic(
+  () => import("@/components/tasks/TaskTimeTrackerSection"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="text-sm text-neutral-500">Loading time tracker…</div>
+    ),
+  }
+);
 
 type Assignment = { user?: { id: number; name: string } | null; user_id?: number; role_on_task?: string | null; estimated_effort_hours?: number | null };
 type Dependency = { type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number; depends_on?: { id: number; title: string } | null };
@@ -427,7 +446,7 @@ export default function TaskDetailPage() {
             taskId={id}
             initialStatus={data.status}
             onStatusChange={(status) =>
-              setData((prev) => (prev ? { ...prev, status } : prev))
+              setData((prev: any | null) => (prev ? { ...prev, status } : prev))
             }
           />
         </DetailSectionCard>

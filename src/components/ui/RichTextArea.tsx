@@ -126,7 +126,7 @@ export function RichTextArea({
             className
           )}
           style={{ minHeight }}
-          placeholder={placeholder}
+          data-placeholder={placeholder}
           onInput={handleInput}
           onBlur={handleInput}
           suppressContentEditableWarning
@@ -135,4 +135,3 @@ export function RichTextArea({
     </div>
   );
 }
-

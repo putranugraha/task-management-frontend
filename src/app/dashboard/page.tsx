@@ -2,14 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import type { Project } from "@/types/project";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ActivityLog } from "@/lib/api/activity-logs";
+import ProjectStatsRow from "@/components/dashboard/ProjectStatsRow";
 import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
 import MilestoneStatsRow from "@/components/dashboard/MilestoneStatsRow";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import DataTable from "./users/data-table";
 import type { Column } from "./users/columns";
 
@@ -79,8 +86,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [activityPage, setActivityPage] = useState(1);
+  const [hiddenProjectKeys, setHiddenProjectKeys] = useState<string[]>([]);
+  const [hiddenTaskKeys, setHiddenTaskKeys] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +132,73 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, []);
+
+  const projectStats = useMemo(() => {
+    const total = projects.length;
+    let active = 0;
+    let completed = 0;
+
+    projects.forEach((p) => {
+      const status = (p.status || "").toLowerCase();
+      const isCompleted =
+        /(\b|^)(done|completed?)($|\b)/.test(status) ||
+        status === "closed" ||
+        status === "finished";
+      const isActive =
+        status.includes("active") ||
+        status.includes("in progress") ||
+        status.includes("ongoing") ||
+        status === "running";
+
+      if (isCompleted) completed += 1;
+      else if (isActive) active += 1;
+    });
+
+    return { total, active, completed };
+  }, [projects]);
+
+  const projectStatusConfig: ChartConfig = {
+    planned: { label: "Planned", color: "var(--chart-1)" },
+    active: { label: "Active", color: "var(--chart-2)" },
+    completed: { label: "Completed", color: "var(--chart-3)" },
+    onhold: { label: "On Hold", color: "var(--chart-4)" },
+    other: { label: "Other", color: "var(--chart-5)" },
+  };
+
+  const projectStatusSeries = useMemo(() => {
+    const buckets: Record<string, { key: string; label: string; count: number }> =
+      {
+        planned: { key: "planned", label: "Planned", count: 0 },
+        active: { key: "active", label: "Active", count: 0 },
+        completed: { key: "completed", label: "Completed", count: 0 },
+        onhold: { key: "onhold", label: "On Hold", count: 0 },
+        other: { key: "other", label: "Other", count: 0 },
+      };
+
+    projects.forEach((p) => {
+      const s = (p.status || "").toLowerCase();
+      let key: keyof typeof buckets = "other";
+      if (s.includes("plan")) key = "planned";
+      else if (
+        s.includes("active") ||
+        s.includes("in progress") ||
+        s.includes("ongoing") ||
+        s === "running"
+      )
+        key = "active";
+      else if (
+        /(\b|^)(done|completed?)($|\b)/.test(s) ||
+        s === "closed" ||
+        s === "finished"
+      )
+        key = "completed";
+      else if (s.includes("hold") || s.includes("pending")) key = "onhold";
+
+      buckets[key].count += 1;
+    });
+
+    return Object.values(buckets).filter((b) => b.count > 0);
+  }, [projects]);
 
   const taskStats = useMemo(() => {
     let completed = 0;
@@ -222,29 +296,47 @@ export default function DashboardPage() {
       const tb = b.time ? Date.parse(b.time) : 0;
       return tb - ta;
     });
-    return sorted.slice(0, 20);
+    return sorted.slice(0, 5);
   }, [activityLogs]);
 
-  const totalActivityPages = Math.max(
-    1,
-    Math.ceil(recentActivity.length / rowsPerPage || 1)
-  );
+  const taskStatusConfig: ChartConfig = {
+    todo: { label: "To Do", color: "var(--chart-1)" },
+    inprogress: { label: "In Progress", color: "var(--chart-4)" },
+    done: { label: "Done", color: "var(--chart-2)" },
+    other: { label: "Other", color: "var(--chart-5)" },
+  };
 
-  useEffect(() => {
-    if (activityPage > totalActivityPages) {
-      setActivityPage(totalActivityPages);
-    }
-  }, [activityPage, totalActivityPages]);
+  const taskStatusSeries = useMemo(() => {
+    const buckets: Record<string, { key: string; label: string; count: number }> =
+      {
+        todo: { key: "todo", label: "To Do", count: 0 },
+        inprogress: { key: "inprogress", label: "In Progress", count: 0 },
+        done: { key: "done", label: "Done", count: 0 },
+        other: { key: "other", label: "Other", count: 0 },
+      };
 
-  const activityStartIndex = (activityPage - 1) * rowsPerPage;
-  const paginatedActivity = useMemo(
-    () =>
-      recentActivity.slice(
-        activityStartIndex,
-        activityStartIndex + rowsPerPage
-      ),
-    [recentActivity, activityStartIndex, rowsPerPage]
-  );
+    tasks.forEach((t) => {
+      const s = (t.status || "").toLowerCase();
+      let key: keyof typeof buckets = "other";
+
+      if (s === "to do" || s === "todo" || s.includes("backlog")) key = "todo";
+      else if (
+        s.includes("in progress") ||
+        s.includes("ongoing") ||
+        s === "progress"
+      )
+        key = "inprogress";
+      else if (
+        /(\b|^)(done|completed?)($|\b)/.test(s) &&
+        !s.includes("incomplete")
+      )
+        key = "done";
+
+      buckets[key].count += 1;
+    });
+
+    return Object.values(buckets).filter((b) => b.count > 0);
+  }, [tasks]);
 
   return (
     <div className="w-full space-y-6">
@@ -266,8 +358,9 @@ export default function DashboardPage() {
 
       {/* Main overview card: stats + lists + activity */}
       <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
-        {/* Row: Task & Milestone stats */}
+        {/* Row: Project, Task & Milestone stats */}
         <div className="space-y-4 border-b border-slate-100 px-6 py-6">
+          <ProjectStatsRow stats={projectStats} loading={loading} />
           <TaskStatsRow stats={taskStats} loading={loading} />
           <MilestoneStatsRow stats={milestoneStats} loading={loading} />
         </div>
@@ -406,6 +499,288 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Row: Overview charts */}
+        <div className="border-t border-slate-100 bg-slate-50/60 px-6 py-6">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                Overview Charts
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Snapshot visual status project dan tasks kamu.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Project status chart */}
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Project Status
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Proporsi project berdasarkan status terkini.
+                  </p>
+                </div>
+                <span className="text-[11px] font-medium text-slate-400">
+                  {projects.length} projects
+                </span>
+              </div>
+              {loading ? (
+                <div className="space-y-3">
+                  <Skeleton className="mx-auto h-32 w-32 rounded-full" />
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton
+                        key={i}
+                        className="h-4 w-20 rounded-full"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : projects.length === 0 || projectStatusSeries.length === 0 ? (
+                <p className="text-xs text-slate-400">
+                  Belum ada data project.
+                </p>
+              ) : (
+                (() => {
+                  const activeSeries = projectStatusSeries.filter(
+                    (s) => s.count > 0
+                  );
+                  const totalProjects = projects.length || 1;
+
+                  const visibleSeriesRaw = activeSeries.filter(
+                    (s) => !hiddenProjectKeys.includes(s.key)
+                  );
+                  const visibleSeries =
+                    visibleSeriesRaw.length > 0 ? visibleSeriesRaw : activeSeries;
+
+                  return (
+                    <ChartContainer
+                      config={projectStatusConfig}
+                      className="flex items-center gap-4"
+                    >
+                      <div className="relative mx-auto h-32 w-32 shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Pie
+                              data={visibleSeries}
+                              dataKey="count"
+                              nameKey="label"
+                              innerRadius={40}
+                              outerRadius={60}
+                              paddingAngle={4}
+                            >
+                              {visibleSeries.map((entry) => (
+                                <Cell
+                                  key={entry.key}
+                                  fill={`var(--color-${entry.key})`}
+                                />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1 text-[11px]">
+                        {projectStatusSeries.map((s) => {
+                          const pct = Math.round((s.count / totalProjects) * 100);
+                          const hidden = hiddenProjectKeys.includes(s.key);
+                          return (
+                            <button
+                              type="button"
+                            key={s.key}
+                            onClick={() => {
+                              const activeKeys = projectStatusSeries
+                                .filter((x) => x.count > 0)
+                                .map((x) => x.key);
+
+                              const isHidden = hiddenProjectKeys.includes(s.key);
+                              const nextHidden = isHidden
+                                ? hiddenProjectKeys.filter((k) => k !== s.key)
+                                : [...hiddenProjectKeys, s.key];
+
+                              const hiddenActiveCount = activeKeys.filter((k) =>
+                                nextHidden.includes(k)
+                              ).length;
+
+                              const allActiveHidden =
+                                hiddenActiveCount >= activeKeys.length &&
+                                activeKeys.length > 0;
+
+                              setHiddenProjectKeys(
+                                allActiveHidden ? [] : nextHidden
+                              );
+                            }}
+                            className={[
+                              "flex items-center justify-between gap-2 rounded-full px-2.5 py-1 transition",
+                              hidden
+                                ? "bg-slate-50/40 text-slate-400"
+                                : "bg-slate-50 text-slate-600",
+                            ].join(" ")}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2 w-2 rounded-full"
+                                style={{
+                                  backgroundColor: `var(--color-${s.key})`,
+                                }}
+                              />
+                              <span className="font-medium text-slate-700">
+                                {s.label}
+                              </span>
+                            </div>
+                              <span className="text-slate-500">
+                                {s.count} ({pct}%)
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </ChartContainer>
+                  );
+                })()
+              )}
+            </div>
+
+            {/* Task status chart */}
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Task Status
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Distribusi tasks berdasarkan status pengerjaan.
+                  </p>
+                </div>
+                <span className="text-[11px] font-medium text-slate-400">
+                  {tasks.length} tasks
+                </span>
+              </div>
+              {loading ? (
+                <div className="space-y-3">
+                  <Skeleton className="mx-auto h-32 w-32 rounded-full" />
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton
+                        key={i}
+                        className="h-4 w-20 rounded-full"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : tasks.length === 0 || taskStatusSeries.length === 0 ? (
+                <p className="text-xs text-slate-400">
+                  Belum ada data task.
+                </p>
+              ) : (
+                (() => {
+                  const activeSeries = taskStatusSeries.filter(
+                    (s) => s.count > 0
+                  );
+                  const totalTasks = tasks.length || 1;
+
+                  const visibleSeriesRaw = activeSeries.filter(
+                    (s) => !hiddenTaskKeys.includes(s.key)
+                  );
+                  const visibleSeries =
+                    visibleSeriesRaw.length > 0 ? visibleSeriesRaw : activeSeries;
+
+                  return (
+                    <ChartContainer
+                      config={taskStatusConfig}
+                      className="flex items-center gap-4"
+                    >
+                      <div className="relative mx-auto h-32 w-32 shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Pie
+                              data={visibleSeries}
+                              dataKey="count"
+                              nameKey="label"
+                              innerRadius={40}
+                              outerRadius={60}
+                              paddingAngle={4}
+                            >
+                              {visibleSeries.map((entry) => (
+                                <Cell
+                                  key={entry.key}
+                                  fill={`var(--color-${entry.key})`}
+                                />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1 text-[11px]">
+                        {taskStatusSeries.map((s) => {
+                          const pct = Math.round(
+                            (s.count / totalTasks) * 100
+                          );
+                          const hidden = hiddenTaskKeys.includes(s.key);
+                          return (
+                            <button
+                              type="button"
+                              key={s.key}
+                              onClick={() => {
+                                const activeKeys = taskStatusSeries
+                                  .filter((x) => x.count > 0)
+                                  .map((x) => x.key);
+
+                                const isHidden = hiddenTaskKeys.includes(s.key);
+                                const nextHidden = isHidden
+                                  ? hiddenTaskKeys.filter((k) => k !== s.key)
+                                  : [...hiddenTaskKeys, s.key];
+
+                                const hiddenActiveCount = activeKeys.filter(
+                                  (k) => nextHidden.includes(k)
+                                ).length;
+
+                                const allActiveHidden =
+                                  hiddenActiveCount >= activeKeys.length &&
+                                  activeKeys.length > 0;
+
+                                setHiddenTaskKeys(
+                                  allActiveHidden ? [] : nextHidden
+                                );
+                              }}
+                              className={[
+                                "flex items-center justify-between gap-2 rounded-full px-2.5 py-1 transition",
+                                hidden
+                                  ? "bg-slate-50/40 text-slate-400"
+                                  : "bg-slate-50 text-slate-600",
+                              ].join(" ")}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="h-2 w-2 rounded-full"
+                                  style={{
+                                    backgroundColor: `var(--color-${s.key})`,
+                                  }}
+                                />
+                                <span className="font-medium text-slate-700">
+                                  {s.label}
+                                </span>
+                              </div>
+                              <span className="text-slate-500">
+                                {s.count} ({pct}%)
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </ChartContainer>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Row: Latest activity */}
         <div className="border-t border-slate-100">
           <div className="flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-slate-50 px-6 py-4">
@@ -440,76 +815,18 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : paginatedActivity.length === 0 ? (
+            ) : recentActivity.length === 0 ? (
               <p className="text-xs text-slate-400">
                 Belum ada aktivitas yang tercatat.
               </p>
             ) : (
               <DataTable<ActivityLog>
                 columns={LATEST_ACTIVITY_COLUMNS}
-                data={paginatedActivity}
+                data={recentActivity}
                 loading={false}
                 emptyText="Belum ada aktivitas yang tercatat."
               />
             )}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-3 text-xs text-slate-600">
-          <span>
-            Showing {paginatedActivity.length === 0 ? 0 : activityStartIndex + 1}{" "}
-            to{" "}
-            {paginatedActivity.length === 0
-              ? 0
-              : activityStartIndex + paginatedActivity.length}{" "}
-            of {recentActivity.length} log
-            {recentActivity.length === 1 ? "" : "s"}
-          </span>
-          <div className="flex flex-wrap items-center gap-3">
-            <RowsPerPageControl
-              value={rowsPerPage}
-              onChange={(next) => setRowsPerPage(next)}
-              options={[5, 10, 20]}
-              label="Rows"
-            />
-            <div className="flex items-center gap-1 text-slate-500">
-              <button
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-semibold transition hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-40"
-                onClick={() => setActivityPage(1)}
-                disabled={activityPage === 1}
-              >
-                «
-              </button>
-              <button
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-semibold transition hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-40"
-                onClick={() =>
-                  setActivityPage((p) => Math.max(1, p - 1))
-                }
-                disabled={activityPage === 1}
-              >
-                ‹
-              </button>
-              <span className="px-2 text-xs font-semibold text-slate-500">
-                Page {activityPage} of {totalActivityPages}
-              </span>
-              <button
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-semibold transition hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-40"
-                onClick={() =>
-                  setActivityPage((p) =>
-                    Math.min(totalActivityPages, p + 1)
-                  )
-                }
-                disabled={activityPage === totalActivityPages}
-              >
-                ›
-              </button>
-              <button
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-xs font-semibold transition hover:border-emerald-200 hover:text-emerald-600 disabled:opacity-40"
-                onClick={() => setActivityPage(totalActivityPages)}
-                disabled={activityPage === totalActivityPages}
-              >
-                »
-              </button>
-            </div>
-          </div>
           </div>
         </div>
       </div>

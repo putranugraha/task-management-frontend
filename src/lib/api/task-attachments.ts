@@ -8,6 +8,7 @@ export type TaskAttachment = {
   mime: string | null;
   size: number;
   url: string;
+  entity_id?: number | string;
   status: TaskAttachmentStatus;
   uploaded_at: string | null;
   verified_at?: string | null;
@@ -35,4 +36,3 @@ export async function approveAttachment(id: number | string) {
 export async function rejectAttachment(id: number | string) {
   return await apiRequest<any>("PATCH", `/api/attachments/${id}/reject`);
 }
-

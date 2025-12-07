@@ -11,9 +11,7 @@ import { listByProject as listTasksByProject, updateStatus as updateTaskStatus }
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
-import EvmWidget from "@/components/evm/EvmWidget";
-import TaskProgressEditor from "@/components/tasks/TaskProgressEditor";
-import TimeEntryForm from "@/components/time/TimeEntryForm";
+import dynamic from "next/dynamic";
 import { totalByTask as totalHoursByTask } from "@/lib/api/time-entries";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
@@ -21,6 +19,42 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, MoreHorizontal, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
+
+const EvmWidget = dynamic(
+  () => import("@/components/evm/EvmWidget"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full py-10 text-center text-sm text-slate-500">
+        Loading EVM analysis…
+      </div>
+    ),
+  }
+);
+
+const TaskProgressEditor = dynamic(
+  () => import("@/components/tasks/TaskProgressEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="text-[11px] text-neutral-500">
+        Loading progress editor…
+      </div>
+    ),
+  }
+);
+
+const TimeEntryForm = dynamic(
+  () => import("@/components/time/TimeEntryForm"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="text-[11px] text-neutral-500">
+        Loading time entry…
+      </div>
+    ),
+  }
+);
 
 type ProjectDetail = {
   id: number;
@@ -277,9 +311,14 @@ export default function ProjectDetailPage() {
       </div>
     );
   }
-  if (notFound) return <div className="text-neutral-500">Project not found</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
-  if (!data) return <div className="text-neutral-500">No project data</div>;
+
+  if (notFound) {
+    return <div className="text-neutral-500">Project not found</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-600">{error}</div>;
+  }
 
   const currency = (v: number | string) => {
     const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -335,7 +374,7 @@ export default function ProjectDetailPage() {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{data.name}</BreadcrumbPage>
+              <BreadcrumbPage>{data?.name ?? "Loading…"}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -343,19 +382,33 @@ export default function ProjectDetailPage() {
       <DetailMainCard>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-slate-900 truncate">{data.name}</h1>
-            <p className="text-sm text-slate-500 truncate">{data.client_name}</p>
+            <h1 className="text-2xl font-semibold text-slate-900 truncate">
+              {data?.name ?? "Loading project…"}
+            </h1>
+            <p className="text-sm text-slate-500 truncate">
+              {data?.client_name ?? "Loading client…"}
+            </p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Status: {data.status}</span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Owner: {data.division_owner?.name ?? '-'}</span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Value: {currency(data.value_amount)}</span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">Start: {data.start_planned ?? '-'}</span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">End: {data.end_planned ?? '-'}</span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+                Status: {data?.status ?? "Loading…"}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+                Owner: {data?.division_owner?.name ?? "-"}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+                Value: {data ? currency(data.value_amount) : "Loading…"}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+                Start: {data?.start_planned ?? "-"}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+                End: {data?.end_planned ?? "-"}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <a
-              href={`/dashboard/projects/${data.id}/milestones/create`}
+              href={data ? `/dashboard/projects/${data.id}/milestones/create` : "#"}
               className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
             >
               <Plus className="h-4 w-4" />
@@ -371,9 +424,26 @@ export default function ProjectDetailPage() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl border border-slate-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.14)]">
-                <DropdownMenuItem onSelect={() => (location.href = `/dashboard/projects/${data.id}/edit`)}>Edit Project</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => (location.href = `/dashboard/tasks/create?project_id=${data.id}`)}>Add Task</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => (location.href = `/dashboard/projects/${data.id}/gantt`)}>View Gantt</DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!data}
+                  onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/edit`)}
+                >
+                  Edit Project
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!data}
+                  onSelect={() =>
+                    data && (location.href = `/dashboard/tasks/create?project_id=${data.id}`)
+                  }
+                >
+                  Add Task
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!data}
+                  onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/gantt`)}
+                >
+                  View Gantt
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={!canBaseline}
                   onSelect={() => setBaselineModalOpen(true)}
@@ -389,18 +459,26 @@ export default function ProjectDetailPage() {
         <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
           <Row
             label="Scope"
-            value={<HtmlInlinePreview html={data.scope} />}
-            onShowMore={data.scope ? () => setDetailModal({ label: "Scope", text: data.scope ?? "-" }) : undefined}
-            showMoreLabel={data.scope ? "Show more" : undefined}
+            value={<HtmlInlinePreview html={data?.scope} />}
+            onShowMore={
+              data?.scope
+                ? () => setDetailModal({ label: "Scope", text: data.scope ?? "-" })
+                : undefined
+            }
+            showMoreLabel={data?.scope ? "Show more" : undefined}
           />
           <Row
             label="Objective"
-            value={<HtmlInlinePreview html={data.objective} />}
-            onShowMore={data.objective ? () => setDetailModal({ label: "Objective", text: data.objective ?? "-" }) : undefined}
-            showMoreLabel={data.objective ? "Show more" : undefined}
+            value={<HtmlInlinePreview html={data?.objective} />}
+            onShowMore={
+              data?.objective
+                ? () => setDetailModal({ label: "Objective", text: data.objective ?? "-" })
+                : undefined
+            }
+            showMoreLabel={data?.objective ? "Show more" : undefined}
           />
-          <Row label="Created At" value={data.created_at ?? '-'} />
-          <Row label="Updated At" value={data.updated_at ?? '-'} />
+          <Row label="Created At" value={data?.created_at ?? "-"} />
+          <Row label="Updated At" value={data?.updated_at ?? "-"} />
         </div>
         <div className="mt-6">
           <div className="inline-flex rounded-xl border bg-white p-1 text-sm shadow-sm">
@@ -432,7 +510,7 @@ export default function ProjectDetailPage() {
         </DetailSectionCard>
       )}
 
-      {activeTab === "evm" && (
+      {activeTab === "evm" && data && (
         <DetailSectionCard>
           <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
         </DetailSectionCard>
@@ -440,10 +518,10 @@ export default function ProjectDetailPage() {
 
       {activeTab === "milestones" && (
         <DetailSectionCard>
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-700">Project Milestones</h3>
             <a
-              href={`/dashboard/projects/${data.id}/milestones`}
+              href={data ? `/dashboard/projects/${data.id}/milestones` : "#"}
               className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
             >
               View All
@@ -492,7 +570,7 @@ export default function ProjectDetailPage() {
             <h3 className="text-sm font-semibold text-slate-700">Project Baselines</h3>
             <div className="flex items-center gap-2">
               <a
-                href={`/dashboard/projects/${data.id}/baselines`}
+                href={data ? `/dashboard/projects/${data.id}/baselines` : "#"}
                 className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
               >
                 View All
@@ -711,7 +789,7 @@ export default function ProjectDetailPage() {
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-700">Milestone Tasks</h3>
           <a
-            href={`/dashboard/projects/${data.id}/milestones`}
+            href={data ? `/dashboard/projects/${data.id}/milestones` : "#"}
             className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
           >
             View All
@@ -788,16 +866,31 @@ export default function ProjectDetailPage() {
                             }
                           };
                           // Build assignees list from possible shapes
+                          type AssigneeView = { name: string; role: string };
                           const raw: any = t as any;
-                          const fromAssignments = Array.isArray(raw?.assignments) ? raw.assignments.map((a: any) => ({
-                            name: a?.user?.name ?? a?.user_name ?? a?.user?.full_name ?? a?.user?.email ?? String(a?.user_id ?? ''),
-                            role: a?.role_on_task ?? 'Member',
-                          })) : [];
-                          const fromUsers = Array.isArray(raw?.users) ? raw.users.map((u: any) => ({
-                            name: u?.name ?? u?.full_name ?? u?.email ?? String(u?.id ?? ''),
-                            role: u?.pivot?.role_on_task ?? 'Member',
-                          })) : [];
-                          const assignees = (fromAssignments.length ? fromAssignments : fromUsers);
+                          const fromAssignments: AssigneeView[] = Array.isArray(raw?.assignments)
+                            ? raw.assignments.map((a: any): AssigneeView => ({
+                                name:
+                                  a?.user?.name ??
+                                  a?.user_name ??
+                                  a?.user?.full_name ??
+                                  a?.user?.email ??
+                                  String(a?.user_id ?? ""),
+                                role: a?.role_on_task ?? "Member",
+                              }))
+                            : [];
+                          const fromUsers: AssigneeView[] = Array.isArray(raw?.users)
+                            ? raw.users.map((u: any): AssigneeView => ({
+                                name:
+                                  u?.name ??
+                                  u?.full_name ??
+                                  u?.email ??
+                                  String(u?.id ?? ""),
+                                role: u?.pivot?.role_on_task ?? "Member",
+                              }))
+                            : [];
+                          const assignees: AssigneeView[] =
+                            fromAssignments.length ? fromAssignments : fromUsers;
                           return (
                             <>
                               <tr key={`row-${t.id}`} className="hover:bg-neutral-50">

@@ -17,8 +17,17 @@ export type Column<T> = {
 };
 
 export function useMilestoneColumns(
-  { onDelete, onChanged, onComplete }:
-  { onDelete?: (row: MilestoneRow) => void; onChanged?: () => void; onComplete?: (row: MilestoneRow) => void; }
+  {
+    onDelete,
+    onChanged,
+    onComplete,
+    canManage,
+  }: {
+    onDelete?: (row: MilestoneRow) => void;
+    onChanged?: () => void;
+    onComplete?: (row: MilestoneRow) => void;
+    canManage?: boolean;
+  }
 ): Column<MilestoneRow>[] {
   return [
     { key: "name", header: "Name" },
@@ -29,39 +38,65 @@ export function useMilestoneColumns(
       key: "actions",
       header: "Actions",
       align: "center",
-      render: (row) => <RowActions row={row} onDelete={onDelete} onChanged={onChanged} onComplete={onComplete} />,
+      render: (row) => (
+        <RowActions
+          row={row}
+          onDelete={onDelete}
+          onChanged={onChanged}
+          onComplete={onComplete}
+          canManage={canManage}
+        />
+      ),
     },
   ];
 }
 
-function RowActions({ row, onDelete, onChanged, onComplete }: { row: MilestoneRow; onDelete?: (row: MilestoneRow) => void; onChanged?: () => void; onComplete?: (row: MilestoneRow) => void; }) {
+function RowActions({
+  row,
+  onDelete,
+  onChanged,
+  onComplete,
+  canManage = true,
+}: {
+  row: MilestoneRow;
+  onDelete?: (row: MilestoneRow) => void;
+  onChanged?: () => void;
+  onComplete?: (row: MilestoneRow) => void;
+  canManage?: boolean;
+}) {
   const isCompleted = (row.status || '').toLowerCase() === 'completed';
   return (
     <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm">
-      <Link
-        href={`/dashboard/milestones/${row.id}/edit`}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-        title={`Edit ${row.name}`}
-      >
-        <Pencil className="h-4 w-4" />
-      </Link>
-      <button
-        type="button"
-        disabled={isCompleted}
-        onClick={() => onComplete?.(row)}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
-        title={isCompleted ? "Already completed" : "Mark milestone as completed"}
-      >
-        <CheckCircle2 className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        onClick={() => onDelete?.(row)}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-        title={`Delete ${row.name}`}
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {canManage && (
+        <>
+          <Link
+            href={`/dashboard/milestones/${row.id}/edit`}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+            title={`Edit ${row.name}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </Link>
+          <button
+            type="button"
+            disabled={isCompleted}
+            onClick={() => onComplete?.(row)}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={
+              isCompleted ? "Already completed" : "Mark milestone as completed"
+            }
+          >
+            <CheckCircle2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete?.(row)}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+            title={`Delete ${row.name}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </>
+      )}
       <Link
         href={`/dashboard/milestones/${row.id}`}
         className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-[#00674F] px-4 text-xs font-semibold leading-none text-white shadow-md transition hover:bg-[#008061]"

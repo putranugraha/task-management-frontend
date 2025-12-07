@@ -10,6 +10,8 @@ export type DivisionRow = {
   users?: { id: number; name: string }[];
   users_count?: number;
   created_at?: string;
+  created_at_date?: string;
+  created_at_time?: string;
 };
 
 export type Column<T> = {

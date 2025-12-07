@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { autoLoginIfEnabled } from "@/lib/auth";
 import { useAuth } from "@/contexts/auth-context";
@@ -32,7 +32,7 @@ function resolveHomePath(
   return "/dashboard";
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { state, login } = useAuth();
@@ -115,47 +115,266 @@ export default function LoginPage() {
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 420, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-      <h1 style={{ marginBottom: 8 }}>Login</h1>
-      <p style={{ marginTop: 0, color: "#666" }}>
-        Halaman login untuk token-based atau Sanctum. Anda juga bisa mencoba auto-login.
-      </p>
-
-      <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <button onClick={doAuto} disabled={loading}>
-          {loading ? "Memeriksa..." : "Coba Auto-Login"}
-        </button>
-        {info && <p style={{ color: "#444" }}>{info}</p>}
-        {error && <p style={{ color: "#b00020" }}>{error}</p>}
-      </section>
-
-      <form onSubmit={onSubmit} style={{ marginTop: 16, display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 4 }}>
-          <span>Email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@example.com"
-            required
-            style={{ padding: 8, border: "1px solid #ddd", borderRadius: 6 }}
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "linear-gradient(135deg, #00674F 0%, #21A07A 40%, #E6FFF6 100%)",
+        padding: 16,
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 960,
+          minHeight: 480,
+          borderRadius: 24,
+          backgroundColor: "white",
+          boxShadow:
+            "0 18px 45px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.02)",
+          display: "grid",
+          gridTemplateColumns: "minmax(260px, 320px) minmax(0, 1fr)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Left panel – dekorasi hijau, tanpa sosial media */}
+        <div
+          style={{
+            position: "relative",
+            background:
+              "linear-gradient(180deg, #00674F 0%, #21A07A 40%, #004234 100%)",
+            color: "white",
+            padding: "32px 24px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          {/* Bentuk cut-out ala contoh */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              right: -40,
+              transform: "translateY(-50%)",
+              width: 80,
+              height: 180,
+              backgroundColor: "white",
+              borderRadius: 40,
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.02)",
+            }}
           />
-        </label>
-        <label style={{ display: "grid", gap: 4 }}>
-          <span>Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="password"
-            required
-            style={{ padding: 8, border: "1px solid #ddd", borderRadius: 6 }}
-          />
-        </label>
-        <button type="submit" disabled={loading}>
-          {loading ? "Masuk..." : "Masuk"}
-        </button>
-      </form>
+
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <h2
+              style={{
+                fontSize: 24,
+                fontWeight: 600,
+                marginBottom: 4,
+                letterSpacing: 0.4,
+              }}
+            >
+              Selamat Datang
+            </h2>
+            <p style={{ opacity: 0.9, maxWidth: 220, fontSize: 13 }}>
+              Masuk untuk mengelola dan memonitor task project Anda.
+            </p>
+          </div>
+
+          <p
+            style={{
+              position: "relative",
+              zIndex: 1,
+              fontSize: 11,
+              opacity: 0.85,
+            }}
+          >
+            © {new Date().getFullYear()} Central Saga
+          </p>
+        </div>
+
+        {/* Right panel – form dan logo */}
+        <div
+          style={{
+            padding: "40px 56px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 24,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <img
+              src="/logo/Logo_Central_Saga-removebg-preview.png"
+              alt="Central Saga"
+              style={{
+                width: 96,
+                height: 96,
+                objectFit: "contain",
+                marginBottom: 8,
+              }}
+            />
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 600,
+                color: "#111827",
+              }}
+            >
+              Sign in
+            </h1>
+            <p
+              style={{
+                fontSize: 13,
+                color: "#6B7280",
+              }}
+            >
+              Gunakan akun Anda untuk masuk ke dashboard.
+            </p>
+          </div>
+
+          <section
+            style={{
+              marginBottom: 4,
+              padding: 10,
+              borderRadius: 999,
+              backgroundColor: "#F3F4F6",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "fit-content",
+              fontSize: 11,
+              color: "#374151",
+            }}
+          >
+            <button
+              type="button"
+              onClick={doAuto}
+              disabled={loading}
+              style={{
+                padding: "4px 12px",
+                borderRadius: 999,
+                border: "none",
+                backgroundColor: "#00674F",
+                color: "white",
+                fontSize: 11,
+                cursor: loading ? "default" : "pointer",
+              }}
+            >
+              {loading ? "Memeriksa auto-login..." : "Coba Auto-Login"}
+            </button>
+            {(info || error) && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  color: error ? "#b00020" : "#374151",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {error ?? info}
+              </span>
+            )}
+          </section>
+
+          <form
+            onSubmit={onSubmit}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "#374151",
+                  fontWeight: 500,
+                }}
+              >
+                Email
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@example.com"
+                required
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 999,
+                  border: "1px solid #E5E7EB",
+                  fontSize: 13,
+                  outline: "none",
+                }}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "#374151",
+                  fontWeight: 500,
+                }}
+              >
+                Password
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 999,
+                  border: "1px solid #E5E7EB",
+                  fontSize: 13,
+                  outline: "none",
+                }}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                marginTop: 8,
+                padding: "10px 16px",
+                borderRadius: 999,
+                border: "none",
+                background:
+                  "linear-gradient(90deg, #00674F 0%, #21A07A 100%)",
+                color: "white",
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: loading ? "default" : "pointer",
+              }}
+            >
+              {loading ? "Masuk..." : "Masuk"}
+            </button>
+          </form>
+        </div>
+      </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: "100vh" }} />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

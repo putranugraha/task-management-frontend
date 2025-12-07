@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const token = window.localStorage.getItem("access_token");
     const rawUser = window.localStorage.getItem("user");
+    const rawMeta = window.localStorage.getItem("auth_meta");
 
     let user: AuthUser | null = null;
     if (rawUser) {
@@ -49,10 +50,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    let meta:
+      | {
+          roles?: string[];
+          permissions?: string[];
+          primary_role?: PrimaryRole | null;
+          dashboard_type?: DashboardType | null;
+          home_path?: string | null;
+        }
+      | null = null;
+    if (rawMeta) {
+      try {
+        meta = JSON.parse(rawMeta);
+      } catch {
+        meta = null;
+      }
+    }
+
     setState((prev) => ({
       ...prev,
       token: token || null,
       user,
+      roles: meta?.roles ?? prev.roles,
+      permissions: meta?.permissions ?? prev.permissions,
+      primary_role:
+        typeof meta?.primary_role === "undefined"
+          ? prev.primary_role
+          : meta.primary_role ?? null,
+      dashboard_type:
+        typeof meta?.dashboard_type === "undefined"
+          ? prev.dashboard_type
+          : meta.dashboard_type ?? null,
+      home_path:
+        typeof meta?.home_path === "undefined"
+          ? prev.home_path
+          : meta.home_path ?? null,
     }));
   }, []);
 
@@ -63,8 +95,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiRequest<ProfileResponse>("GET", "/api/profile");
 
-      if (data.user && typeof window !== "undefined") {
-        window.localStorage.setItem("user", JSON.stringify(data.user));
+      if (typeof window !== "undefined") {
+        if (data.user) {
+          window.localStorage.setItem("user", JSON.stringify(data.user));
+        }
+
+        const metaToStore = {
+          roles: data.roles ?? [],
+          permissions: data.permissions ?? [],
+          primary_role:
+            typeof data.primary_role === "undefined"
+              ? initialAuthState.primary_role
+              : data.primary_role,
+          dashboard_type:
+            typeof data.dashboard_type === "undefined"
+              ? initialAuthState.dashboard_type
+              : data.dashboard_type,
+          home_path:
+            typeof data.home_path === "undefined" ? null : data.home_path,
+        };
+        window.localStorage.setItem("auth_meta", JSON.stringify(metaToStore));
       }
 
       setState((prev) => ({
@@ -104,23 +154,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initialize = async () => {
       setState((prev) => ({ ...prev, isLoading: true }));
 
-      syncFromStorage();
-
       const token =
         typeof window !== "undefined"
           ? window.localStorage.getItem("access_token")
           : null;
 
-      if (token && !cancelled) {
-        await refreshProfile();
-      }
+      syncFromStorage();
 
       if (!cancelled) {
         setState((prev) => ({
           ...prev,
-          isLoading: false,
           isInitialized: true,
+          isLoading: !!token,
         }));
+      }
+
+      if (token && !cancelled) {
+        await refreshProfile();
       }
     };
 
@@ -172,6 +222,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.user) {
           window.localStorage.setItem("user", JSON.stringify(res.user));
         }
+
+        const metaToStore = {
+          roles: res.roles ?? [],
+          permissions: res.permissions ?? [],
+          primary_role:
+            typeof res.primary_role === "undefined"
+              ? initialAuthState.primary_role
+              : res.primary_role,
+          dashboard_type:
+            typeof res.dashboard_type === "undefined"
+              ? initialAuthState.dashboard_type
+              : res.dashboard_type,
+          home_path:
+            typeof res.home_path === "undefined" ? null : res.home_path,
+        };
+        window.localStorage.setItem("auth_meta", JSON.stringify(metaToStore));
 
         setState((prev) => ({
           ...prev,

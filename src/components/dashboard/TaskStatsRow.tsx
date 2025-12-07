@@ -47,12 +47,12 @@ export default function TaskStatsRow({ stats, loading }: { stats: Stats; loading
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+    <div className="grid min-w-full w-full grid-cols-1 gap-5 md:grid-cols-3">
       {cards.map(({ key, title, gradient, Icon, value, delta, deltaColor }) => (
         <div
           key={key}
           className={[
-            "group flex h-full flex-col justify-between rounded-2xl bg-gradient-to-br",
+            "group flex h-full w-full flex-col justify-between rounded-2xl bg-gradient-to-br",
             gradient,
             "p-6 text-white shadow-sm transition-transform duration-200 hover:scale-[1.02] hover:shadow-lg",
           ].join(" ")}

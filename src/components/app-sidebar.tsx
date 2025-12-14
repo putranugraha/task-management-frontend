@@ -12,6 +12,7 @@ import {
   Users as UsersIconLucide,
   ShieldCheck,
   Settings as SettingsIconLucide,
+  Bell,
   Building2,
   ListChecks,
 } from "lucide-react";
@@ -40,6 +41,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
     { title: "Projects", url: "/dashboard/projects", icon: FolderKanban },
     { title: "Tasks", url: "/dashboard/tasks", icon: ListTodo },
+    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
     { title: "Milestones", url: "/dashboard/milestones", icon: Flag },
     { title: "Divisions", url: "/dashboard/divisions", icon: Building2 },
     { title: "Reports", url: "/dashboard/reports", icon: BarChart2 },

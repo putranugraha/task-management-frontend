@@ -240,7 +240,7 @@ export default function NotificationsPage() {
   const hasError = !!error && !loading;
 
   return (
-    <div className="w-full space-y-6 -mx-2 md:-mx-4">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-3xl font-semibold text-slate-900">
           Notifications Dashboard

@@ -25,7 +25,7 @@ export function DetailSectionCard({ children, className }: Props) {
   return (
     <section
       className={cn(
-        "rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4",
+        "w-full rounded-[24px] border border-transparent bg-white/95 shadow-[0_18px_36px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 p-4",
         className
       )}
     >

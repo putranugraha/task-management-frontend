@@ -7,6 +7,7 @@ import { getApiBaseUrl, shouldProxyApiThroughNext, shouldUseSanctum } from './co
 // across SSR/CSR and stale builds.
 const API_BASE_URL = shouldProxyApiThroughNext() ? '' : getApiBaseUrl();
 const USE_SANCTUM = shouldUseSanctum();
+const API_DEBUG = process.env.NEXT_PUBLIC_API_DEBUG === 'true';
 
 // Small cookie helper (browser only)
 function getCookie(name: string): string | null {
@@ -86,7 +87,7 @@ async function ensureCsrfCookie(): Promise<void> {
       await api.get('/csrf-cookie', { baseURL: base });
     }
   } catch (e) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (API_DEBUG && process.env.NODE_ENV !== 'production') {
       console.warn('[api] Failed to prefetch CSRF cookie:', e);
     }
   }
@@ -112,7 +113,7 @@ export async function apiRequest<T>(
     }
     // Resolve base dynamically per request (handles SSR/CSR and localhost heuristics)
     const resolvedBase = shouldProxyApiThroughNext() ? '' : getApiBaseUrl();
-    if (process.env.NODE_ENV !== 'production') {
+    if (API_DEBUG && process.env.NODE_ENV !== 'production') {
       const fullUrlForLog = url.startsWith('http') ? url : `${resolvedBase}${url}`;
       console.log(`[api] ${method} ${fullUrlForLog}`);
       console.log('[api] Base URL:', resolvedBase || '(relative via Next proxy)');
@@ -139,7 +140,7 @@ export async function apiRequest<T>(
       response?: { status?: number }; 
       config?: unknown 
     };
-    if (process.env.NODE_ENV !== 'production') {
+    if (API_DEBUG && process.env.NODE_ENV !== 'production') {
       console.error(`Error in apiRequest to ${url}:`, axiosError.message || 'Unknown error');
       console.error('Full error object:', error);
       console.error('Error response:', axiosError.response);
@@ -148,14 +149,14 @@ export async function apiRequest<T>(
     
     // If we get a 500 error, try alternative approaches
     if (axiosError.response?.status === 500) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (API_DEBUG && process.env.NODE_ENV !== 'production') {
         console.log('Received 500 error, trying alternative approaches...');
       }
       const retryBase = shouldProxyApiThroughNext() ? '' : getApiBaseUrl();
       
       // Try 1: Direct fetch without axios
       try {
-        if (process.env.NODE_ENV !== 'production') {
+        if (API_DEBUG && process.env.NODE_ENV !== 'production') {
           console.log('Attempting direct fetch...');
         }
         const fullUrl = url.startsWith('http') ? url : `${retryBase}${url}`;
@@ -171,24 +172,24 @@ export async function apiRequest<T>(
         
         if (fetchResponse.ok) {
           const fetchData = await fetchResponse.json();
-          if (process.env.NODE_ENV !== 'production') {
+          if (API_DEBUG && process.env.NODE_ENV !== 'production') {
             console.log('Direct fetch successful:', fetchData);
           }
         return fetchData as T;
       } else {
-          if (process.env.NODE_ENV !== 'production') {
+          if (API_DEBUG && process.env.NODE_ENV !== 'production') {
             console.error('Direct fetch failed:', fetchResponse.status, fetchResponse.statusText);
           }
         }
       } catch (fetchError) {
-        if (process.env.NODE_ENV !== 'production') {
+        if (API_DEBUG && process.env.NODE_ENV !== 'production') {
           console.error('Direct fetch error:', fetchError);
         }
       }
       
       // Try 2: XHR fallback
       if (method === 'GET') {
-        if (process.env.NODE_ENV !== 'production') {
+        if (API_DEBUG && process.env.NODE_ENV !== 'production') {
           console.log('Attempting XHR fallback...');
         }
         return new Promise((resolve, reject) => {
@@ -207,7 +208,7 @@ export async function apiRequest<T>(
             if (xhr.status >= 200 && xhr.status < 300) {
               try {
                 const response = JSON.parse(xhr.responseText);
-                if (process.env.NODE_ENV !== 'production') {
+                if (API_DEBUG && process.env.NODE_ENV !== 'production') {
                   console.log('XHR fallback successful', response);
                 }
                 resolve(response as T);
@@ -220,7 +221,9 @@ export async function apiRequest<T>(
           };
           
           xhr.onerror = function() {
-            console.error('XHR error occurred');
+            if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+              console.error('XHR error occurred');
+            }
             reject(new Error('Network error occurred'));
           };
           
@@ -235,7 +238,7 @@ export async function apiRequest<T>(
     
     // If axios fails and no fallback worked, try with native fetch as fallback
     if (!axiosError.response && method === 'GET') {
-      if (process.env.NODE_ENV !== 'production') {
+      if (API_DEBUG && process.env.NODE_ENV !== 'production') {
         console.log('Attempting fallback with XHR');
       }
       return new Promise((resolve, reject) => {
@@ -255,7 +258,9 @@ export async function apiRequest<T>(
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
-              console.log('XHR fallback successful', response);
+              if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+                console.log('XHR fallback successful', response);
+              }
               resolve(response as T);
             } catch (e) {
               reject(new Error(`JSON parse error: ${e}`));
@@ -266,10 +271,10 @@ export async function apiRequest<T>(
         };
         
         xhr.onerror = function() {
-            if (process.env.NODE_ENV !== 'production') {
-              console.error('XHR error occurred');
-            }
-            reject(new Error('Network error occurred'));
+          if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+            console.error('XHR error occurred');
+          }
+          reject(new Error('Network error occurred'));
         };
         
         xhr.ontimeout = function() {
@@ -289,12 +294,14 @@ api.interceptors.response.use(
   (response) => response,
   async (error: { response?: { status?: number; data?: unknown }; code?: string; message?: string; config?: any }) => {
     // Log error details for debugging
-    console.error('API Error:', {
-      message: error.message,
-      config: error.config,
-      status: error.response?.status,
-      data: error.response?.data
-    });
+    if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+      console.error('API Error:', {
+        message: error.message,
+        config: error.config,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+    }
 
     // Handle unauthorized by attempting auto-login once
     if (error.response?.status === 401 && typeof window !== 'undefined') {
@@ -339,16 +346,22 @@ api.interceptors.response.use(
         retryConfig.headers['X-Requested-With'] = 'XMLHttpRequest';
         return api.request(retryConfig);
       } catch (csrfErr) {
-        console.error('Failed to refresh CSRF cookie:', csrfErr);
+        if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+          console.error('Failed to refresh CSRF cookie:', csrfErr);
+        }
       }
     }
     
     if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout - consider increasing the timeout value');
+      if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+        console.error('Request timeout - consider increasing the timeout value');
+      }
     }
     
     if (!error.response) {
-      console.error('Network error - check your internet connection or API endpoint availability');
+      if (API_DEBUG && process.env.NODE_ENV !== 'production') {
+        console.error('Network error - check your internet connection or API endpoint availability');
+      }
     }
     
     return Promise.reject(error);

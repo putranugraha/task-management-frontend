@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { apiRequest } from "@/lib/api";
 import type { Task } from "@/types/task";
-import DataTable from "../users/data-table";
 import { useTaskColumns, type TaskRow } from "./columns";
 import type { Column } from "../users/columns";
 import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
@@ -17,7 +17,41 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
+// Simple in-memory cache for task list to avoid refetching on every navigation.
+// This lives for the lifetime of the JS bundle (per tab) and is safe for dashboard use.
+let tasksCache: { rows: TaskRow[]; fetchedAt: number } | null = null;
+const TASKS_CACHE_TTL_MS = 60_000; // 60 seconds
+
+const DataTable = dynamic(
+  () => import("../users/data-table"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-40 rounded-md" />
+        <Skeleton className="h-[320px] w-full rounded-2xl" />
+      </div>
+    ),
+  }
+);
+
+type PaginationMeta = {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+};
+
+type PaginatedResponse<T> = {
+  data: T[];
+  meta?: PaginationMeta;
+};
+
+type MaybePaginated<T> = T[] | PaginatedResponse<T>;
+
+const DEFAULT_PER_PAGE = 10;
 
 export default function TasksPage() {
   const { can } = useAuth();
@@ -25,16 +59,29 @@ export default function TasksPage() {
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null);
   const { showToast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState<TaskRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [stats, setStats] = useState<{ total: number; completed: number; in_progress: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (opts?: { page?: number; perPage?: number; showLoading?: boolean }) => {
+    const showLoading = opts?.showLoading ?? true;
+    const pageParam = opts?.page ?? 1;
+    const perPageParam = opts?.perPage ?? DEFAULT_PER_PAGE;
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setError(null);
-      const res = await apiRequest<MaybePaginated<Task>>("GET", "/api/tasks");
-      const list = Array.isArray(res) ? res : (res as any).data ?? [];
+      const params = new URLSearchParams();
+      params.set("page", String(pageParam));
+      params.set("per_page", String(perPageParam));
+      const res = await apiRequest<MaybePaginated<Task>>("GET", `/api/tasks?${params.toString()}`);
+      const isArray = Array.isArray(res);
+      const list = isArray ? res : ((res as PaginatedResponse<Task>).data ?? []);
+      const meta = !isArray && (res as PaginatedResponse<Task>).meta ? (res as PaginatedResponse<Task>).meta as PaginationMeta : null;
       const mapped: TaskRow[] = list.map((t: any) => ({
         id: Number(t.id),
         title: t.title,
@@ -46,6 +93,10 @@ export default function TasksPage() {
         percent_complete: Number(t.percent_complete ?? 0),
       }));
       setRows(mapped);
+      setPaginationMeta(meta);
+      if (pageParam === 1) {
+        tasksCache = { rows: mapped, fetchedAt: Date.now() };
+      }
     } catch (e: any) {
       const msg = e?.message ?? "Failed to load tasks";
       setError(msg);
@@ -59,7 +110,33 @@ export default function TasksPage() {
     }
   };
 
-  useEffect(() => { fetchTasks(); }, []);
+  const fetchTaskStats = async () => {
+    try {
+      setStatsLoading(true);
+      const res = await apiRequest<{ total: number; completed: number; in_progress: number }>(
+        "GET",
+        "/api/tasks/stats"
+      );
+      setStats({
+        total: res.total ?? 0,
+        completed: res.completed ?? 0,
+        in_progress: res.in_progress ?? 0,
+      });
+    } catch {
+      // Biarkan stats tetap dihitung dari rows jika request gagal
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tasksCache) {
+      const age = Date.now() - tasksCache.fetchedAt;
+      if (age >= 0 && age <= TASKS_CACHE_TTL_MS) {
+        setRows(tasksCache.rows);
+      }
+    }
+  }, []);
 
   const handleDelete = (row: TaskRow) => {
     setDeleteTarget(row);
@@ -70,7 +147,7 @@ export default function TasksPage() {
     setDeleteLoading(true);
     try {
       await apiRequest("DELETE", `/api/tasks/${deleteTarget.id}`);
-      await fetchTasks();
+      await fetchTasks({ page: 1, perPage: DEFAULT_PER_PAGE, showLoading: false });
       showToast({
         variant: "success",
         title: "Task dihapus",
@@ -197,9 +274,19 @@ export default function TasksPage() {
     return picked.length > 0 ? picked : columnOrder;
   }, [columnOrder]);
   const [visibleKeys, setVisibleKeys] = useState<string[]>(defaultVisibleKeys);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_PER_PAGE);
   const [page, setPage] = useState(1);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    fetchTasks({ page, perPage: rowsPerPage });
+  }, [page, rowsPerPage]);
+
+  // Initial stats load (sekali saat mount, tidak ikut search/pagination)
+  useEffect(() => {
+    fetchTaskStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const valid = new Set(columnOrder);
@@ -241,32 +328,39 @@ export default function TasksPage() {
     });
   }, [rows, search]);
 
-  useEffect(() => { setPage(1); }, [rowsPerPage, search, rows.length]);
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
-  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
-  const startIndex = (page - 1) * rowsPerPage;
-  const paginatedRows = useMemo(
-    () => filteredRows.slice(startIndex, startIndex + rowsPerPage),
-    [filteredRows, startIndex, rowsPerPage]
-  );
+  useEffect(() => { setPage(1); }, [search]);
+  const totalPages = paginationMeta && typeof paginationMeta.last_page === "number" && paginationMeta.last_page > 0
+    ? paginationMeta.last_page
+    : 1;
+  const startIndex = paginationMeta && typeof paginationMeta.from === "number" && paginationMeta.from !== null
+    ? Math.max(0, paginationMeta.from - 1)
+    : (page - 1) * rowsPerPage;
+  const paginatedRows = filteredRows;
 
   const taskStats = useMemo(() => {
-    let completed = 0;
-    let inProgress = 0;
+    const totalFromRows = rows.length;
+    let completedFromRows = 0;
+    let inProgressFromRows = 0;
     rows.forEach((r) => {
-      const s = (r.status || '').toLowerCase();
-      const isCompleted = /(\b|^)(done|completed?)($|\b)/.test(s) && !s.includes('incomplete');
-      const isInProgress = s.includes('in progress') || s === 'progress' || s.includes('ongoing');
-      if (isCompleted) completed += 1;
-      else if ((!s.includes('incomplete')) && (s.includes('done') || s.includes('completed') || s === 'complete')) completed += 1;
-      else if (isInProgress) inProgress += 1;
+      const s = (r.status || "").toLowerCase();
+      const isCompleted = /(\b|^)(done|completed?)($|\b)/.test(s) && !s.includes("incomplete");
+      const isInProgress = s.includes("in progress") || s === "progress" || s.includes("ongoing");
+      if (isCompleted) completedFromRows += 1;
+      else if (!s.includes("incomplete") && (s.includes("done") || s.includes("completed") || s === "complete")) {
+        completedFromRows += 1;
+      } else if (isInProgress) {
+        inProgressFromRows += 1;
+      }
     });
-    const total = rows.length;
-    const completedPercent = total ? Math.round((completed / total) * 100) : 0;
-    const inProgressPercent = total ? Math.round((inProgress / total) * 100) : 0;
+    const total = stats?.total ?? totalFromRows;
+    const completed = stats?.completed ?? completedFromRows;
+    const inProgress = stats?.in_progress ?? inProgressFromRows;
+    const base = total || totalFromRows || 1;
+    const completedPercent = Math.round((completed / base) * 100);
+    const inProgressPercent = Math.round((inProgress / base) * 100);
     const totalPercent = completedPercent;
     return { total, completed, inProgress, totalPercent, completedPercent, inProgressPercent };
-  }, [rows]);
+  }, [rows, stats]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -300,8 +394,11 @@ export default function TasksPage() {
     ];
   }, [columns, numberColumn, visibleKeys, columnOrder]);
 
-  const summaryStart = filteredRows.length === 0 ? 0 : startIndex + 1;
-  const summaryEnd = filteredRows.length === 0 ? 0 : startIndex + paginatedRows.length;
+  const totalItems = paginationMeta && typeof paginationMeta.total === "number"
+    ? paginationMeta.total
+    : paginatedRows.length;
+  const summaryStart = totalItems === 0 ? 0 : (paginationMeta?.from ?? (startIndex + 1));
+  const summaryEnd = totalItems === 0 ? 0 : (paginationMeta?.to ?? (startIndex + paginatedRows.length));
 
   const toggleColumn = (key: string) => {
     setVisibleKeys((prev) => {
@@ -326,7 +423,7 @@ export default function TasksPage() {
         <p className="text-sm text-slate-500">Monitor tasks by status and progress.</p>
       </div>
 
-      <TaskStatsRow stats={taskStats as any} loading={loading} />
+      <TaskStatsRow stats={taskStats as any} loading={loading || statsLoading} />
 
       {error && (
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">{error}</div>
@@ -587,12 +684,15 @@ export default function TasksPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>
-            Showing {summaryStart} to {summaryEnd} of {filteredRows.length} task{filteredRows.length === 1 ? "" : "s"}
+            Showing {summaryStart} to {summaryEnd} of {totalItems} task{totalItems === 1 ? "" : "s"}
           </span>
           <div className="flex flex-wrap items-center gap-4">
             <RowsPerPageControl
               value={rowsPerPage}
-              onChange={(next) => setRowsPerPage(next)}
+              onChange={(next) => {
+                setRowsPerPage(next);
+                setPage(1);
+              }}
             />
             <div className="flex items-center gap-1 text-slate-500">
               <button

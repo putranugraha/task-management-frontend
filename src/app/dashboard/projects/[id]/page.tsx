@@ -492,8 +492,8 @@ export default function ProjectDetailPage() {
             </DropdownMenu>
           </div>
         </div>
-        {/* Detail rows */}
-        <div className="mt-5 grid gap-3">
+        {/* Detail rows: Scope left, Objective right on desktop */}
+        <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
           <Row
             label="Scope"
             value={<HtmlInlinePreview html={data?.scope} />}

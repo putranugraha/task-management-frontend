@@ -16,6 +16,22 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
+type PaginationMeta = {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+};
+
+type PaginatedResponse<T> = {
+  data: T[];
+  meta?: PaginationMeta;
+};
+
+const DEFAULT_PER_PAGE = 10;
+
 export default function ProjectsPage() {
   const { can } = useAuth();
   const canManageProject = can("mengelola project");
@@ -23,16 +39,37 @@ export default function ProjectsPage() {
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null);
   const { showToast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchProjects = async () => {
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_PER_PAGE);
+  const [page, setPage] = useState(1);
+  const [stats, setStats] = useState<{ total: number; active: number; completed: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  const fetchProjects = async (opts?: { page?: number; perPage?: number; search?: string }) => {
+    const pageParam = opts?.page ?? page ?? 1;
+    const perPageParam = opts?.perPage ?? rowsPerPage ?? DEFAULT_PER_PAGE;
+    const searchParam = opts?.search ?? search ?? "";
     try {
       setLoading(true);
       setError(null);
-      const res = await apiRequest<MaybePaginated<Project>>("GET", "/api/projects");
-      const list = Array.isArray(res) ? res : (res as any).data ?? [];
+      const params = new URLSearchParams();
+      params.set("page", String(pageParam));
+      params.set("per_page", String(perPageParam));
+      if (searchParam.trim()) {
+        params.set("search", searchParam.trim());
+      }
+      const res = await apiRequest<MaybePaginated<Project>>("GET", `/api/projects?${params.toString()}`);
+      const isArray = Array.isArray(res);
+      const list = isArray ? res : ((res as PaginatedResponse<Project>).data ?? []);
+      const meta = !isArray && (res as PaginatedResponse<Project>).meta
+        ? (res as PaginatedResponse<Project>).meta as PaginationMeta
+        : null;
       const mapped: ProjectRow[] = list.map((p: any) => {
         const owner = p.division_owner || p.owner || p.project_owner || null;
         const ownerObj = owner
@@ -47,10 +84,11 @@ export default function ProjectsPage() {
           division_owner: ownerObj,
           start_planned: p.start_planned ?? null,
           end_planned: p.end_planned ?? null,
-        created_at: p.created_at,
-      } as ProjectRow;
+          created_at: p.created_at,
+        } as ProjectRow;
       });
       setRows(mapped);
+      setPaginationMeta(meta);
     } catch (e: any) {
       const msg = e?.message ?? "Failed to load projects";
       setError(msg);
@@ -64,7 +102,43 @@ export default function ProjectsPage() {
     }
   };
 
-  useEffect(() => { fetchProjects(); }, []);
+  const fetchProjectStats = async (opts?: { search?: string }) => {
+    const searchParam = opts?.search ?? search ?? "";
+    try {
+      setStatsLoading(true);
+      const params = new URLSearchParams();
+      if (searchParam.trim()) {
+        params.set("search", searchParam.trim());
+      }
+      const res = await apiRequest<{ total: number; active: number; completed: number }>(
+        "GET",
+        `/api/projects/stats?${params.toString()}`
+      );
+      setStats({
+        total: res.total ?? 0,
+        active: res.active ?? 0,
+        completed: res.completed ?? 0,
+      });
+    } catch {
+      // Jika gagal, biarkan stats tetap nilai sebelumnya agar kartu tidak kosong
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // Debounce search input to avoid refetch on every keystroke
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [search]);
+
+  // Initial stats load (sekali saat mount, tidak ikut search)
+  useEffect(() => {
+    fetchProjectStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDelete = (row: ProjectRow) => {
     setDeleteTarget(row);
@@ -104,7 +178,6 @@ export default function ProjectsPage() {
   }) as unknown as Column<ProjectRow>[];
 
   // Column visibility controls, mirroring Users page
-  const [search, setSearch] = useState("");
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
   const togglableColumns = useMemo(() => baseColumns.filter((c) => c.key !== "actions"), [baseColumns]);
@@ -136,20 +209,21 @@ export default function ProjectsPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [columnMenuOpen]);
 
-  // Filter + pagination
-  const filteredRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) => [row.name, row.client_name, row.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
-  }, [rows, search]);
+  // Server-side pagination + search
+  useEffect(() => {
+    fetchProjects({ page, perPage: rowsPerPage, search: debouncedSearch });
+  }, [page, rowsPerPage, debouncedSearch]);
 
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [rowsPerPage, search, rows.length]);
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
-  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
-  const startIndex = (page - 1) * rowsPerPage;
-  const paginatedRows = useMemo(() => filteredRows.slice(startIndex, startIndex + rowsPerPage), [filteredRows, startIndex, rowsPerPage]);
+  const totalPages = paginationMeta && typeof paginationMeta.last_page === "number" && paginationMeta.last_page > 0
+    ? paginationMeta.last_page
+    : 1;
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const startIndex = paginationMeta && typeof paginationMeta.from === "number" && paginationMeta.from !== null
+    ? Math.max(0, paginationMeta.from - 1)
+    : (page - 1) * rowsPerPage;
 
   const numberColumn: Column<ProjectRow> = useMemo(() => ({
     key: "__number",
@@ -189,28 +263,29 @@ export default function ProjectsPage() {
     });
   };
 
-  const summaryStart = filteredRows.length === 0 ? 0 : startIndex + 1;
-  const summaryEnd = filteredRows.length === 0 ? 0 : startIndex + paginatedRows.length;
+  const totalItems = paginationMeta && typeof paginationMeta.total === "number"
+    ? paginationMeta.total
+    : rows.length;
+  const summaryStart = totalItems === 0 ? 0 : (paginationMeta?.from ?? (startIndex + 1));
+  const summaryEnd = totalItems === 0 ? 0 : (paginationMeta?.to ?? (startIndex + rows.length));
 
   // Project stats (3 cards max)
   const projectStats = useMemo(() => {
-    let active = 0;
-    let completed = 0;
-    rows.forEach((r) => {
-      const s = String(r.status ?? '').toLowerCase();
-      if (/(complete|done|finish)/.test(s)) completed += 1;
-      else if (/(active|ongoing|progress|running|execute|executing)/.test(s)) active += 1;
-    });
-    const total = rows.length;
+    const total = stats?.total ?? totalItems;
+    const active = stats?.active ?? 0;
+    const completed = stats?.completed ?? 0;
+    const baseForPercent = total || rows.length || 1;
+    const activePercent = Math.round((active / baseForPercent) * 100);
+    const completedPercent = Math.round((completed / baseForPercent) * 100);
     return {
       total,
       active,
       completed,
-      totalPercent: total ? Math.round((active / total) * 100) : 0,
-      activePercent: total ? Math.round((active / total) * 100) : 0,
-      completedPercent: total ? Math.round((completed / total) * 100) : 0,
+      totalPercent: activePercent,
+      activePercent,
+      completedPercent,
     };
-  }, [rows]);
+  }, [stats, totalItems, rows.length]);
 
   return (
     <div className="w-full space-y-6">
@@ -219,7 +294,7 @@ export default function ProjectsPage() {
         <p className="text-sm text-slate-500">Keep projects aligned and moving forward.</p>
       </div>
 
-      <ProjectStatsRow stats={projectStats as any} loading={loading} />
+      <ProjectStatsRow stats={projectStats as any} loading={loading || statsLoading} />
 
       {error && (
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
@@ -237,7 +312,10 @@ export default function ProjectsPage() {
               </span>
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Type project, client, or status…"
                 className="h-full w-full rounded-xl border-0 bg-transparent pl-12 pr-24 text-sm font-medium text-slate-600 outline-none placeholder:text-slate-300"
               />
@@ -304,16 +382,19 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        <DataTable columns={visibleColumns as Column<ProjectRow>[]} data={paginatedRows} loading={loading} />
+        <DataTable columns={visibleColumns as Column<ProjectRow>[]} data={rows} loading={loading} />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>
-            Showing {summaryStart} to {summaryEnd} of {filteredRows.length} project{filteredRows.length === 1 ? "" : "s"}
+            Showing {summaryStart} to {summaryEnd} of {totalItems} project{totalItems === 1 ? "" : "s"}
           </span>
           <div className="flex flex-wrap items-center gap-4">
             <RowsPerPageControl
               value={rowsPerPage}
-              onChange={(next) => setRowsPerPage(next)}
+              onChange={(next) => {
+                setRowsPerPage(next);
+                setPage(1);
+              }}
             />
             <div className="flex items-center gap-1 text-slate-500">
               <button

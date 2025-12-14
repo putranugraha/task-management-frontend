@@ -22,6 +22,11 @@ import type { Column } from "./users/columns";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
+const PROJECTS_PER_PAGE = 50;
+const TASKS_PER_PAGE = 50;
+const MILESTONES_PER_PAGE = 50;
+const ACTIVITY_LOGS_PER_PAGE = 10;
+
 const LATEST_ACTIVITY_COLUMNS: Column<ActivityLog>[] = [
   {
     key: "time",
@@ -88,21 +93,86 @@ export default function DashboardPage() {
 
   const [hiddenProjectKeys, setHiddenProjectKeys] = useState<string[]>([]);
   const [hiddenTaskKeys, setHiddenTaskKeys] = useState<string[]>([]);
+  const [taskStatsApi, setTaskStatsApi] = useState<{
+    total: number;
+    completed: number;
+    in_progress: number;
+  } | null>(null);
+  const [milestoneStatsApi, setMilestoneStatsApi] = useState<{
+    total: number;
+    completed: number;
+    overdue: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const fetchStats = async () => {
+      try {
+        const [taskStatsRes, milestoneStatsRes] = await Promise.all([
+          apiRequest<{
+            total: number;
+            completed: number;
+            in_progress: number;
+          }>("GET", "/api/tasks/stats").catch(() => null),
+          apiRequest<{
+            total: number;
+            completed: number;
+            overdue: number;
+          }>("GET", "/api/milestones/stats").catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        if (taskStatsRes) {
+          setTaskStatsApi({
+            total: taskStatsRes.total ?? 0,
+            completed: taskStatsRes.completed ?? 0,
+            in_progress: taskStatsRes.in_progress ?? 0,
+          });
+        } else {
+          setTaskStatsApi(null);
+        }
+
+        if (milestoneStatsRes) {
+          setMilestoneStatsApi({
+            total: milestoneStatsRes.total ?? 0,
+            completed: milestoneStatsRes.completed ?? 0,
+            overdue: milestoneStatsRes.overdue ?? 0,
+          });
+        } else {
+          setMilestoneStatsApi(null);
+        }
+      } catch {
+        if (cancelled) return;
+        setTaskStatsApi(null);
+        setMilestoneStatsApi(null);
+      }
+    };
+
     (async () => {
       setLoading(true);
       setError(null);
+      setTaskStatsApi(null);
+      setMilestoneStatsApi(null);
+
       try {
         const [projectsRes, tasksRes, milestonesRes, activityRes] =
           await Promise.all([
-            apiRequest<MaybePaginated<Project>>("GET", "/api/projects"),
-            apiRequest<MaybePaginated<Task>>("GET", "/api/tasks"),
-            apiRequest<MaybePaginated<Milestone>>("GET", "/api/milestones"),
+            apiRequest<MaybePaginated<Project>>(
+              "GET",
+              `/api/projects?per_page=${PROJECTS_PER_PAGE}`
+            ),
+            apiRequest<MaybePaginated<Task>>(
+              "GET",
+              `/api/tasks?per_page=${TASKS_PER_PAGE}`
+            ),
+            apiRequest<MaybePaginated<Milestone>>(
+              "GET",
+              `/api/milestones?per_page=${MILESTONES_PER_PAGE}`
+            ),
             apiRequest<ActivityLog[] | { data: ActivityLog[] }>(
               "GET",
-              "/api/activity-logs?per_page=50"
+              `/api/activity-logs?per_page=${ACTIVITY_LOGS_PER_PAGE}`
             ),
           ]);
 
@@ -119,6 +189,10 @@ export default function DashboardPage() {
             ? activityRes
             : ((activityRes as any).data ?? [])
         );
+
+        // Fetch stats in background so dashboard content
+        // tidak ikut nunggu query agregasi yang lebih berat.
+        fetchStats();
       } catch (e: any) {
         if (!cancelled) {
           setError(e?.message ?? "Gagal memuat data dashboard");
@@ -201,51 +275,81 @@ export default function DashboardPage() {
   }, [projects]);
 
   const taskStats = useMemo(() => {
-    let completed = 0;
-    let inProgress = 0;
+    const totalFromRows = tasks.length;
+    let completedFromRows = 0;
+    let inProgressFromRows = 0;
+
     tasks.forEach((t) => {
-      const status = (t.status || "").toLowerCase();
+      const s = (t.status || "").toLowerCase();
       const isCompleted =
-        /(\b|^)(done|completed?)($|\b)/.test(status) &&
-        !status.includes("incomplete");
+        /(\b|^)(done|completed?)($|\b)/.test(s) && !s.includes("incomplete");
       const isInProgress =
-        status.includes("in progress") ||
-        status === "progress" ||
-        status.includes("ongoing");
-      if (isCompleted) completed += 1;
-      else if (isInProgress) inProgress += 1;
+        s.includes("in progress") || s === "progress" || s.includes("ongoing");
+
+      if (isCompleted) {
+        completedFromRows += 1;
+      } else if (
+        !s.includes("incomplete") &&
+        (s.includes("done") || s.includes("completed") || s === "complete")
+      ) {
+        completedFromRows += 1;
+      } else if (isInProgress) {
+        inProgressFromRows += 1;
+      }
     });
+
+    const total = taskStatsApi?.total ?? totalFromRows;
+    const completed = taskStatsApi?.completed ?? completedFromRows;
+    const inProgress = taskStatsApi?.in_progress ?? inProgressFromRows;
+
+    const base = total || totalFromRows || 1;
+    const completedPercent = Math.round((completed / base) * 100);
+    const inProgressPercent = Math.round((inProgress / base) * 100);
+    const totalPercent = completedPercent;
+
     return {
-      total: tasks.length,
+      total,
       completed,
       inProgress,
+      totalPercent,
+      completedPercent,
+      inProgressPercent,
     };
-  }, [tasks]);
+  }, [tasks, taskStatsApi]);
 
   const milestoneStats = useMemo(() => {
-    const total = milestones.length;
-    let completed = 0;
-    let overdue = 0;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const totalFromRows = milestones.length;
+    let completedFromRows = 0;
+    let overdueFromRows = 0;
 
     milestones.forEach((m) => {
-      const status = (m.status || "").toLowerCase();
-      if (status === "completed") {
-        completed += 1;
-        return;
+      const s = (m.status || "").toLowerCase();
+      if (s.includes("completed") || s === "complete") {
+        completedFromRows += 1;
       }
-      if (m.due_planned) {
-        const due = new Date(m.due_planned);
-        if (due < today && status !== "completed") {
-          overdue += 1;
-        }
+      if (s.includes("overdue")) {
+        overdueFromRows += 1;
       }
     });
 
-    return { total, completed, overdue };
-  }, [milestones]);
+    const total = milestoneStatsApi?.total ?? totalFromRows;
+    const completed = milestoneStatsApi?.completed ?? completedFromRows;
+    const overdue = milestoneStatsApi?.overdue ?? overdueFromRows;
+
+    const base = total || totalFromRows || 1;
+    const completedPercent = Math.round((completed / base) * 100);
+    const overduePercent = Math.round((overdue / base) * 100);
+    const totalPercent = completedPercent;
+
+    return {
+      total,
+      completed,
+      overdue,
+      totalPercent,
+      completedPercent,
+      overduePercent,
+    };
+  }, [milestones, milestoneStatsApi]);
 
   const importantTasks = useMemo(() => {
     const isDone = (status: string | null | undefined) => {
@@ -319,24 +423,57 @@ export default function DashboardPage() {
       const s = (t.status || "").toLowerCase();
       let key: keyof typeof buckets = "other";
 
-      if (s === "to do" || s === "todo" || s.includes("backlog")) key = "todo";
-      else if (
-        s.includes("in progress") ||
-        s.includes("ongoing") ||
-        s === "progress"
-      )
-        key = "inprogress";
-      else if (
-        /(\b|^)(done|completed?)($|\b)/.test(s) &&
-        !s.includes("incomplete")
-      )
-        key = "done";
+      if (s === "to do" || s === "todo" || s.includes("backlog")) {
+        key = "todo";
+      } else {
+        const isInProgress =
+          s.includes("in progress") || s === "progress" || s.includes("ongoing");
+        const isCompletedStrict =
+          /(\b|^)(done|completed?)($|\b)/.test(s) && !s.includes("incomplete");
+        const isCompletedLoose =
+          !s.includes("incomplete") &&
+          (s.includes("done") || s.includes("completed") || s === "complete");
+
+        if (isInProgress) {
+          key = "inprogress";
+        } else if (isCompletedStrict || isCompletedLoose) {
+          key = "done";
+        }
+      }
 
       buckets[key].count += 1;
     });
 
+    const sampleTotal =
+      buckets.todo.count +
+      buckets.inprogress.count +
+      buckets.done.count +
+      buckets.other.count;
+    const targetTotal = taskStats.total;
+
+    if (sampleTotal > 0 && targetTotal > 0 && sampleTotal !== targetTotal) {
+      const orderedKeys: (keyof typeof buckets)[] = [
+        "todo",
+        "inprogress",
+        "done",
+        "other",
+      ];
+      let allocated = 0;
+
+      orderedKeys.forEach((key, index) => {
+        const bucket = buckets[key];
+        if (index === orderedKeys.length - 1) {
+          bucket.count = Math.max(0, targetTotal - allocated);
+        } else {
+          const scaled = Math.round((bucket.count / sampleTotal) * targetTotal);
+          bucket.count = scaled;
+          allocated += scaled;
+        }
+      });
+    }
+
     return Object.values(buckets).filter((b) => b.count > 0);
-  }, [tasks]);
+  }, [tasks, taskStats]);
 
   return (
     <div className="w-full space-y-6">
@@ -657,7 +794,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <span className="text-[11px] font-medium text-slate-400">
-                  {tasks.length} tasks
+                  {taskStats.total} tasks
                 </span>
               </div>
               {loading ? (
@@ -681,7 +818,7 @@ export default function DashboardPage() {
                   const activeSeries = taskStatusSeries.filter(
                     (s) => s.count > 0
                   );
-                  const totalTasks = tasks.length || 1;
+                  const totalTasks = taskStats.total || 1;
 
                   const visibleSeriesRaw = activeSeries.filter(
                     (s) => !hiddenTaskKeys.includes(s.key)

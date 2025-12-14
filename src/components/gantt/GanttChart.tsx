@@ -6,6 +6,14 @@ import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
 import { ChevronLeft } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Zoom = "day" | "week";
 
@@ -34,14 +42,17 @@ export default function GanttChart({
   const HEADER_WEEK_H = 22;
   const HEADER_DAY_H = 26;
   const HEADER_TOTAL_H = HEADER_WEEK_H + HEADER_DAY_H;
-  // Responsive scaling: ensure the chart fills available viewport width.
+  // Responsive scaling: sedikit boost supaya kelihatan lebih lebar tanpa berlebihan.
   const basePxPerDay = zoom === "day" ? 32 : 16;
   const pxPerDay = useMemo(() => {
     if (!gridDays) return basePxPerDay;
-    const fit = viewportWidth ? Math.floor((viewportWidth - 1) / gridDays) : basePxPerDay;
-    return Math.max(basePxPerDay, fit);
+    if (!viewportWidth) return basePxPerDay;
+    const fit = Math.floor((viewportWidth - 1) / gridDays);
+    // Boost ringan dan batasi supaya tidak terlalu panjang untuk range panjang.
+    const boosted = Math.min(fit * 1.3, basePxPerDay * 3);
+    return Math.max(basePxPerDay, boosted);
   }, [viewportWidth, gridDays, basePxPerDay]);
-  const totalWidth = Math.max(gridDays * pxPerDay, viewportWidth || 0);
+  const totalWidth = gridDays * pxPerDay;
 
   // Pick the latest baseline with valid start/end (by taken_at desc, then id desc) if available
   const baselineWindow = useMemo(() => {
@@ -148,40 +159,77 @@ export default function GanttChart({
               {sidebarCollapsed ? "Show list" : "Hide list"}
             </span>
           </button>
-          <label className="inline-flex items-center gap-2 text-muted-foreground">
-            <input type="checkbox" className="h-4 w-4" checked={showDeps} onChange={(e) => setShowDeps(e.target.checked)} />
-            <span>Dependencies</span>
-          </label>
-          <label className="inline-flex items-center gap-2 text-muted-foreground">
-            <input type="checkbox" className="h-4 w-4" checked={showPhaseStarts} onChange={(e) => setShowPhaseStarts(e.target.checked)} />
-            <span>Phase Starts</span>
-          </label>
-          <label className="inline-flex items-center gap-2 text-muted-foreground">
-            <input type="checkbox" className="h-4 w-4" checked={showTaskBaselines} onChange={(e) => setShowTaskBaselines(e.target.checked)} />
-            <span>Task Baselines</span>
-          </label>
-          {/* Milestone links removed per request */}
-          <label className="text-muted-foreground">Zoom</label>
-          <select value={zoom} onChange={(e) => setZoom(e.target.value as Zoom)} className="h-8 rounded-md border border-input bg-background px-2 text-sm">
-            <option value="day">Day</option>
-            <option value="week">Week</option>
-          </select>
-          <div className="hidden md:flex items-center gap-3 pl-2">
-            {[
-              { key: 'Planned', status: '' },
-              { key: 'In Progress', status: 'progress' },
-              { key: 'Done', status: 'done' },
-              { key: 'On Hold', status: 'hold' },
-            ].map((it) => {
-              const c = colorForStatus(it.status);
-              return (
-                <div key={it.key} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-2.5 w-2.5 rounded-full border" style={{ backgroundColor: c.bg, borderColor: c.fg }} />
-                  <span>{it.key}</span>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            <span className="text-xs md:text-sm text-muted-foreground">Zoom</span>
+            <select
+              value={zoom}
+              onChange={(e) => setZoom(e.target.value as Zoom)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+            </select>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground shadow-sm hover:bg-muted transition-colors"
+              >
+                Display
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[220px]">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Display options
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={showDeps}
+                onCheckedChange={(checked) => setShowDeps(Boolean(checked))}
+              >
+                Dependencies
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={showPhaseStarts}
+                onCheckedChange={(checked) => setShowPhaseStarts(Boolean(checked))}
+              >
+                Phase Starts
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={showTaskBaselines}
+                onCheckedChange={(checked) => setShowTaskBaselines(Boolean(checked))}
+              >
+                Task Baselines
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Status legend
+              </DropdownMenuLabel>
+              <div className="mt-1 flex flex-col gap-1 px-2 pb-1.5">
+                {[
+                  { key: "Planned", status: "" },
+                  { key: "In Progress", status: "progress" },
+                  { key: "Done", status: "done" },
+                  { key: "On Hold", status: "hold" },
+                ].map((it) => {
+                  const c = colorForStatus(it.status);
+                  return (
+                    <div
+                      key={it.key}
+                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full border"
+                        style={{ backgroundColor: c.bg, borderColor: c.fg }}
+                      />
+                      <span>{it.key}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

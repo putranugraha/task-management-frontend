@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
@@ -8,7 +9,6 @@ import type { ProjectBaseline } from "@/types/project-baseline";
 import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import { listByProject as listMilestonesByProject } from "@/lib/api/milestones";
 import { apiRequest } from "@/lib/api";
-import GanttChart from "@/components/gantt/GanttChart";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -18,6 +18,18 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const GanttChart = dynamic(
+  () => import("@/components/gantt/GanttChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-72 w-full rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+        Loading Gantt chart…
+      </div>
+    ),
+  }
+);
 
 export default function ProjectGanttPage() {
   const params = useParams();
@@ -83,45 +95,28 @@ export default function ProjectGanttPage() {
 
   if (!id) return <div className="text-neutral-500">Invalid project id</div>;
 
-  if (loading) {
-    return (
-      <div className="w-full space-y-6">
-        <div className="px-1">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard/projects">Projects</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Loading Gantt…</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-        <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6">
-          <div className="flex items-center justify-between mb-4 gap-3">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-9 w-32 rounded-md" />
-              <Skeleton className="h-7 w-40 rounded-md" />
-            </div>
-          </div>
-          <Skeleton className="h-6 w-64 rounded-md mb-4" />
-          <Skeleton className="h-72 w-full rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
   if (error) return <div className="text-red-600">{error}</div>;
 
   return (
-    <div className="w-full space-y-4 -mx-2 md:-mx-4">
-      <div className="flex items-center justify-between px-2 md:px-4">
+    <div className="w-full space-y-6">
+      <div>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="/dashboard/projects">Projects</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Project Gantt</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <a
             href={`/dashboard/projects/${id}`}
@@ -132,10 +127,16 @@ export default function ProjectGanttPage() {
           <h2 className="text-xl md:text-2xl font-semibold text-foreground">Project Gantt</h2>
         </div>
       </div>
-      <div className="px-2 md:px-4">
-        <GanttChart tasks={tasks} milestones={milestones} baselines={baselines} />
+      <div>
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-6 w-64 rounded-md" />
+            <Skeleton className="h-72 w-full rounded-xl" />
+          </div>
+        ) : (
+          <GanttChart tasks={tasks} milestones={milestones} baselines={baselines} />
+        )}
       </div>
     </div>
   );
 }
-

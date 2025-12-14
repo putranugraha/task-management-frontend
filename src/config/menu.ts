@@ -25,6 +25,11 @@ export const MENU_ITEMS: MenuItem[] = [
     permissions: ["melihat tugas", "mengelola tugas", "mengelola tugas sendiri"],
   },
   {
+    label: "Notifications",
+    path: "/dashboard/notifications",
+    roles: ["Admin", "Manager", "Member"],
+  },
+  {
     label: "Milestones",
     path: "/dashboard/milestones",
     permissions: ["melihat project", "mengelola project"],

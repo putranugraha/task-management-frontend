@@ -18,6 +18,20 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
+type PaginationMeta = {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+};
+
+type PaginatedResponse<T> = {
+  data: T[];
+  meta?: PaginationMeta;
+};
+
 export default function MilestonesPage() {
   const { can } = useAuth();
   const canManageProject = can("mengelola project");
@@ -26,6 +40,7 @@ export default function MilestonesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null);
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -33,12 +48,30 @@ export default function MilestonesPage() {
   const [deleteTarget, setDeleteTarget] = useState<MilestoneRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchMilestones = async () => {
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+  const [stats, setStats] = useState<{ total: number; completed: number; overdue: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  const fetchMilestones = async (opts?: { page?: number; perPage?: number; search?: string }) => {
+    const pageParam = opts?.page ?? page ?? 1;
+    const perPageParam = opts?.perPage ?? rowsPerPage ?? 10;
+    const searchParam = opts?.search ?? search ?? "";
     try {
       setLoading(true);
       setError(null);
-      const res = await apiRequest<MaybePaginated<Milestone>>("GET", "/api/milestones");
-      const list = Array.isArray(res) ? res : (res as any).data ?? [];
+      const params = new URLSearchParams();
+      params.set("page", String(pageParam));
+      params.set("per_page", String(perPageParam));
+      if (searchParam.trim()) {
+        params.set("search", searchParam.trim());
+      }
+      const res = await apiRequest<MaybePaginated<Milestone>>("GET", `/api/milestones?${params.toString()}`);
+      const isArray = Array.isArray(res);
+      const list = isArray ? res : ((res as PaginatedResponse<Milestone>).data ?? []);
+      const meta = !isArray && (res as PaginatedResponse<Milestone>).meta
+        ? (res as PaginatedResponse<Milestone>).meta as PaginationMeta
+        : null;
       const mapped: MilestoneRow[] = list.map((m: any) => ({
         id: m.id,
         name: m.name,
@@ -48,6 +81,7 @@ export default function MilestonesPage() {
         status: m.status ?? "Planned",
       }));
       setRows(mapped);
+      setPaginationMeta(meta);
     } catch (e: any) {
       const msg = e?.message ?? "Failed to load milestones";
       setError(msg);
@@ -61,8 +95,28 @@ export default function MilestonesPage() {
     }
   };
 
+  const fetchMilestoneStats = async () => {
+    try {
+      setStatsLoading(true);
+      const res = await apiRequest<{ total: number; completed: number; overdue: number }>(
+        "GET",
+        "/api/milestones/stats"
+      );
+      setStats({
+        total: res.total ?? 0,
+        completed: res.completed ?? 0,
+        overdue: res.overdue ?? 0,
+      });
+    } catch {
+      // Biarkan stats tetap berasal dari rows jika request gagal
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchMilestones();
+    fetchMilestones({ page: 1, perPage: rowsPerPage, search });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDelete = (row: MilestoneRow) => {
@@ -74,7 +128,7 @@ export default function MilestonesPage() {
     setDeleteLoading(true);
     try {
       await apiRequest("DELETE", `/api/milestones/${deleteTarget.id}`);
-      await fetchMilestones();
+      await fetchMilestones({ page: 1, perPage: rowsPerPage, search });
       showToast({
         variant: "success",
         title: "Milestone dihapus",
@@ -157,31 +211,27 @@ export default function MilestonesPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [columnMenuOpen]);
 
-  const filteredRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((r) => {
-      const project = r.project?.name ?? "";
-      return [r.name, r.status, project, r.due_planned ?? "", r.due_actual ?? ""].some((v) =>
-        String(v ?? "").toLowerCase().includes(term)
-      );
-    });
-  }, [rows, search]);
-
   const milestoneStats = useMemo(() => {
-    let completed = 0;
-    let overdue = 0;
+    const totalFromRows = rows.length;
+    let completedFromRows = 0;
+    let overdueFromRows = 0;
     rows.forEach((r) => {
-      const s = (r.status || '').toLowerCase();
-      if (s.includes('completed') || s === 'complete') completed += 1;
-      if (s.includes('overdue')) overdue += 1;
+      const s = (r.status || "").toLowerCase();
+      if (s.includes("completed") || s === "complete") completedFromRows += 1;
+      if (s.includes("overdue")) overdueFromRows += 1;
     });
-    const total = rows.length;
-    const completedPercent = total ? Math.round((completed / total) * 100) : 0;
-    const overduePercent = total ? Math.round((overdue / total) * 100) : 0;
+
+    const total = stats?.total ?? totalFromRows;
+    const completed = stats?.completed ?? completedFromRows;
+    const overdue = stats?.overdue ?? overdueFromRows;
+
+    const base = total || totalFromRows || 1;
+    const completedPercent = Math.round((completed / base) * 100);
+    const overduePercent = Math.round((overdue / base) * 100);
     const totalPercent = completedPercent;
+
     return { total, completed, overdue, totalPercent, completedPercent, overduePercent };
-  }, [rows]);
+  }, [rows, stats]);
 
   // Column visibility logic (similar to Users page)
   const togglableColumns = useMemo(() => columns.filter((c) => c.key !== "actions"), [columns]);
@@ -222,16 +272,31 @@ export default function MilestonesPage() {
     });
   };
 
-  // Pagination logic (similar to Users page)
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [rowsPerPage, search, rows.length]);
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
+  // Server-side pagination + search
+  useEffect(() => {
+    fetchMilestones({ page, perPage: rowsPerPage, search });
+  }, [page, rowsPerPage, search]);
+
+  // Initial stats load (sekali saat mount, tidak ikut search)
+  useEffect(() => {
+    fetchMilestoneStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalPages = paginationMeta && typeof paginationMeta.last_page === "number" && paginationMeta.last_page > 0
+    ? paginationMeta.last_page
+    : 1;
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
-  const startIndex = (page - 1) * rowsPerPage;
-  const paginatedRows = useMemo(() => filteredRows.slice(startIndex, startIndex + rowsPerPage), [filteredRows, startIndex, rowsPerPage]);
-  const summaryStart = filteredRows.length === 0 ? 0 : startIndex + 1;
-  const summaryEnd = filteredRows.length === 0 ? 0 : startIndex + paginatedRows.length;
+
+  const startIndex = paginationMeta && typeof paginationMeta.from === "number" && paginationMeta.from !== null
+    ? Math.max(0, paginationMeta.from - 1)
+    : (page - 1) * rowsPerPage;
+
+  const totalItems = paginationMeta && typeof paginationMeta.total === "number"
+    ? paginationMeta.total
+    : rows.length;
+  const summaryStart = totalItems === 0 ? 0 : (paginationMeta?.from ?? (startIndex + 1));
+  const summaryEnd = totalItems === 0 ? 0 : (paginationMeta?.to ?? (startIndex + rows.length));
 
   const numberColumn: any = useMemo(() => ({
     key: "__number",
@@ -262,7 +327,7 @@ export default function MilestonesPage() {
         <p className="text-sm text-slate-500">Track milestone progress across projects and timelines.</p>
       </div>
 
-      <MilestoneStatsRow stats={milestoneStats} loading={loading} />
+      <MilestoneStatsRow stats={milestoneStats} loading={loading || statsLoading} />
 
       {error && (
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-600 shadow-sm">
@@ -351,16 +416,19 @@ export default function MilestonesPage() {
           </div>
         </div>
 
-        <DataTable columns={visibleColumns as any} data={paginatedRows} loading={loading} />
+        <DataTable columns={visibleColumns as any} data={rows} loading={loading} />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">
           <span>
-            Showing {summaryStart} to {summaryEnd} of {filteredRows.length} milestone{filteredRows.length === 1 ? "" : "s"}
+            Showing {summaryStart} to {summaryEnd} of {totalItems} milestone{totalItems === 1 ? "" : "s"}
           </span>
           <div className="flex flex-wrap items-center gap-4">
             <RowsPerPageControl
               value={rowsPerPage}
-              onChange={(next) => setRowsPerPage(next)}
+              onChange={(next) => {
+                setRowsPerPage(next);
+                setPage(1);
+              }}
             />
             <div className="flex items-center gap-1 text-slate-500">
               <button

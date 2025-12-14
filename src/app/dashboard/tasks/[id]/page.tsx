@@ -159,44 +159,6 @@ export default function TaskDetailPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="w-full space-y-6">
-        <div className="px-1">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard/tasks">Tasks</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Loading…</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-        <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur p-6">
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-7 w-64 rounded-md" />
-            <Skeleton className="h-4 w-40 rounded-md" />
-            <div className="grid gap-3 grid-cols-1 md:grid-cols-2 mt-4">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-3 w-24 rounded" />
-                  <Skeleton className="h-10 w-full rounded-xl" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="w-full space-y-4">
@@ -224,7 +186,7 @@ export default function TaskDetailPage() {
     );
   }
 
-  if (!data) {
+  if (!data && !loading) {
     return (
       <div className="w-full space-y-4">
         <div className="px-1">
@@ -251,6 +213,13 @@ export default function TaskDetailPage() {
     );
   }
 
+  const isLoading = loading && !error;
+  const title = data?.title ?? `Task #${id}`;
+  const projectName = data?.project?.name ?? data?.project_id ?? (isLoading ? "Loading project…" : "Task detail overview");
+  const status = data?.status ?? (isLoading ? "Loading…" : "To Do");
+  const priority = data?.priority ?? (isLoading ? "Loading…" : "Medium");
+  const percentComplete = Number(data?.percent_complete ?? 0);
+
   const ass: Assignment[] = Array.isArray(data?.assignments) ? data.assignments : [];
   const deps: Dependency[] = Array.isArray(data?.dependencies) ? data.dependencies : [];
 
@@ -268,7 +237,7 @@ export default function TaskDetailPage() {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{data.title ?? `Task #${id}`}</BreadcrumbPage>
+              <BreadcrumbPage>{title}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -278,38 +247,54 @@ export default function TaskDetailPage() {
       <DetailMainCard className="w-full">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold text-slate-900 truncate">{data.title}</h1>
+            <h1 className="text-2xl font-semibold text-slate-900 truncate">{title}</h1>
             <p className="text-sm text-slate-500">
-              {data.project?.name ? (
-                <span>Project: {data.project.name}</span>
-              ) : (
-                <span>Task detail overview</span>
-              )}
+              {data?.project?.name
+                ? <span>Project: {data.project.name}</span>
+                : <span>{projectName}</span>}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#00674F]">
-              {data.status ?? "To Do"}
+              {status}
             </span>
             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-              {data.priority ?? "Medium"} priority
+              {priority} priority
             </span>
             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-              {Number(data.percent_complete ?? 0)}% complete
+              {percentComplete}% complete
             </span>
           </div>
         </div>
 
         <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
-          <Row label="Project" value={data.project?.name ?? data.project_id ?? "-"} />
-          <Row label="Milestone" value={data.milestone?.name ?? data.milestone_id ?? "-"} />
-          <Row label="Start Planned" value={data.start_planned ?? "-"} />
-          <Row label="End Planned" value={data.end_planned ?? "-"} />
-          <Row label="Created At" value={data.created_at ?? "-"} />
-          <Row label="Updated At" value={data.updated_at ?? "-"} />
-          </div>
+          <Row
+            label="Project"
+            value={isLoading ? "Loading…" : (data?.project?.name ?? data?.project_id ?? "-")}
+          />
+          <Row
+            label="Milestone"
+            value={isLoading ? "Loading…" : (data?.milestone?.name ?? data?.milestone_id ?? "-")}
+          />
+          <Row
+            label="Start Planned"
+            value={isLoading ? "Loading…" : (data?.start_planned ?? "-")}
+          />
+          <Row
+            label="End Planned"
+            value={isLoading ? "Loading…" : (data?.end_planned ?? "-")}
+          />
+          <Row
+            label="Created At"
+            value={isLoading ? "Loading…" : (data?.created_at ?? "-")}
+          />
+          <Row
+            label="Updated At"
+            value={isLoading ? "Loading…" : (data?.updated_at ?? "-")}
+          />
+        </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <a
             href={`/dashboard/tasks/${id}/edit`}
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
@@ -339,118 +324,122 @@ export default function TaskDetailPage() {
         </div>
       </DetailMainCard>
 
-      <DetailTwoColumnGrid>
-        <DetailSectionCard>
-          <h3 className="text-sm font-semibold mb-2 text-slate-800">Assignments</h3>
-          <div className="border rounded-lg overflow-hidden">
-            {ass.length === 0 ? (
-              <div className="p-3 text-sm text-neutral-500">No assignments</div>
-            ) : (
-              <table className="min-w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-700">
-                  <tr>
-                    <th className="text-left font-medium px-3 py-2 border-b">User</th>
-                    <th className="text-left font-medium px-3 py-2 border-b">Role</th>
-                    <th className="text-left font-medium px-3 py-2 border-b">Effort (h)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ass.map((a, idx) => {
-                    const name = a.user?.name ?? String(a.user_id ?? "");
-                    const role = (a.role_on_task ?? "").trim();
-                    const eff = a.estimated_effort_hours ?? null;
-                    return (
-                      <tr key={idx} className="hover:bg-neutral-50">
-                        <td className="px-3 py-2 border-t">{name || "-"}</td>
-                        <td className="px-3 py-2 border-t">{role || "-"}</td>
-                        <td className="px-3 py-2 border-t">{typeof eff === "number" ? eff : "-"}</td>
+      {!isLoading && data && (
+        <>
+          <DetailTwoColumnGrid>
+            <DetailSectionCard>
+              <h3 className="text-sm font-semibold mb-2 text-slate-800">Assignments</h3>
+              <div className="border rounded-lg overflow-hidden">
+                {ass.length === 0 ? (
+                  <div className="p-3 text-sm text-neutral-500">No assignments</div>
+                ) : (
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-neutral-50 text-neutral-700">
+                      <tr>
+                        <th className="text-left font-medium px-3 py-2 border-b">User</th>
+                        <th className="text-left font-medium px-3 py-2 border-b">Role</th>
+                        <th className="text-left font-medium px-3 py-2 border-b">Effort (h)</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </DetailSectionCard>
+                    </thead>
+                    <tbody>
+                      {ass.map((a, idx) => {
+                        const name = a.user?.name ?? String(a.user_id ?? "");
+                        const role = (a.role_on_task ?? "").trim();
+                        const eff = a.estimated_effort_hours ?? null;
+                        return (
+                          <tr key={idx} className="hover:bg-neutral-50">
+                            <td className="px-3 py-2 border-t">{name || "-"}</td>
+                            <td className="px-3 py-2 border-t">{role || "-"}</td>
+                            <td className="px-3 py-2 border-t">{typeof eff === "number" ? eff : "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </DetailSectionCard>
 
-        <DetailSectionCard>
-          <h3 className="text-sm font-semibold mb-2 text-slate-800">Dependencies</h3>
-          <div className="border rounded-lg overflow-hidden">
-            {deps.length === 0 ? (
-              <div className="p-3 text-sm text-neutral-500">No dependencies</div>
-            ) : (
-              <table className="min-w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-700">
-                  <tr>
-                    <th className="text-left font-medium px-3 py-2 border-b">Depends On</th>
-                    <th className="text-left font-medium px-3 py-2 border-b">Type</th>
-                    <th className="text-left font-medium px-3 py-2 border-b">Lag (days)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deps.map((d, idx) => (
-                    <tr key={idx} className="hover:bg-neutral-50">
-                      <td className="px-3 py-2 border-t">{d.depends_on?.title ?? "-"}</td>
-                      <td className="px-3 py-2 border-t">{d.type ?? "FS"}</td>
-                      <td className="px-3 py-2 border-t">{typeof d.lag_days === "number" ? d.lag_days : 0}</td>
+            <DetailSectionCard>
+              <h3 className="text-sm font-semibold mb-2 text-slate-800">Dependencies</h3>
+              <div className="border rounded-lg overflow-hidden">
+                {deps.length === 0 ? (
+                  <div className="p-3 text-sm text-neutral-500">No dependencies</div>
+                ) : (
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-neutral-50 text-neutral-700">
+                      <tr>
+                        <th className="text-left font-medium px-3 py-2 border-b">Depends On</th>
+                        <th className="text-left font-medium px-3 py-2 border-b">Type</th>
+                        <th className="text-left font-medium px-3 py-2 border-b">Lag (days)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deps.map((d, idx) => (
+                        <tr key={idx} className="hover:bg-neutral-50">
+                          <td className="px-3 py-2 border-t">{d.depends_on?.title ?? "-"}</td>
+                          <td className="px-3 py-2 border-t">{d.type ?? "FS"}</td>
+                          <td className="px-3 py-2 border-t">{typeof d.lag_days === "number" ? d.lag_days : 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </DetailSectionCard>
+          </DetailTwoColumnGrid>
+
+          <DetailSectionCard>
+            <h3 className="text-sm font-semibold mb-2 text-slate-800">Baselines</h3>
+            <div className="border rounded-lg overflow-hidden">
+              {(!Array.isArray(data.task_baselines) || data.task_baselines.length === 0) ? (
+                <div className="p-3 text-sm text-neutral-500">No baselines yet.</div>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead className="bg-neutral-50 text-neutral-700">
+                    <tr>
+                      <th className="text-left font-medium px-3 py-2 border-b">Start (Base)</th>
+                      <th className="text-left font-medium px-3 py-2 border-b">End (Base)</th>
+                      <th className="text-left font-medium px-3 py-2 border-b">Duration</th>
+                      <th className="text-left font-medium px-3 py-2 border-b">Linked</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </DetailSectionCard>
-      </DetailTwoColumnGrid>
+                  </thead>
+                  <tbody>
+                    {data.task_baselines.map((b: any) => (
+                      <tr key={b.id} className="hover:bg-neutral-50">
+                        <td className="px-3 py-2 border-t">{b.start_planned_base ?? "-"}</td>
+                        <td className="px-3 py-2 border-t">{b.end_planned_base ?? "-"}</td>
+                        <td className="px-3 py-2 border-t">
+                          {typeof b.duration_planned_base === "number" ? `${b.duration_planned_base} days` : "-"}
+                        </td>
+                        <td className="px-3 py-2 border-t">
+                          {b.baseline?.baseline_name ? `Project: ${b.baseline.baseline_name}` : "Free snapshot"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </DetailSectionCard>
 
-      <DetailSectionCard>
-        <h3 className="text-sm font-semibold mb-2 text-slate-800">Baselines</h3>
-        <div className="border rounded-lg overflow-hidden">
-          {(!Array.isArray(data?.task_baselines) || data.task_baselines.length === 0) ? (
-            <div className="p-3 text-sm text-neutral-500">No baselines yet.</div>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-700">
-                <tr>
-                  <th className="text-left font-medium px-3 py-2 border-b">Start (Base)</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">End (Base)</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Duration</th>
-                  <th className="text-left font-medium px-3 py-2 border-b">Linked</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.task_baselines.map((b: any) => (
-                  <tr key={b.id} className="hover:bg-neutral-50">
-                    <td className="px-3 py-2 border-t">{b.start_planned_base ?? "-"}</td>
-                    <td className="px-3 py-2 border-t">{b.end_planned_base ?? "-"}</td>
-                    <td className="px-3 py-2 border-t">
-                      {typeof b.duration_planned_base === "number" ? `${b.duration_planned_base} days` : "-"}
-                    </td>
-                    <td className="px-3 py-2 border-t">
-                      {b.baseline?.baseline_name ? `Project: ${b.baseline.baseline_name}` : "Free snapshot"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </DetailSectionCard>
+          <DetailTwoColumnGrid className="mb-4">
+            <DetailSectionCard>
+              <TaskAttachmentsSection taskId={id} />
+            </DetailSectionCard>
 
-      <DetailTwoColumnGrid className="mb-4">
-        <DetailSectionCard>
-          <TaskAttachmentsSection taskId={id} />
-        </DetailSectionCard>
-
-        <DetailSectionCard>
-          <TaskTimeTrackerSection
-            taskId={id}
-            initialStatus={data.status}
-            onStatusChange={(status) =>
-              setData((prev: any | null) => (prev ? { ...prev, status } : prev))
-            }
-          />
-        </DetailSectionCard>
-      </DetailTwoColumnGrid>
+            <DetailSectionCard>
+              <TaskTimeTrackerSection
+                taskId={id}
+                initialStatus={data.status}
+                onStatusChange={(status) =>
+                  setData((prev: any | null) => (prev ? { ...prev, status } : prev))
+                }
+              />
+            </DetailSectionCard>
+          </DetailTwoColumnGrid>
+        </>
+      )}
     </div>
   );
 }

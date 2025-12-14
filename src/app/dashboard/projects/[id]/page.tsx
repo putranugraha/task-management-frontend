@@ -154,15 +154,19 @@ export default function ProjectDetailPage() {
     return () => { mounted = false; };
   }, [id]);
 
-  // Fetch project baselines
+  // Fetch project baselines lazily when needed (Baselines or Tasks tab)
   useEffect(() => {
     let mounted = true;
-    async function run() {
-      if (!id) return;
+      async function run() {
+        if (!id) return;
+        if (activeTab !== "baselines" && activeTab !== "tasks") return;
       setBaselinesLoading(true);
       setBaselinesError(null);
       try {
-        const res = await apiRequest<ProjectBaseline[] | { data: ProjectBaseline[] }>("GET", `/api/project-baselines?project_id=${encodeURIComponent(String(id))}`);
+        const res = await apiRequest<ProjectBaseline[] | { data: ProjectBaseline[] }>(
+          "GET",
+          `/api/project-baselines?project_id=${encodeURIComponent(String(id))}`
+        );
         const arr = Array.isArray(res) ? res : ((res as any)?.data ?? []);
         arr.sort((a: any, b: any) => {
           const ta = a.taken_at ? Date.parse(a.taken_at) : 0;
@@ -184,13 +188,17 @@ export default function ProjectDetailPage() {
       }
     }
     run();
-    return () => { mounted = false; };
-  }, [id]);
+    return () => {
+      mounted = false;
+    };
+  }, [id, activeTab]);
 
+  // Fetch project milestones lazily when milestones-related tabs are opened
   useEffect(() => {
     let mounted = true;
-    async function run() {
-      if (!id) return;
+      async function run() {
+        if (!id) return;
+        if (activeTab !== "milestones" && activeTab !== "tasks" && activeTab !== "baselines" && activeTab !== "overview") return;
       setMilestonesLoading(true);
       setMilestonesError(null);
       try {
@@ -221,14 +229,17 @@ export default function ProjectDetailPage() {
       }
     }
     run();
-    return () => { mounted = false; };
-  }, [id]);
+    return () => {
+      mounted = false;
+    };
+  }, [id, activeTab]);
 
-  // Fetch project tasks once, then group by milestone at render time
+  // Fetch project tasks lazily when tasks/baselines/overview tabs are opened
   useEffect(() => {
     let mounted = true;
-    async function run() {
-      if (!id) return;
+      async function run() {
+        if (!id) return;
+        if (activeTab !== "tasks" && activeTab !== "baselines" && activeTab !== "overview") return;
       setTasksLoading(true);
       setTasksError(null);
       try {
@@ -237,8 +248,8 @@ export default function ProjectDetailPage() {
           const arr = Array.isArray(list) ? list : [];
           // Stabilize order: by status, then created_at, then id
           arr.sort((a, b) => {
-            const sa = a.status || '';
-            const sb = b.status || '';
+            const sa = a.status || "";
+            const sb = b.status || "";
             if (sa !== sb) return sa.localeCompare(sb);
             const ca = a.created_at ? Date.parse(a.created_at) : 0;
             const cb = b.created_at ? Date.parse(b.created_at) : 0;
@@ -260,8 +271,10 @@ export default function ProjectDetailPage() {
       }
     }
     run();
-    return () => { mounted = false; };
-  }, [id]);
+    return () => {
+      mounted = false;
+    };
+  }, [id, activeTab]);
 
   if (loading) {
     return (
@@ -359,10 +372,34 @@ export default function ProjectDetailPage() {
     return withoutTags.replace(/&nbsp;/gi, " ").trim() || "-";
   };
 
+  const taskStats = (() => {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return { total: 0, inProgress: 0, completed: 0 };
+    }
+    let inProgress = 0;
+    let completed = 0;
+    tasks.forEach((t) => {
+      const s = String(t.status ?? "").toLowerCase();
+      const isDoneLike =
+        s.includes("done") ||
+        s.includes("complete") ||
+        s.includes("selesai") ||
+        s.includes("finish");
+      const isInProgressLike =
+        s.includes("progress") ||
+        s.includes("ongoing") ||
+        s.includes("jalan") ||
+        s.includes("doing");
+      if (isDoneLike) completed += 1;
+      else if (isInProgressLike) inProgress += 1;
+    });
+    return { total: tasks.length, inProgress, completed };
+  })();
+
   return (
     <>
     <div className="w-full space-y-6">
-      <div className="px-1">
+      <div>
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -379,7 +416,7 @@ export default function ProjectDetailPage() {
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      <DetailMainCard>
+      <DetailMainCard className="w-full">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-slate-900 truncate">
@@ -455,8 +492,8 @@ export default function ProjectDetailPage() {
             </DropdownMenu>
           </div>
         </div>
-        {/* Detail rows: 2 columns on desktop, 1 on mobile */}
-        <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
+        {/* Detail rows */}
+        <div className="mt-5 grid gap-3">
           <Row
             label="Scope"
             value={<HtmlInlinePreview html={data?.scope} />}
@@ -503,21 +540,124 @@ export default function ProjectDetailPage() {
       </DetailMainCard>
 
       {activeTab === "overview" && (
-        <DetailSectionCard>
-          <div className="text-sm text-slate-600">
-            Select a tab above to view EVM, Milestones, Baselines, or Tasks.
+        <DetailSectionCard className="w-full space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-800">
+                Project health snapshot
+              </h3>
+              <p className="text-xs text-neutral-500">
+                Ringkasan singkat milestones dan progres task untuk proyek ini.
+              </p>
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-inner">
+                <div className="flex flex-wrap gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Milestones
+                    </div>
+                    <div className="text-base font-semibold text-slate-900">
+                      {milestones.length}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Tasks
+                    </div>
+                    <div className="text-base font-semibold text-slate-900">
+                      {taskStats.total}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      In Progress
+                    </div>
+                    <div className="text-base font-semibold text-slate-900">
+                      {taskStats.inProgress}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Completed
+                    </div>
+                    <div className="text-base font-semibold text-slate-900">
+                      {taskStats.completed}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-800">
+                Upcoming milestones
+              </h3>
+              <p className="text-xs text-neutral-500">
+                3 milestone terdekat berdasarkan tanggal due planned.
+              </p>
+              <div className="border rounded-xl overflow-hidden">
+                {milestonesLoading ? (
+                  <div className="p-3 text-sm text-neutral-500">
+                    Loading milestones...
+                  </div>
+                ) : milestonesError ? (
+                  <div className="p-3 text-sm text-red-600">
+                    {milestonesError}
+                  </div>
+                ) : milestones.length === 0 ? (
+                  <div className="p-3 text-sm text-neutral-500">
+                    Belum ada milestone untuk proyek ini.
+                  </div>
+                ) : (
+                  <table className="min-w-full text-sm table-fixed">
+                    <thead className="bg-neutral-50 text-neutral-700">
+                      <tr>
+                        <th className="text-left font-medium px-3 py-2 border-b w-[55%]">
+                          Name
+                        </th>
+                        <th className="text-left font-medium px-3 py-2 border-b w-[20%]">
+                          Status
+                        </th>
+                        <th className="text-left font-medium px-3 py-2 border-b w-[25%]">
+                          Due
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {milestones.slice(0, 3).map((m) => (
+                        <tr key={m.id} className="hover:bg-neutral-50">
+                          <td className="px-3 py-2 border-t align-top truncate">
+                            <span className="block truncate" title={m.name}>
+                              {m.name}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 border-t align-top whitespace-nowrap">
+                            {m.status}
+                          </td>
+                          <td className="px-3 py-2 border-t align-top whitespace-nowrap">
+                            {m.due_planned ?? "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
           </div>
+          <p className="text-xs text-neutral-500">
+            Untuk detail lengkap EVM, milestones, baselines, atau tasks, gunakan tab di atas.
+          </p>
         </DetailSectionCard>
       )}
 
       {activeTab === "evm" && data && (
-        <DetailSectionCard>
+        <DetailSectionCard className="w-full">
           <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
         </DetailSectionCard>
       )}
 
       {activeTab === "milestones" && (
-        <DetailSectionCard>
+        <DetailSectionCard className="w-full">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-700">Project Milestones</h3>
             <a
@@ -785,7 +925,7 @@ export default function ProjectDetailPage() {
       )}
 
       {activeTab === "tasks" && (
-      <DetailSectionCard className="mt-2">
+      <DetailSectionCard className="w-full mt-2">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-700">Milestone Tasks</h3>
           <a
@@ -1204,7 +1344,7 @@ function HtmlInlinePreview({ html }: { html: string | null | undefined }) {
   if (!html) return <span>-</span>;
   return (
     <div
-      className="prose prose-sm max-w-none text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
+      className="prose prose-sm max-w-none text-slate-700"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

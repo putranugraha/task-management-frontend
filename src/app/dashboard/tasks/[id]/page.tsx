@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
+import { listComments, createComment } from "@/lib/api/comments";
+import type { Comment } from "@/types/comment";
 import { DetailMainCard, DetailSectionCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import {
   Breadcrumb,
@@ -47,6 +49,11 @@ export default function TaskDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [baselineCreating, setBaselineCreating] = useState(false);
   const [baselineMsg, setBaselineMsg] = useState<string | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -89,6 +96,33 @@ export default function TaskDetailPage() {
     }
     fetchTask();
     return () => { mounted = false; };
+  }, [id]);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchComments() {
+      if (!id) return;
+      setCommentsLoading(true);
+      setCommentsError(null);
+      try {
+        const list = await listComments("Task", id);
+        if (active) {
+          setComments(list);
+        }
+      } catch (e: any) {
+        if (active) {
+          setCommentsError(e?.message ?? "Gagal memuat komentar");
+        }
+      } finally {
+        if (active) {
+          setCommentsLoading(false);
+        }
+      }
+    }
+    fetchComments();
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   async function handleCreateBaseline() {
@@ -156,6 +190,27 @@ export default function TaskDetailPage() {
       console.error('Create Task Baseline error:', e?.response || e);
     } finally {
       setBaselineCreating(false);
+    }
+  }
+
+  async function handleSubmitComment(e: any) {
+    e.preventDefault();
+    const content = newComment.trim();
+    if (!content || !id || postingComment) return;
+    setPostingComment(true);
+    setCommentsError(null);
+    try {
+      const created = await createComment({
+        entity_type: "Task",
+        entity_id: id,
+        content,
+      });
+      setNewComment("");
+      setComments((prev) => [created, ...prev]);
+    } catch (e: any) {
+      setCommentsError(e?.message ?? "Gagal mengirim komentar");
+    } finally {
+      setPostingComment(false);
     }
   }
 
@@ -243,86 +298,139 @@ export default function TaskDetailPage() {
         </Breadcrumb>
       </div>
 
-      {/* Main detail card now uses full available width */}
-      <DetailMainCard className="w-full">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold text-slate-900 truncate">{title}</h1>
-            <p className="text-sm text-slate-500">
-              {data?.project?.name
-                ? <span>Project: {data.project.name}</span>
-                : <span>{projectName}</span>}
-            </p>
+      {/* Top layout: two large cards side by side on wide screens */}
+      <DetailTwoColumnGrid className="xl:mx-[-8px] 2xl:mx-[-16px]">
+        {/* Summary card */}
+        <DetailMainCard className="w-full">
+          <div className="space-y-3">
+            <div className="min-w-0 space-y-1">
+              <h1 className="text-2xl font-semibold text-slate-900 truncate">
+                {title}
+              </h1>
+              <p className="text-sm text-slate-500">
+                {data?.project?.name
+                  ? <span>Project: {data.project.name}</span>
+                  : <span>{projectName}</span>}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#00674F]">
+                {status}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                {priority} priority
+              </span>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                {percentComplete}% complete
+              </span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-3 text-sm text-slate-600">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Start Planned
+                </div>
+                <div className="mt-0.5">
+                  {isLoading ? "Loading…" : data?.start_planned ?? "-"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  End Planned
+                </div>
+                <div className="mt-0.5">
+                  {isLoading ? "Loading…" : data?.end_planned ?? "-"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Created At
+                </div>
+                <div className="mt-0.5">
+                  {isLoading ? "Loading…" : data?.created_at ?? "-"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Updated At
+                </div>
+                <div className="mt-0.5">
+                  {isLoading ? "Loading…" : data?.updated_at ?? "-"}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#00674F]">
-              {status}
-            </span>
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-              {priority} priority
-            </span>
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-              {percentComplete}% complete
-            </span>
+        </DetailMainCard>
+
+        {/* Detail fields + actions card */}
+        <DetailMainCard className="w-full">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <h2 className="text-lg font-semibold text-slate-900 truncate">
+                Task Details
+              </h2>
+              <p className="text-sm text-slate-500">
+                Atur informasi utama untuk task ini.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">
-          <Row
-            label="Project"
-            value={isLoading ? "Loading…" : (data?.project?.name ?? data?.project_id ?? "-")}
-          />
-          <Row
-            label="Milestone"
-            value={isLoading ? "Loading…" : (data?.milestone?.name ?? data?.milestone_id ?? "-")}
-          />
-          <Row
-            label="Start Planned"
-            value={isLoading ? "Loading…" : (data?.start_planned ?? "-")}
-          />
-          <Row
-            label="End Planned"
-            value={isLoading ? "Loading…" : (data?.end_planned ?? "-")}
-          />
-          <Row
-            label="Created At"
-            value={isLoading ? "Loading…" : (data?.created_at ?? "-")}
-          />
-          <Row
-            label="Updated At"
-            value={isLoading ? "Loading…" : (data?.updated_at ?? "-")}
-          />
-        </div>
+          <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            <Row
+              label="Project"
+              value={isLoading ? "Loading…" : (data?.project?.name ?? data?.project_id ?? "-")}
+            />
+            <Row
+              label="Milestone"
+              value={isLoading ? "Loading…" : (data?.milestone?.name ?? data?.milestone_id ?? "-")}
+            />
+            <Row
+              label="Start Planned"
+              value={isLoading ? "Loading…" : (data?.start_planned ?? "-")}
+            />
+            <Row
+              label="End Planned"
+              value={isLoading ? "Loading…" : (data?.end_planned ?? "-")}
+            />
+            <Row
+              label="Created At"
+              value={isLoading ? "Loading…" : (data?.created_at ?? "-")}
+            />
+            <Row
+              label="Updated At"
+              value={isLoading ? "Loading…" : (data?.updated_at ?? "-")}
+            />
+          </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <a
-            href={`/dashboard/tasks/${id}/edit`}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
-          >
-            Edit Task
-          </a>
-          <button
-            type="button"
-            onClick={handleCreateBaseline}
-            disabled={baselineCreating}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {baselineCreating ? "Creating baseline…" : "Create Task Baseline"}
-          </button>
-          <button
-            type="button"
-            onClick={() => history.back()}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
-          >
-            Back
-          </button>
-          {!!baselineMsg && (
-            <span className="text-xs px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
-              {baselineMsg}
-            </span>
-          )}
-        </div>
-      </DetailMainCard>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <a
+              href={`/dashboard/tasks/${id}/edit`}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+            >
+              Edit Task
+            </a>
+            <button
+              type="button"
+              onClick={handleCreateBaseline}
+              disabled={baselineCreating}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {baselineCreating ? "Creating baseline…" : "Create Task Baseline"}
+            </button>
+            <button
+              type="button"
+              onClick={() => history.back()}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50"
+            >
+              Back
+            </button>
+            {!!baselineMsg && (
+              <span className="text-xs px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
+                {baselineMsg}
+              </span>
+            )}
+          </div>
+        </DetailMainCard>
+      </DetailTwoColumnGrid>
 
       {!isLoading && data && (
         <>
@@ -360,8 +468,8 @@ export default function TaskDetailPage() {
               </div>
             </DetailSectionCard>
 
-            <DetailSectionCard>
-              <h3 className="text-sm font-semibold mb-2 text-slate-800">Dependencies</h3>
+          <DetailSectionCard>
+            <h3 className="text-sm font-semibold mb-2 text-slate-800">Dependencies</h3>
               <div className="border rounded-lg overflow-hidden">
                 {deps.length === 0 ? (
                   <div className="p-3 text-sm text-neutral-500">No dependencies</div>
@@ -388,6 +496,74 @@ export default function TaskDetailPage() {
               </div>
             </DetailSectionCard>
           </DetailTwoColumnGrid>
+
+          <DetailSectionCard>
+            <h3 className="text-sm font-semibold mb-2 text-slate-800">Comments</h3>
+            <div className="space-y-3">
+              <form onSubmit={handleSubmitComment} className="space-y-2">
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Tambahkan komentar
+                </label>
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                  placeholder="Tulis komentar terkait task ini…"
+                />
+                {commentsError && (
+                  <p className="text-xs text-rose-500">{commentsError}</p>
+                )}
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={postingComment || !newComment.trim()}
+                    className="inline-flex items-center rounded-full border border-slate-200 bg-[#00674F] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-[#00523f] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {postingComment ? "Mengirim…" : "Kirim komentar"}
+                  </button>
+                </div>
+              </form>
+              <div className="mt-3 border-t border-slate-100 pt-3 space-y-2 max-h-80 overflow-y-auto">
+                {commentsLoading ? (
+                  <div className="text-sm text-neutral-500">Memuat komentar…</div>
+                ) : comments.length === 0 ? (
+                  <div className="text-sm text-neutral-500">
+                    Belum ada komentar. Jadilah yang pertama.
+                  </div>
+                ) : (
+                  comments.map((c) => {
+                    const author = c.user?.name || "Pengguna";
+                    let when = "";
+                    if (c.created_at) {
+                      const d = new Date(c.created_at);
+                      when = Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
+                    }
+                    return (
+                      <div
+                        key={c.id}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-700"
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-800">
+                            {author}
+                          </span>
+                          {when && (
+                            <span className="text-[10px] uppercase tracking-wide text-slate-400">
+                              {when}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          {c.content}
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </DetailSectionCard>
 
           <DetailSectionCard>
             <h3 className="text-sm font-semibold mb-2 text-slate-800">Baselines</h3>
@@ -453,4 +629,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+function getInitials(name?: string | null, fallback?: string | null) {
+  const source = (name ?? fallback ?? "").trim();
+  if (!source) return "?";
+  const parts = source.split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0] ?? "").join("").toUpperCase();
 }

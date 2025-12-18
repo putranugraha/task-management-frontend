@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { autoLoginIfEnabled } from "@/lib/auth";
 import { useAuth } from "@/contexts/auth-context";
 import type { DashboardType } from "@/types/auth";
 
@@ -41,7 +40,6 @@ function LoginPageContent() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   // Jika sudah login dan auth sudah ter-initialize, redirect dari halaman login.
   useEffect(() => {
@@ -64,34 +62,10 @@ function LoginPageContent() {
     searchParams,
   ]);
 
-  const doAuto = async () => {
-    setLoading(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const ok = await autoLoginIfEnabled();
-      if (ok) {
-        setInfo("Auto-login berhasil. Mengarahkan ke dashboard...");
-        router.replace("/dashboard");
-      } else {
-        setInfo("Auto-login tidak aktif atau gagal. Coba form di bawah.");
-      }
-    } catch (e: unknown) {
-      const message =
-        e && typeof e === "object" && "message" in e
-          ? String((e as { message?: string }).message)
-          : "Auto-login gagal";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setInfo(null);
     try {
       const res = await login(email, password);
 
@@ -244,49 +218,6 @@ function LoginPageContent() {
               Gunakan akun Anda untuk masuk ke dashboard.
             </p>
           </div>
-
-          <section
-            style={{
-              marginBottom: 4,
-              padding: 10,
-              borderRadius: 999,
-              backgroundColor: "#F3F4F6",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "fit-content",
-              fontSize: 11,
-              color: "#374151",
-            }}
-          >
-            <button
-              type="button"
-              onClick={doAuto}
-              disabled={loading}
-              style={{
-                padding: "4px 12px",
-                borderRadius: 999,
-                border: "none",
-                backgroundColor: "#00674F",
-                color: "white",
-                fontSize: 11,
-                cursor: loading ? "default" : "pointer",
-              }}
-            >
-              {loading ? "Memeriksa auto-login..." : "Coba Auto-Login"}
-            </button>
-            {(info || error) && (
-              <span
-                style={{
-                  marginLeft: 8,
-                  color: error ? "#b00020" : "#374151",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {error ?? info}
-              </span>
-            )}
-          </section>
 
           <form
             onSubmit={onSubmit}

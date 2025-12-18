@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, MoreHorizontal, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
+import { useAuth } from "@/contexts/auth-context";
 
 const EvmWidget = dynamic(
   () => import("@/components/evm/EvmWidget"),
@@ -74,6 +75,7 @@ type ProjectDetail = {
 export default function ProjectDetailPage() {
   const params = useParams();
   const id = Number(params?.id);
+  const { hasRole, can } = useAuth();
 
   const [data, setData] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,6 +114,9 @@ export default function ProjectDetailPage() {
   })() : null;
   const currentUserId = Number((currentUser?.id ?? currentUser?.user_id) ?? 0);
   const { showToast } = useToast();
+
+  const isMemberOnly =
+    hasRole("Member") && !hasRole("Admin") && !hasRole("Manager") && !can("mengelola project");
 
   useEffect(() => {
     let mounted = true;
@@ -443,54 +448,56 @@ export default function ProjectDetailPage() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <a
-              href={data ? `/dashboard/projects/${data.id}/milestones/create` : "#"}
-              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-            >
-              <Plus className="h-4 w-4" />
-              Add Milestone
-            </a>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
-                >
-                  <MoreHorizontal className="h-5 w-5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl border border-slate-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.14)]">
-                <DropdownMenuItem
-                  disabled={!data}
-                  onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/edit`)}
-                >
-                  Edit Project
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!data}
-                  onSelect={() =>
-                    data && (location.href = `/dashboard/tasks/create?project_id=${data.id}`)
-                  }
-                >
-                  Add Task
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!data}
-                  onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/gantt`)}
-                >
-                  View Gantt
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!canBaseline}
-                  onSelect={() => setBaselineModalOpen(true)}
-                >
-                  {canBaseline ? 'Create Baseline' : 'Create Baseline (unavailable)'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => history.back()}>Back</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {!isMemberOnly && (
+            <div className="flex items-center gap-2">
+              <a
+                href={data ? `/dashboard/projects/${data.id}/milestones/create` : "#"}
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                <Plus className="h-4 w-4" />
+                Add Milestone
+              </a>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
+                  >
+                    <MoreHorizontal className="h-5 w-5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl border border-slate-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.14)]">
+                  <DropdownMenuItem
+                    disabled={!data}
+                    onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/edit`)}
+                  >
+                    Edit Project
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!data}
+                    onSelect={() =>
+                      data && (location.href = `/dashboard/tasks/create?project_id=${data.id}`)
+                    }
+                  >
+                    Add Task
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!data}
+                    onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/gantt`)}
+                  >
+                    View Gantt
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!canBaseline}
+                    onSelect={() => setBaselineModalOpen(true)}
+                  >
+                    {canBaseline ? 'Create Baseline' : 'Create Baseline (unavailable)'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => history.back()}>Back</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
         {/* Detail rows: Scope left, Objective right on desktop */}
         <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2">

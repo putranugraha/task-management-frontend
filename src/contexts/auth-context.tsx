@@ -161,15 +161,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       syncFromStorage();
 
-      if (!cancelled) {
-        setState((prev) => ({
-          ...prev,
-          isInitialized: true,
-          isLoading: !!token,
-        }));
+      // Jika tidak ada token sama sekali, langsung anggap belum login.
+      if (!token) {
+        if (!cancelled) {
+          setState((prev) => ({
+            ...prev,
+            isInitialized: true,
+            isLoading: false,
+          }));
+        }
+        return;
       }
 
-      if (token && !cancelled) {
+      // Jika ada token, validasi dulu ke backend lewat /api/profile.
+      // refreshProfile akan mengatur isInitialized dan isLoading sendiri,
+      // termasuk saat token sudah tidak valid.
+      if (!cancelled) {
         await refreshProfile();
       }
     };

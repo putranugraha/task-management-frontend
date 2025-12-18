@@ -213,8 +213,8 @@ export default function EditProjectPage() {
     return owners.find((o) => o.id === Number(ownerId)) ?? null;
   }, [owners, form?.division_owner_id]);
 
-  if (loading) return <div>Loading...</div>;
-  if (!form) return <div>Not found</div>;
+  if (loading) return <div>Memuat data…</div>;
+  if (!form) return <div>Project tidak ditemukan</div>;
 
   if (authLoading || loading || ownersLoading || !form) {
     return (

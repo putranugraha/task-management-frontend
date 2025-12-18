@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import { listComments, createComment } from "@/lib/api/comments";
+import { useAuth } from "@/contexts/auth-context";
 import type { Comment } from "@/types/comment";
 import { DetailMainCard, DetailSectionCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import {
@@ -23,7 +24,11 @@ const TaskAttachmentsSection = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="text-sm text-neutral-500">Loading attachments…</div>
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-32 rounded" />
+        <Skeleton className="h-10 w-full rounded-xl bg-neutral-200/60" />
+        <Skeleton className="h-10 w-full rounded-xl bg-neutral-200/60" />
+      </div>
     ),
   }
 );
@@ -33,17 +38,35 @@ const TaskTimeTrackerSection = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="text-sm text-neutral-500">Loading time tracker…</div>
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-40 rounded" />
+        <Skeleton className="h-9 w-full rounded-full bg-neutral-200/60" />
+      </div>
     ),
   }
 );
 
-type Assignment = { user?: { id: number; name: string } | null; user_id?: number; role_on_task?: string | null; estimated_effort_hours?: number | null };
+type Assignment = {
+  user?: {
+    id: number;
+    name: string;
+    role?: string | null;
+    roles?: string[] | null;
+  } | null;
+  user_id?: number;
+  role_on_task?: string | null;
+  estimated_effort_hours?: number | null;
+};
 type Dependency = { type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number; depends_on?: { id: number; title: string } | null };
 
 export default function TaskDetailPage() {
   const params = useParams();
   const id = Number(params?.id);
+  const { state, hasRole, can } = useAuth();
+  const currentUserId = useMemo(
+    () => Number(state.user?.id ?? (state.user as any)?.user_id ?? 0),
+    [state.user]
+  );
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +77,9 @@ export default function TaskDetailPage() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
+  const [assignmentUserRoles, setAssignmentUserRoles] = useState<
+    Record<number, string>
+  >({});
 
   useEffect(() => {
     let mounted = true;
@@ -124,6 +150,85 @@ export default function TaskDetailPage() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    const list: any[] = Array.isArray((data as any)?.assignments)
+      ? (data as any).assignments
+      : [];
+    if (!list.length) return;
+
+    (async () => {
+      const updates: Record<number, string> = {};
+      const seen = new Set<number>();
+
+      for (const a of list) {
+        const uid = Number(
+          a?.user?.id ?? a?.user_id ?? (a as any)?.id ?? 0
+        );
+        if (!Number.isFinite(uid) || uid <= 0 || seen.has(uid)) continue;
+        seen.add(uid);
+
+        if (assignmentUserRoles[uid]) continue;
+
+        let role = "";
+        const user = a?.user as any;
+
+        if (user) {
+          if (user.role && String(user.role).trim()) {
+            role = String(user.role).trim();
+          } else if (Array.isArray(user.roles) && user.roles.length > 0) {
+            const first = user.roles[0];
+            const name =
+              typeof first === "string" ? first : first?.name ?? "";
+            role = String(name || "").trim();
+          }
+        }
+
+        if (!role && uid === currentUserId) {
+          const fromPrimary = state.primary_role ?? null;
+          const fromList =
+            Array.isArray(state.roles) && state.roles.length
+              ? state.roles[0]
+              : null;
+          const picked = fromPrimary || fromList;
+          if (picked) {
+            role = String(picked).trim();
+          }
+        }
+
+        if (!role) {
+          try {
+            const res = await apiRequest<any>("GET", `/api/users/${uid}`);
+            const payload =
+              res && typeof res === "object" && "data" in (res as any)
+                ? (res as any).data
+                : res;
+            let r = payload?.role ?? null;
+            if (!r && Array.isArray(payload?.roles) && payload.roles.length) {
+              const first = payload.roles[0];
+              r =
+                typeof first === "string"
+                  ? first
+                  : (first as any)?.name ?? null;
+            }
+            if (r) {
+              role = String(r).trim();
+            }
+          } catch {
+            // ignore failures; leave role empty
+          }
+        }
+
+        if (role) {
+          updates[uid] = role;
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setAssignmentUserRoles((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+  }, [data, currentUserId, state.primary_role, state.roles, assignmentUserRoles]);
 
   async function handleCreateBaseline() {
     setBaselineMsg(null);
@@ -197,16 +302,32 @@ export default function TaskDetailPage() {
     e.preventDefault();
     const content = newComment.trim();
     if (!content || !id || postingComment) return;
+    if (!currentUserId) {
+      setCommentsError("User yang aktif tidak dikenali, komentar tidak dapat dikirim.");
+      return;
+    }
     setPostingComment(true);
     setCommentsError(null);
     try {
       const created = await createComment({
         entity_type: "Task",
         entity_id: id,
+        user_id: currentUserId,
         content,
       });
+      // Pastikan komentar baru punya nama user di FE
+      const withUser = {
+        ...created,
+        user: created.user ?? (state.user
+          ? {
+              id: currentUserId,
+              name: state.user.name,
+              email: (state.user as any).email ?? "",
+            }
+          : created.user),
+      };
       setNewComment("");
-      setComments((prev) => [created, ...prev]);
+      setComments((prev) => [withUser, ...prev]);
     } catch (e: any) {
       setCommentsError(e?.message ?? "Gagal mengirim komentar");
     } finally {
@@ -268,7 +389,7 @@ export default function TaskDetailPage() {
     );
   }
 
-  const isLoading = loading && !error;
+  const isLoading = false;
   const title = data?.title ?? `Task #${id}`;
   const projectName = data?.project?.name ?? data?.project_id ?? (isLoading ? "Loading project…" : "Task detail overview");
   const status = data?.status ?? (isLoading ? "Loading…" : "To Do");
@@ -277,6 +398,23 @@ export default function TaskDetailPage() {
 
   const ass: Assignment[] = Array.isArray(data?.assignments) ? data.assignments : [];
   const deps: Dependency[] = Array.isArray(data?.dependencies) ? data.dependencies : [];
+
+  const canEditTask = useMemo(
+    () =>
+      hasRole("Admin") ||
+      hasRole("Manager") ||
+      can("mengelola project") ||
+      can("mengelola tugas"),
+    [hasRole, can]
+  );
+
+  const canCreateTaskBaseline = useMemo(
+    () =>
+      hasRole("Admin") ||
+      hasRole("Manager") ||
+      can("mengelola project"),
+    [hasRole, can]
+  );
 
   return (
     <div className="w-full space-y-6">
@@ -298,71 +436,78 @@ export default function TaskDetailPage() {
         </Breadcrumb>
       </div>
 
-      {/* Top layout: two large cards side by side on wide screens */}
-      <DetailTwoColumnGrid className="xl:mx-[-8px] 2xl:mx-[-16px]">
-        {/* Summary card */}
-        <DetailMainCard className="w-full">
-          <div className="space-y-3">
-            <div className="min-w-0 space-y-1">
-              <h1 className="text-2xl font-semibold text-slate-900 truncate">
-                {title}
-              </h1>
-              <p className="text-sm text-slate-500">
-                {data?.project?.name
-                  ? <span>Project: {data.project.name}</span>
-                  : <span>{projectName}</span>}
-              </p>
+      {/* Top layout: two equal-width cards (summary + details) */}
+      <div className="grid gap-8 min-w-0 w-full lg:grid-cols-2">
+        {/* Summary aside (neutral, same tone as other cards) */}
+        <aside className="min-w-0 flex h-full flex-col justify-between gap-6 rounded-3xl border border-slate-100 bg-white/95 p-7 text-slate-900 shadow-[0_4px_25px_rgba(15,23,42,0.08)]">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="w-full rounded-full bg-slate-100">
+                <div className="h-1 rounded-full bg-[#00674F]" style={{ width: `${percentComplete || 0}%` }} />
+              </div>
+              <h2 className="text-lg font-semibold uppercase tracking-[0.32em] text-slate-900">
+                Task Overview
+              </h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="grid h-16 w-16 place-items-center rounded-full bg-slate-100 text-lg font-bold text-slate-700">
+                {getInitials(title, data?.project?.name ?? projectName)}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-xl font-semibold text-slate-900">{title}</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  {data?.project?.name ? `Project: ${data.project.name}` : projectName}
+                </div>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#00674F]">
+              <span className="inline-flex items-center rounded-full bg-[#00674F]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#00674F]">
                 {status}
               </span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-                {priority} priority
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+                {priority}
               </span>
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">
                 {percentComplete}% complete
               </span>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-3 text-sm text-slate-600">
+            <div className="grid grid-cols-2 gap-4 text-sm text-slate-700">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                  Start Planned
-                </div>
-                <div className="mt-0.5">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Start Planned</div>
+                <div className="font-semibold mt-0.5">
                   {isLoading ? "Loading…" : data?.start_planned ?? "-"}
                 </div>
               </div>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                  End Planned
-                </div>
-                <div className="mt-0.5">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">End Planned</div>
+                <div className="font-semibold mt-0.5">
                   {isLoading ? "Loading…" : data?.end_planned ?? "-"}
                 </div>
               </div>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                  Created At
-                </div>
-                <div className="mt-0.5">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Created At</div>
+                <div className="font-semibold mt-0.5">
                   {isLoading ? "Loading…" : data?.created_at ?? "-"}
                 </div>
               </div>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                  Updated At
-                </div>
-                <div className="mt-0.5">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Updated At</div>
+                <div className="font-semibold mt-0.5">
                   {isLoading ? "Loading…" : data?.updated_at ?? "-"}
                 </div>
               </div>
             </div>
           </div>
-        </DetailMainCard>
+          <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50 p-4 text-slate-600">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Tip</p>
+            <p className="text-sm leading-relaxed">
+              Gunakan halaman ini untuk memastikan status, tanggal, dan progres task selalu terupdate.
+            </p>
+          </div>
+        </aside>
 
         {/* Detail fields + actions card */}
-        <DetailMainCard className="w-full">
+        <div className="flex h-full min-w-0 w-full flex-col gap-6 rounded-2xl border border-neutral-100 bg-gradient-to-br from-white to-neutral-50 p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 space-y-1">
               <h2 className="text-lg font-semibold text-slate-900 truncate">
@@ -374,7 +519,7 @@ export default function TaskDetailPage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
             <Row
               label="Project"
               value={isLoading ? "Loading…" : (data?.project?.name ?? data?.project_id ?? "-")}
@@ -401,21 +546,25 @@ export default function TaskDetailPage() {
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <a
-              href={`/dashboard/tasks/${id}/edit`}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
-            >
-              Edit Task
-            </a>
-            <button
-              type="button"
-              onClick={handleCreateBaseline}
-              disabled={baselineCreating}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {baselineCreating ? "Creating baseline…" : "Create Task Baseline"}
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canEditTask && (
+              <a
+                href={`/dashboard/tasks/${id}/edit`}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+              >
+                Edit Task
+              </a>
+            )}
+            {canCreateTaskBaseline && (
+              <button
+                type="button"
+                onClick={handleCreateBaseline}
+                disabled={baselineCreating}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {baselineCreating ? "Creating baseline…" : "Create Task Baseline"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => history.back()}
@@ -429,12 +578,12 @@ export default function TaskDetailPage() {
               </span>
             )}
           </div>
-        </DetailMainCard>
-      </DetailTwoColumnGrid>
+        </div>
+      </div>
 
       {!isLoading && data && (
-        <>
-          <DetailTwoColumnGrid>
+        <div className="flex flex-col gap-6">
+          <DetailTwoColumnGrid className="order-1">
             <DetailSectionCard>
               <h3 className="text-sm font-semibold mb-2 text-slate-800">Assignments</h3>
               <div className="border rounded-lg overflow-hidden">
@@ -451,8 +600,27 @@ export default function TaskDetailPage() {
                     </thead>
                     <tbody>
                       {ass.map((a, idx) => {
-                        const name = a.user?.name ?? String(a.user_id ?? "");
-                        const role = (a.role_on_task ?? "").trim();
+                        const user = a.user;
+                        const uid = Number(user?.id ?? a.user_id ?? 0);
+                        const name = user?.name ?? String(a.user_id ?? "");
+                        const roleFromMap =
+                          Number.isFinite(uid) && uid > 0
+                            ? assignmentUserRoles[uid]
+                            : "";
+                        const fallbackRoleFromUser =
+                          (user?.role && String(user.role).trim()) ||
+                          (Array.isArray(user?.roles) &&
+                          user.roles.length > 0
+                            ? String(
+                                typeof user.roles[0] === "string"
+                                  ? user.roles[0]
+                                  : (user.roles[0] as any)?.name ?? ""
+                              ).trim()
+                            : "");
+                        const role =
+                          (roleFromMap ||
+                            fallbackRoleFromUser ||
+                            (a.role_on_task ?? "")).trim() || "-";
                         const eff = a.estimated_effort_hours ?? null;
                         return (
                           <tr key={idx} className="hover:bg-neutral-50">
@@ -497,7 +665,7 @@ export default function TaskDetailPage() {
             </DetailSectionCard>
           </DetailTwoColumnGrid>
 
-          <DetailSectionCard>
+          <DetailSectionCard className="order-3">
             <h3 className="text-sm font-semibold mb-2 text-slate-800">Comments</h3>
             <div className="space-y-3">
               <form onSubmit={handleSubmitComment} className="space-y-2">
@@ -565,7 +733,7 @@ export default function TaskDetailPage() {
             </div>
           </DetailSectionCard>
 
-          <DetailSectionCard>
+          <DetailSectionCard className="order-2">
             <h3 className="text-sm font-semibold mb-2 text-slate-800">Baselines</h3>
             <div className="border rounded-lg overflow-hidden">
               {(!Array.isArray(data.task_baselines) || data.task_baselines.length === 0) ? (
@@ -599,7 +767,7 @@ export default function TaskDetailPage() {
             </div>
           </DetailSectionCard>
 
-          <DetailTwoColumnGrid className="mb-4">
+          <DetailTwoColumnGrid className="mb-4 order-4">
             <DetailSectionCard>
               <TaskAttachmentsSection taskId={id} />
             </DetailSectionCard>
@@ -614,7 +782,7 @@ export default function TaskDetailPage() {
               />
             </DetailSectionCard>
           </DetailTwoColumnGrid>
-        </>
+        </div>
       )}
     </div>
   );

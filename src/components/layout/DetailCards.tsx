@@ -36,7 +36,7 @@ export function DetailSectionCard({ children, className }: Props) {
 
 export function DetailTwoColumnGrid({ children, className }: Props) {
   return (
-    <div className={cn("grid min-w-0 w-full gap-4 md:grid-cols-2", className)}>
+    <div className={cn("grid min-w-0 w-full gap-8 md:grid-cols-2", className)}>
       {children}
     </div>
   );

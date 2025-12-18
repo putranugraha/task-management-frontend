@@ -13,6 +13,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -28,6 +29,7 @@ export function NavMain({
     url: string
     icon: LucideIcon
     isActive?: boolean
+    badge?: number
     items?: {
       title: string
       url: string
@@ -47,6 +49,11 @@ export function NavMain({
                   <span>{item.title}</span>
                 </Link>
               </SidebarMenuButton>
+              {typeof item.badge === "number" && item.badge > 0 && (
+                <SidebarMenuBadge className="bg-red-500 text-white">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </SidebarMenuBadge>
+              )}
               {item.items?.length ? (
                 <>
                   <CollapsibleTrigger asChild>

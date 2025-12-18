@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Timer, Square } from "lucide-react";
 
 type Props = {
   taskId: number;
@@ -28,6 +29,21 @@ type TimeEntry = {
   user?: { id: number; name: string } | null;
   user_id?: number;
 };
+
+function formatHoursToHM(hours: number | string | null | undefined): string {
+  if (hours == null) return "0 menit";
+  const hNum =
+    typeof hours === "string" ? parseFloat(hours) : Number(hours ?? 0);
+  if (!Number.isFinite(hNum) || hNum <= 0) return "0 menit";
+  const totalMinutes = Math.round(hNum * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h} jam`);
+  if (m > 0) parts.push(`${m} menit`);
+  if (parts.length === 0) return "0 menit";
+  return parts.join(" ");
+}
 
 export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange }: Props) {
   const { state, hasRole } = useAuth();
@@ -338,8 +354,10 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
   const runningHours =
     timerStart && nowTs
-      ? ((nowTs - timerStart) / 3_600_000).toFixed(2)
+      ? (nowTs - timerStart) / 3_600_000
       : null;
+  const runningLabel =
+    runningHours != null ? formatHoursToHM(runningHours) : null;
 
   const userMap = useMemo(() => {
     const map = new Map<number, string>();
@@ -362,8 +380,10 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
   return (
     <section className="mt-4">
-      <h3 className="text-sm font-medium mb-2">Time Tracking</h3>
-      <div className="border rounded-lg">
+      <h3 className="text-sm font-semibold mb-2 text-slate-800">
+        Time Tracking
+      </h3>
+      <div className="border rounded-lg bg-white/60">
         {loading ? (
           <div className="p-3 text-sm text-neutral-500">
             Loading time entries...
@@ -382,7 +402,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
                   Date
                 </th>
                 <th className="text-left font-medium px-3 py-2 border-b">
-                  Hours
+                  Durasi
                 </th>
                 <th className="text-left font-medium px-3 py-2 border-b">
                   User
@@ -409,7 +429,16 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
                     <td className="px-3 py-2 border-t">
                       {String(e.date).slice(0, 10)}
                     </td>
-                    <td className="px-3 py-2 border-t">{hrs}</td>
+                    <td className="px-3 py-2 border-t">
+                      <div className="text-sm font-medium text-slate-800">
+                        {formatHoursToHM(hrs)}
+                      </div>
+                      {Number.isFinite(hrs as number) && (
+                        <div className="text-[11px] text-neutral-500">
+                          {(hrs as number).toFixed(2)} jam
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 border-t">{userName}</td>
                     <td className="px-3 py-2 border-t">{e.note ?? "-"}</td>
                   </tr>
@@ -420,15 +449,25 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-sm">
-        <div>
-            <span className="inline-block px-2 py-0.5 rounded border bg-neutral-50">
-              Total Hours: <b>{totalHours}</b>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2 text-sm">
+        <div className="space-y-1">
+          <div className="inline-flex items-baseline gap-1 rounded-full bg-white/70 px-2 py-1 border border-slate-200">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              Total Waktu
             </span>
-          {runningHours && (
-            <span className="ml-2 text-xs text-neutral-600">
-              Timer berjalan: {runningHours} jam
+            <span className="text-sm font-semibold text-slate-800">
+              {formatHoursToHM(totalHours)}
             </span>
+            {Number.isFinite(totalHours) && (
+              <span className="text-[11px] text-neutral-500">
+                ({totalHours.toFixed(2)} jam)
+              </span>
+            )}
+          </div>
+          {runningLabel && (
+            <div className="text-xs text-neutral-600">
+              Timer berjalan: {runningLabel}
+            </div>
           )}
         </div>
 
@@ -474,18 +513,20 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
                   }
                   setStartConfirmOpen(true);
                 }}
-                className={`inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] ${
+                className={`inline-flex items-center justify-center gap-1.5 rounded-full border border-[#00674F] bg-[#00674F] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005341] ${
                   isStartBlocked ? "opacity-60 cursor-not-allowed" : ""
                 }`}
               >
+                <Timer className="h-4 w-4" />
                 Start Timer
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setStopConfirmOpen(true)}
-                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-500/80 bg-amber-500/10 px-4 py-1.5 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-500/20"
               >
+                <Square className="h-4 w-4" />
                 Stop &amp; Save
               </button>
             )}

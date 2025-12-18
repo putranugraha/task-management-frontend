@@ -12,6 +12,8 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Paperclip, UploadCloud } from "lucide-react";
 
 type Props = {
   taskId: number;
@@ -163,8 +165,14 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
       </h3>
       <div className="border rounded-lg bg-white/60">
         {loading ? (
-          <div className="p-3 text-sm text-neutral-500">
-            Loading attachments...
+          <div className="p-3 space-y-3">
+            <Skeleton className="h-4 w-40 rounded" />
+            {[...Array(2)].map((_, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                <Skeleton className="h-4 w-40 rounded" />
+                <Skeleton className="h-4 w-24 rounded" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="p-3 text-sm text-red-600">{error}</div>
@@ -277,20 +285,41 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
       {allowed && !permLoading && (
         <form
           onSubmit={handleUpload}
-          className="mt-3 flex flex-wrap items-center gap-2 text-sm"
+          className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-sm flex flex-col gap-2"
         >
+          <div className="flex flex-wrap items-center gap-2">
+            <label
+              htmlFor="task-attachment-file"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm cursor-pointer transition hover:border-[#00674F] hover:text-[#00674F]"
+            >
+              <Paperclip className="h-4 w-4" />
+              <span>Pilih file</span>
+            </label>
+            {file && (
+              <span className="max-w-[260px] truncate text-xs text-slate-600">
+                {file.name}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-neutral-500">
+              Upload lampiran yang relevan (dokumen, gambar, atau file pendukung lainnya).
+            </p>
+            <button
+              type="submit"
+              disabled={!file || uploading}
+              className="inline-flex items-center justify-center rounded-full border border-[#00674F] bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#005341] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <UploadCloud className="mr-1.5 h-4 w-4" />
+              {uploading ? "Mengunggah..." : "Upload"}
+            </button>
+          </div>
           <input
+            id="task-attachment-file"
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="text-xs"
+            className="sr-only"
           />
-          <button
-            type="submit"
-            disabled={!file || uploading}
-            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {uploading ? "Uploading..." : "Upload Attachment"}
-          </button>
         </form>
       )}
 

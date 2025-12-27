@@ -31,42 +31,13 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { listMyNotifications } from "@/lib/api/notifications";
+import { useNotifications } from "@/contexts/notification-context";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
   const { state, hasRole, can } = useAuth();
-  const [unreadCount, setUnreadCount] = React.useState<number | null>(null);
-
-  React.useEffect(() => {
-    if (!state?.isInitialized) return;
-
-    let cancelled = false;
-
-    async function fetchUnreadCount() {
-      try {
-        const res = await listMyNotifications({
-          only_unread: true,
-          page: 1,
-          per_page: 1,
-        });
-        if (!cancelled) {
-          setUnreadCount(res.meta?.total ?? 0);
-        }
-      } catch {
-        if (!cancelled) {
-          setUnreadCount(0);
-        }
-      }
-    }
-
-    fetchUnreadCount();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [state?.isInitialized]);
+  const { unreadCount } = useNotifications();
 
   const allNavItems = [
     { title: "Overview", url: "/dashboard", icon: LayoutDashboard },

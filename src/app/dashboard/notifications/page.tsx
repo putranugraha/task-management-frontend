@@ -26,6 +26,7 @@ import {
 import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { useNotifications } from "@/contexts/notification-context";
 
 type NotificationRow = TaskNotification;
 
@@ -124,6 +125,7 @@ export default function NotificationsPage() {
   const { state } = useAuth();
   const router = useRouter();
   const { showToast } = useToast();
+  const { refreshUnreadCount, decrementUnreadCount } = useNotifications();
 
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [meta, setMeta] = useState<NotificationsMeta | null>(null);
@@ -225,6 +227,8 @@ export default function NotificationsPage() {
               : item
           )
         );
+        decrementUnreadCount();
+        await refreshUnreadCount();
       }
       router.push(target);
     } catch (e: any) {

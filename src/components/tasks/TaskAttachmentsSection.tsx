@@ -8,6 +8,7 @@ import {
   rejectAttachment,
   type TaskAttachment,
 } from "@/lib/api/task-attachments";
+import { saveProgress, complete } from "@/lib/api/tasks";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
@@ -17,9 +18,17 @@ import { Paperclip, UploadCloud } from "lucide-react";
 
 type Props = {
   taskId: number;
+  initialPercent?: number;
+  onPercentChange?: (value: number) => void;
+  onStatusChange?: (value: string) => void;
 };
 
-export default function TaskAttachmentsSection({ taskId }: Props) {
+export default function TaskAttachmentsSection({
+  taskId,
+  initialPercent,
+  onPercentChange,
+  onStatusChange,
+}: Props) {
   const { hasRole } = useAuth();
   const [items, setItems] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,6 +47,24 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
     filename?: string | null;
   } | null>(null);
   const [moderateLoading, setModerateLoading] = useState(false);
+  const [progressMode, setProgressMode] = useState<
+    "none" | "complete" | "custom"
+  >("complete");
+  const initialPctNumber = Number.isFinite(initialPercent ?? 0)
+    ? Number(initialPercent ?? 0)
+    : 0;
+  const [progressValue, setProgressValue] = useState<number>(initialPctNumber);
+  const [progressInput, setProgressInput] = useState<string>(
+    String(initialPctNumber)
+  );
+
+  useEffect(() => {
+    if (typeof initialPercent === "number" && Number.isFinite(initialPercent)) {
+      const pct = Math.max(0, Math.min(100, Number(initialPercent)));
+      setProgressValue(pct);
+      setProgressInput(String(pct));
+    }
+  }, [initialPercent]);
 
   async function fetchAttachments() {
     setLoading(true);
@@ -122,6 +149,55 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
 
       if (action === "approve") {
         await approveAttachment(id);
+
+        // Setelah lampiran disetujui, tawarkan update progres task jika diminta.
+        if (progressMode === "complete") {
+          try {
+            const updated = await complete(taskId);
+            const pct = Number((updated as any)?.percent_complete ?? 100);
+            if (Number.isFinite(pct)) {
+              onPercentChange?.(pct);
+            } else {
+              onPercentChange?.(100);
+            }
+            const status = (updated as any)?.status;
+            if (status) {
+              onStatusChange?.(String(status));
+            }
+          } catch (e: any) {
+            const msg =
+              e?.response?.data?.message ||
+              e?.response?.data?.error ||
+              e?.message ||
+              "Gagal menandai task sebagai selesai";
+            showToast({
+              variant: "error",
+              title: "Gagal update progres task",
+              description: msg,
+            });
+          }
+        } else if (progressMode === "custom") {
+          const raw = Number(progressValue ?? initialPercent ?? 0);
+          const pct = Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0));
+          try {
+            const updated = await saveProgress(taskId, pct);
+            const latest = Number((updated as any)?.percent_complete ?? pct);
+            onPercentChange?.(
+              Number.isFinite(latest) ? latest : pct
+            );
+          } catch (e: any) {
+            const msg =
+              e?.response?.data?.message ||
+              e?.response?.data?.error ||
+              e?.message ||
+              "Gagal memperbarui progres task";
+            showToast({
+              variant: "error",
+              title: "Gagal update progres task",
+              description: msg,
+            });
+          }
+        }
       } else {
         await rejectAttachment(id);
       }
@@ -343,7 +419,72 @@ export default function TaskAttachmentsSection({ taskId }: Props) {
           moderateTarget && handleStatus(moderateTarget.id, moderateTarget.action)
         }
         onCancel={() => !moderateLoading && setModerateTarget(null)}
-      />
+      >
+        {moderateTarget?.action === "approve" && (
+          <div className="space-y-3">
+            <p className="text-xs text-neutral-500">
+              Setelah lampiran disetujui, kamu bisa langsung mengatur progres task berdasarkan hasil review.
+            </p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  className="h-3.5 w-3.5 text-[#00674F]"
+                  checked={progressMode === "complete"}
+                  onChange={() => setProgressMode("complete")}
+                />
+                <span>
+                  Tandai task sebagai <span className="font-semibold">selesai (100%)</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  className="mt-1 h-3.5 w-3.5 text-[#00674F]"
+                  checked={progressMode === "custom"}
+                  onChange={() => setProgressMode("custom")}
+                />
+                <span className="flex-1 space-y-1">
+                  <span>Atur progres secara bertahap:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={progressInput}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setProgressInput("");
+                          setProgressValue(0);
+                          return;
+                        }
+                        const digitsOnly = raw.replace(/\D/g, "");
+                        const num = Math.max(
+                          0,
+                          Math.min(100, Number(digitsOnly || "0"))
+                        );
+                        setProgressValue(num);
+                        setProgressInput(String(num));
+                      }}
+                      className="h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                    />
+                    <span className="text-sm text-slate-600">%</span>
+                    {typeof initialPercent === "number" && (
+                      <span className="ml-2 text-[11px] text-neutral-500">
+                        Progress saat ini:{" "}
+                        <span className="font-semibold">
+                          {initialPercent}%
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
+      </ConfirmDialog>
     </section>
   );
 }

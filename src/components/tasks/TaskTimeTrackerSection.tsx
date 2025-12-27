@@ -45,6 +45,27 @@ function formatHoursToHM(hours: number | string | null | undefined): string {
   return parts.join(" ");
 }
 
+function formatRunningDuration(hours: number | string | null | undefined): string {
+  if (hours == null) return "0 detik";
+  const hNum =
+    typeof hours === "string" ? parseFloat(hours) : Number(hours ?? 0);
+  if (!Number.isFinite(hNum) || hNum <= 0) return "0 detik";
+  const totalSeconds = Math.max(0, Math.floor(hNum * 3_600));
+  const h = Math.floor(totalSeconds / 3_600);
+  const m = Math.floor((totalSeconds % 3_600) / 60);
+  const s = totalSeconds % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h} jam`);
+  if (m > 0) parts.push(`${m} menit`);
+  if (h === 0 && m === 0) {
+    parts.push(`${s} detik`);
+  } else if (s > 0) {
+    parts.push(`${s} detik`);
+  }
+  if (parts.length === 0) return "0 detik";
+  return parts.join(" ");
+}
+
 export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange }: Props) {
   const { state, hasRole } = useAuth();
   const currentUserId = useMemo(
@@ -142,7 +163,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
     setNowTs(Date.now());
     const id = window.setInterval(() => {
       setNowTs(Date.now());
-    }, 10_000); // update setiap 10 detik
+    }, 1_000); // update setiap 1 detik
 
     return () => {
       window.clearInterval(id);
@@ -357,7 +378,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
       ? (nowTs - timerStart) / 3_600_000
       : null;
   const runningLabel =
-    runningHours != null ? formatHoursToHM(runningHours) : null;
+    runningHours != null ? formatRunningDuration(runningHours) : null;
 
   const userMap = useMemo(() => {
     const map = new Map<number, string>();

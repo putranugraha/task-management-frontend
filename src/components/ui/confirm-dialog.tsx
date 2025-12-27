@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ type ConfirmDialogProps = {
   loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  children?: ReactNode;
 };
 
 export function ConfirmDialog({
@@ -27,6 +28,7 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -70,6 +72,11 @@ export function ConfirmDialog({
             <X className="h-4 w-4" />
           </button>
         </div>
+        {children && (
+          <div className="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-600">
+            {children}
+          </div>
+        )}
         <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
@@ -99,4 +106,3 @@ export function ConfirmDialog({
     document.body
   );
 }
-

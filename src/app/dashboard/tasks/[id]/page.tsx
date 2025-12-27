@@ -769,7 +769,20 @@ export default function TaskDetailPage() {
 
           <DetailTwoColumnGrid className="mb-4 order-4">
             <DetailSectionCard>
-              <TaskAttachmentsSection taskId={id} />
+              <TaskAttachmentsSection
+                taskId={id}
+                initialPercent={percentComplete}
+                onPercentChange={(value) =>
+                  setData((prev: any | null) =>
+                    prev ? { ...prev, percent_complete: value } : prev
+                  )
+                }
+                onStatusChange={(status) =>
+                  setData((prev: any | null) =>
+                    prev ? { ...prev, status } : prev
+                  )
+                }
+              />
             </DetailSectionCard>
 
             <DetailSectionCard>

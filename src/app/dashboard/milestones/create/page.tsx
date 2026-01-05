@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
 import { fetchProjectsList } from "@/lib/lookups";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronsUpDown, Loader2 } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard } from "@/components/layout/DetailCards";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 
@@ -17,7 +18,6 @@ type FormState = {
   project_id: number | "";
   name: string;
   due_planned: string;
-  due_actual: string;
 };
 
 export default function CreateMilestonePage() {
@@ -28,11 +28,17 @@ export default function CreateMilestonePage() {
   }
 
   const router = useRouter();
+  const todayLocal = (() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  })();
   const [form, setForm] = useState<FormState>({
     project_id: "",
     name: "",
     due_planned: "",
-    due_actual: "",
   });
   const [projects, setProjects] = useState<Project[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -41,11 +47,16 @@ export default function CreateMilestonePage() {
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const { showToast } = useToast();
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const selectedProject = useMemo(() => {
+    if (!form.project_id) return null;
+    return projects.find((p) => Number(p.id) === Number(form.project_id)) ?? null;
+  }, [form.project_id, projects]);
+
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target as any;
     setForm((s) => ({
       ...s,
-      [name]: name === "project_id" ? (value ? Number(value) : "") : value,
+      [name]: value,
     }));
   };
 
@@ -55,13 +66,23 @@ export default function CreateMilestonePage() {
     setError(null);
     setSuccessMessage(null);
     try {
+      if (!form.project_id) {
+        const msg = "Project wajib dipilih";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Validasi gagal",
+          description: msg,
+        });
+        setSubmitting(false);
+        return;
+      }
       const payload: Record<string, any> = {
-        project_id: form.project_id || null,
+        project_id: form.project_id,
         name: form.name,
         // Explicitly send default status so backend validation passes
         status: "Planned",
         due_planned: form.due_planned || null,
-        due_actual: form.due_actual || null,
       };
       await apiRequest("POST", "/api/milestones", payload);
       setSuccessMessage("Milestone berhasil ditambahkan.");
@@ -112,7 +133,7 @@ export default function CreateMilestonePage() {
   const checklistItems = useMemo(
     () => [
       { key: "name", label: "Isi nama milestone dengan benar", completed: Boolean(form.name) },
-      { key: "project", label: "Pilih project (opsional)", completed: Boolean(form.project_id) },
+      { key: "project", label: "Pilih project", completed: Boolean(form.project_id) },
       { key: "due", label: "Set Due Planned (opsional)", completed: Boolean(form.due_planned) },
     ],
     [form]
@@ -220,26 +241,47 @@ export default function CreateMilestonePage() {
                 />
               </div>
               <div className="space-y-2">
-                <label htmlFor="project_id" className="text-sm font-semibold text-slate-500">
+                <label className="text-sm font-semibold text-slate-500">
                   Project
                 </label>
                 {lookupsLoading ? (
                   <Skeleton className="h-11 w-full rounded-xl bg-neutral-200/60" />
+                ) : projects.length === 0 ? (
+                  <div className="flex h-11 w-full items-center rounded-xl border border-slate-200 bg-neutral-50 px-4 text-sm font-medium text-slate-400 shadow-inner">
+                    Tidak ada project
+                  </div>
                 ) : (
-                  <select
-                    id="project_id"
-                    name="project_id"
-                    value={form.project_id}
-                    onChange={onChange}
-                    className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-                  >
-                    <option value="">(Optional) Pilih project</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                        aria-label="Pilih project"
+                      >
+                        <span className={selectedProject ? "text-slate-700" : "text-slate-400"}>
+                          {selectedProject?.name ?? "Pilih project"}
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+                    >
+                      {projects.map((p) => (
+                        <DropdownMenuItem
+                          key={p.id}
+                          onSelect={() => setForm((s) => ({ ...s, project_id: Number(p.id) }))}
+                          className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                        >
+                          <span>{p.name}</span>
+                          {Number(form.project_id) === Number(p.id) && (
+                            <Check className="h-4 w-4 text-emerald-500" />
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             </div>
@@ -255,6 +297,7 @@ export default function CreateMilestonePage() {
                   name="due_planned"
                   value={form.due_planned}
                   onChange={onChange}
+                  min={todayLocal}
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />
               </div>
@@ -266,9 +309,10 @@ export default function CreateMilestonePage() {
                   id="due_actual"
                   type="date"
                   name="due_actual"
-                  value={form.due_actual}
-                  onChange={onChange}
-                  className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-neutral-50 px-4 text-sm font-medium text-neutral-500 shadow-inner"
+                  disabled
+                  readOnly
+                  placeholder="Auto-filled when milestone is completed"
                 />
                 <p className="text-[11px] text-slate-400">Bisa dikosongkan, akan terisi saat Completed.</p>
               </div>

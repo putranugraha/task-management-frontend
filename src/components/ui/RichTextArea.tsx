@@ -26,12 +26,68 @@ export function RichTextArea({
   rows = 4,
 }: Props) {
   const ref = React.useRef<HTMLDivElement | null>(null);
+  const [formatState, setFormatState] = React.useState<{
+    bold: boolean;
+    italic: boolean;
+    bullet: boolean;
+  }>({ bold: false, italic: false, bullet: false });
+
+  const refreshFormatState = React.useCallback(() => {
+    if (typeof document === "undefined") return;
+    if (!ref.current) return;
+
+    const selection = document.getSelection();
+    if (!selection || !selection.anchorNode) {
+      setFormatState({ bold: false, italic: false, bullet: false });
+      return;
+    }
+
+    let node: Node | null = selection.anchorNode;
+    let inside = false;
+    while (node) {
+      if (node === ref.current) {
+        inside = true;
+        break;
+      }
+      node = node.parentNode;
+    }
+    if (!inside) {
+      setFormatState({ bold: false, italic: false, bullet: false });
+      return;
+    }
+
+    try {
+      const bold = document.queryCommandState("bold");
+      const italic = document.queryCommandState("italic");
+      const bullet = document.queryCommandState("insertUnorderedList");
+      setFormatState({
+        bold: Boolean(bold),
+        italic: Boolean(italic),
+        bullet: Boolean(bullet),
+      });
+    } catch {
+      // ignore unsupported command state queries
+    }
+  }, []);
 
   React.useEffect(() => {
     if (!ref.current) return;
     if (ref.current.innerHTML === value) return;
     ref.current.innerHTML = value || "";
   }, [value]);
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const handler = () => {
+      refreshFormatState();
+    };
+
+    document.addEventListener("selectionchange", handler);
+    return () => {
+      document.removeEventListener("selectionchange", handler);
+    };
+  }, [refreshFormatState]);
 
   const exec = (command: string, arg?: string) => {
     if (typeof document === "undefined") return;
@@ -43,6 +99,7 @@ export function RichTextArea({
     } else {
       document.execCommand(command, false);
     }
+    refreshFormatState();
     if (ref.current) {
       onChange(ref.current.innerHTML);
     }
@@ -51,6 +108,7 @@ export function RichTextArea({
   const handleInput = () => {
     if (!ref.current) return;
     onChange(ref.current.innerHTML);
+    refreshFormatState();
   };
 
   const minHeight = rows * 24;
@@ -74,7 +132,9 @@ export function RichTextArea({
             type="button"
             className={cn(
               BUTTON_BASE,
-              "border-slate-200 bg-white text-slate-600 hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
+              "border-slate-200 bg-white text-slate-600 hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]",
+              formatState.bold &&
+                "border-[#00674F] bg-[#00674F]/10 text-[#00674F]"
             )}
             onClick={() => exec("bold")}
           >
@@ -84,7 +144,9 @@ export function RichTextArea({
             type="button"
             className={cn(
               BUTTON_BASE,
-              "border-slate-200 bg-white text-slate-600 hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
+              "border-slate-200 bg-white text-slate-600 hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]",
+              formatState.italic &&
+                "border-[#00674F] bg-[#00674F]/10 text-[#00674F]"
             )}
             onClick={() => exec("italic")}
           >
@@ -94,7 +156,9 @@ export function RichTextArea({
             type="button"
             className={cn(
               BUTTON_BASE,
-              "border-slate-200 bg-white text-slate-600 hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
+              "border-slate-200 bg-white text-slate-600 hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]",
+              formatState.bullet &&
+                "border-[#00674F] bg-[#00674F]/10 text-[#00674F]"
             )}
             onClick={() => exec("insertUnorderedList")}
           >

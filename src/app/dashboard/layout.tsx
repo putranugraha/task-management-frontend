@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarProvider,
@@ -7,12 +9,28 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Menu } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { state } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!state.isInitialized) return;
+    if (state.token) return;
+
+    const nextPath =
+      typeof window !== "undefined" ? window.location.pathname : "/dashboard";
+    const search = new URLSearchParams();
+    search.set("next", nextPath);
+
+    router.replace(`/auth/login?${search.toString()}`);
+  }, [state.isInitialized, state.token, router]);
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex bg-background text-foreground">

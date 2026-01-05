@@ -6,6 +6,8 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { apiRequest } from "@/lib/api";
 import type { Task } from "@/types/task";
+import type { StatusHistory } from "@/types/status-history";
+import { listByTask as listStatusHistories } from "@/lib/api/status-histories";
 import { useTaskColumns, type TaskRow } from "./columns";
 import type { Column } from "../users/columns";
 import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
@@ -86,16 +88,22 @@ export default function TasksPage() {
         id: Number(t.id),
         title: t.title,
         project: t.project ? { id: Number(t.project.id), name: t.project.name } : null,
-        priority: t.priority ?? 'Medium',
-        status: t.status ?? 'To Do',
+        priority: t.priority ?? "Medium",
+        status: t.status ?? "To Do",
         start_planned: t.start_planned ?? null,
         end_planned: t.end_planned ?? null,
         percent_complete: Number(t.percent_complete ?? 0),
       }));
-      setRows(mapped);
+      const dedupedMap = new Map<number, TaskRow>();
+      for (const row of mapped) {
+        if (!Number.isFinite(row.id)) continue;
+        dedupedMap.set(row.id, row);
+      }
+      const deduped = Array.from(dedupedMap.values());
+      setRows(deduped);
       setPaginationMeta(meta);
       if (pageParam === 1) {
-        tasksCache = { rows: mapped, fetchedAt: Date.now() };
+        tasksCache = { rows: deduped, fetchedAt: Date.now() };
       }
     } catch (e: any) {
       const msg = e?.message ?? "Failed to load tasks";
@@ -172,25 +180,31 @@ export default function TasksPage() {
 
   // Detail modal state (consistent with Users)
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailData, setDetailData] = useState<
-    (TaskRow & {
-      description?: string | null;
-      created_at?: string | null;
-      updated_at?: string | null;
-      start_actual?: string | null;
-      end_actual?: string | null;
-      milestone?: { id: number; name: string } | null;
-      assignees?: { id: number; name: string }[];
-    }) | null
-  >(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState<string | null>(null);
+    const [detailData, setDetailData] = useState<
+      (TaskRow & {
+        description?: string | null;
+        created_at?: string | null;
+        updated_at?: string | null;
+        start_actual?: string | null;
+        end_actual?: string | null;
+        milestone?: { id: number; name: string } | null;
+        assignees?: { id: number; name: string }[];
+      }) | null
+    >(null);
+    const [statusHistories, setStatusHistories] = useState<StatusHistory[]>([]);
+    const [statusHistLoading, setStatusHistLoading] = useState(false);
+    const [statusHistError, setStatusHistError] = useState<string | null>(null);
 
-  const openDetail = async (row: TaskRow) => {
-    setDetailOpen(true);
-    setDetailLoading(true);
-    setDetailError(null);
-    try {
+    const openDetail = async (row: TaskRow) => {
+      setDetailOpen(true);
+      setDetailLoading(true);
+      setDetailError(null);
+      setStatusHistories([]);
+      setStatusHistError(null);
+      setStatusHistLoading(true);
+      try {
       // Try includes for richer payloads when backend supports it
       const baseUrl = `/api/tasks/${row.id}`;
       const endpoints = [
@@ -227,10 +241,10 @@ export default function TasksPage() {
         }
       }
 
-      setDetailData({
-        id: Number(payload.id),
-        title: payload.title,
-        project: payload.project ? { id: Number(payload.project.id), name: payload.project.name } : null,
+        setDetailData({
+          id: Number(payload.id),
+          title: payload.title,
+          project: payload.project ? { id: Number(payload.project.id), name: payload.project.name } : null,
         priority: payload.priority ?? 'Medium',
         status: payload.status ?? 'To Do',
         start_planned: payload.start_planned ?? null,
@@ -242,20 +256,34 @@ export default function TasksPage() {
         created_at: payload.created_at ?? null,
         updated_at: payload.updated_at ?? null,
         milestone: payload.milestone ? { id: Number(payload.milestone.id), name: payload.milestone.name } : null,
-        assignees,
-      });
-    } catch (e: any) {
-      const msg = e?.message ?? "Gagal memuat detail task";
-      setDetailError(msg);
-      showToast({
-        variant: "error",
-        title: "Gagal memuat detail task",
-        description: msg,
-      });
-    } finally {
-      setDetailLoading(false);
-    }
-  };
+          assignees,
+        });
+
+        try {
+          const histories = await listStatusHistories(row.id, { perPage: 10 });
+          setStatusHistories(histories);
+        } catch (e: any) {
+          const msg = e?.message ?? "Gagal memuat histori status";
+          setStatusHistError(msg);
+          showToast({
+            variant: "error",
+            title: "Gagal memuat histori status",
+            description: msg,
+          });
+        }
+      } catch (e: any) {
+        const msg = e?.message ?? "Gagal memuat detail task";
+        setDetailError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat detail task",
+          description: msg,
+        });
+      } finally {
+        setDetailLoading(false);
+        setStatusHistLoading(false);
+      }
+    };
 
   // Columns
   const columns = useTaskColumns(handleDelete, {
@@ -656,8 +684,66 @@ export default function TasksPage() {
                         <Row label="End Actual" value={detailData.end_actual ?? '-'} />
                         <Row label="Created At" value={detailData.created_at ?? '-'} />
                         <Row label="Updated At" value={detailData.updated_at ?? '-'} />
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-2 space-y-4">
                           <Row label="Description" value={detailData.description ?? '-'} />
+                          <div>
+                            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                              Status History
+                            </div>
+                            {statusHistLoading ? (
+                              <div className="space-y-2">
+                                {Array.from({ length: 3 }).map((_, idx) => (
+                                  <Skeleton key={idx} className="h-10 w-full rounded-lg" />
+                                ))}
+                              </div>
+                            ) : statusHistError ? (
+                              <div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-600">
+                                {statusHistError}
+                              </div>
+                            ) : statusHistories.length === 0 ? (
+                              <div className="text-xs text-neutral-400">
+                                Belum ada histori status untuk task ini.
+                              </div>
+                            ) : (
+                              <div className="space-y-2 max-h-56 overflow-y-auto rounded-xl border border-slate-100 bg-white px-3 py-2">
+                                {statusHistories.map((h) => {
+                                  const actor = h.changer?.name ?? "System";
+                                  const fromLabel = h.from_status ?? "Tidak diketahui";
+                                  const toLabel = h.to_status || "Tidak diketahui";
+                                  return (
+                                    <div
+                                      key={h.id}
+                                      className="flex items-start justify-between gap-2 text-xs text-slate-700"
+                                    >
+                                      <div className="space-y-0.5">
+                                        <div className="font-semibold">
+                                          {actor} mengubah status dari{" "}
+                                          <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold">
+                                            {fromLabel}
+                                          </span>
+                                          {" "}menjadi{" "}
+                                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                            {toLabel}
+                                          </span>
+                                        </div>
+                                        {h.note && (
+                                          <div className="text-[11px] text-slate-500">
+                                            Catatan: {h.note}
+                                          </div>
+                                        )}
+                                        <div className="text-[11px] text-slate-400">
+                                          Task ID: {h.task_id}
+                                        </div>
+                                      </div>
+                                      <div className="whitespace-nowrap text-[11px] text-slate-400">
+                                        {h.created_at ? new Date(h.created_at).toLocaleString() : ""}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : detailError ? (

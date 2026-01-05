@@ -13,6 +13,8 @@ import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
 import dynamic from "next/dynamic";
 import { totalByTask as totalHoursByTask } from "@/lib/api/time-entries";
+import { listByProject as listReportingPeriods } from "@/lib/api/reporting-periods";
+import { listByProject as listKpiSnapshots, getAverageCycleTimeByProject, generateForProject as generateKpiForProject } from "@/lib/api/kpi-snapshots";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -104,8 +106,25 @@ export default function ProjectDetailPage() {
   const [taskTotalHours, setTaskTotalHours] = useState<Record<number, number>>({});
   const [taskTotalHoursLoading, setTaskTotalHoursLoading] = useState<Record<number, boolean>>({});
   const [taskTotalHoursError, setTaskTotalHoursError] = useState<Record<number, string | null>>({});
+  // KPI reporting state
+  const [reportingPeriods, setReportingPeriods] = useState<any[]>([]);
+  const [reportingLoading, setReportingLoading] = useState(false);
+  const [reportingError, setReportingError] = useState<string | null>(null);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
+  const [kpiSnapshots, setKpiSnapshots] = useState<any[]>([]);
+  const [kpiLoading, setKpiLoading] = useState(false);
+  const [kpiError, setKpiError] = useState<string | null>(null);
+  const [avgCycleTime, setAvgCycleTime] = useState<number | null>(null);
+  const [generateDate, setGenerateDate] = useState<string>(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const [generateNote, setGenerateNote] = useState<string>("");
+  const [generateLoading, setGenerateLoading] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   // Local UI tab state
-  const [activeTab, setActiveTab] = useState<"overview" | "evm" | "milestones" | "baselines" | "tasks">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "evm" | "milestones" | "baselines" | "tasks" | "reporting">("overview");
   // Detail text modal for long fields like scope/objective
   const [detailModal, setDetailModal] = useState<{ label: string; text: string } | null>(null);
   // Current user id for time entries (from localStorage user object)
@@ -280,6 +299,83 @@ export default function ProjectDetailPage() {
       mounted = false;
     };
   }, [id, activeTab]);
+
+  // Fetch reporting periods lazily when reporting tab is opened
+  useEffect(() => {
+    let mounted = true;
+    async function run() {
+      if (!id) return;
+      if (activeTab !== "reporting") return;
+      setReportingLoading(true);
+      setReportingError(null);
+      try {
+        const list = await listReportingPeriods(id);
+        if (!mounted) return;
+        const arr = Array.isArray(list) ? list : [];
+        if (arr.length > 0) {
+          arr.sort((a: any, b: any) => {
+            const da = a.period_date ? Date.parse(a.period_date) : 0;
+            const db = b.period_date ? Date.parse(b.period_date) : 0;
+            return db - da;
+          });
+          setReportingPeriods(arr);
+          if (selectedPeriodId == null) {
+            setSelectedPeriodId(arr[0].id ?? null);
+          }
+        }
+      } catch (e: any) {
+        const msg = e?.message ?? "Gagal memuat reporting periods";
+        setReportingError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat reporting periods",
+          description: msg,
+        });
+      } finally {
+        setReportingLoading(false);
+      }
+    }
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [id, activeTab, selectedPeriodId, showToast]);
+
+  // Fetch KPI snapshots and average cycle time when reporting tab active
+  useEffect(() => {
+    let mounted = true;
+    async function run() {
+      if (!id) return;
+      if (activeTab !== "reporting") return;
+      setKpiLoading(true);
+      setKpiError(null);
+      try {
+        const [snapList, avg] = await Promise.all([
+          listKpiSnapshots(id, selectedPeriodId ?? undefined),
+          getAverageCycleTimeByProject(id),
+        ]);
+        if (!mounted) return;
+        setKpiSnapshots(Array.isArray(snapList) ? snapList : []);
+        setAvgCycleTime(typeof avg === "number" && Number.isFinite(avg) ? avg : null);
+      } catch (e: any) {
+        const msg = e?.message ?? "Gagal memuat KPI snapshots";
+        setKpiError(msg);
+        showToast({
+          variant: "error",
+          title: "Gagal memuat KPI snapshots",
+          description: msg,
+        });
+      } finally {
+        setKpiLoading(false);
+      }
+    }
+    if (activeTab === "reporting") {
+      run();
+    }
+    return () => {
+      mounted = false;
+    };
+  }, [id, activeTab, selectedPeriodId, showToast]);
 
   if (loading) {
     return (
@@ -529,6 +625,7 @@ export default function ProjectDetailPage() {
             {[
               { key: "overview", label: "Overview" },
               { key: "evm", label: "EVM" },
+              { key: "reporting", label: "Laporan KPI" },
               { key: "milestones", label: "Milestones" },
               { key: "baselines", label: "Baselines" },
               { key: "tasks", label: "Tasks" },
@@ -660,6 +757,227 @@ export default function ProjectDetailPage() {
       {activeTab === "evm" && data && (
         <DetailSectionCard className="w-full">
           <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
+        </DetailSectionCard>
+      )}
+
+      {activeTab === "reporting" && (
+        <DetailSectionCard className="w-full space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700">Laporan KPI Proyek</h3>
+              <p className="text-xs text-neutral-500">
+                Rekap snapshot KPI berdasarkan periode pelaporan untuk proyek ini.
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 space-y-3">
+            {!isMemberOnly && (
+              <form
+                className="flex flex-wrap items-center gap-3 text-xs"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!id) return;
+                  setGenerateLoading(true);
+                  setGenerateError(null);
+                  try {
+                    const snap = await generateKpiForProject(id, {
+                      period_date: generateDate,
+                      note: generateNote || undefined,
+                    });
+                    if (snap && typeof snap === "object") {
+                      const periodId =
+                        (snap as any).period_id ??
+                        (snap as any).reporting_period?.id ??
+                        null;
+                      const periodDate =
+                        (snap as any).reporting_period?.period_date ??
+                        generateDate;
+                      if (periodId != null) {
+                        const pid = Number(periodId);
+                        setSelectedPeriodId(pid);
+                        setReportingPeriods((prev) => {
+                          if (prev.some((p: any) => p.id === pid)) {
+                            return prev;
+                          }
+                          const next = [
+                            {
+                              id: pid,
+                              project_id: id,
+                              period_date: periodDate,
+                              note: generateNote || null,
+                              project: null,
+                              created_at: "",
+                              updated_at: "",
+                            },
+                            ...prev,
+                          ];
+                          return next;
+                        });
+                      }
+                    }
+                    showToast({
+                      variant: "success",
+                      title: "KPI snapshot berhasil dibuat",
+                      description: "Data KPI telah dihitung berdasarkan tugas pada proyek ini.",
+                    });
+                  } catch (e: any) {
+                    const msg =
+                      e?.response?.data?.message ??
+                      e?.message ??
+                      "Gagal menghasilkan KPI snapshot";
+                    setGenerateError(msg);
+                    showToast({
+                      variant: "error",
+                      title: "Gagal menghasilkan KPI snapshot",
+                      description: msg,
+                    });
+                  } finally {
+                    setGenerateLoading(false);
+                  }
+                }}
+              >
+                <label className="flex items-center gap-2">
+                  <span className="text-neutral-600">Tanggal periode:</span>
+                  <input
+                    type="date"
+                    className="rounded-md border border-slate-200 px-2 py-1"
+                    value={generateDate}
+                    onChange={(e) => setGenerateDate(e.target.value)}
+                    required
+                  />
+                </label>
+                <label className="flex min-w-[220px] flex-1 items-center gap-2">
+                  <span className="text-neutral-600">Catatan (opsional):</span>
+                  <input
+                    className="flex-1 min-w-0 rounded-md border border-slate-200 px-2 py-1"
+                    value={generateNote}
+                    onChange={(e) => setGenerateNote(e.target.value)}
+                    placeholder="Mis. Laporan akhir bulan"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={generateLoading}
+                  className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-neutral-50 disabled:opacity-60"
+                >
+                  {generateLoading ? "Menghitung..." : "Generate KPI dari tugas"}
+                </button>
+                {generateError && (
+                  <span className="w-full text-[11px] text-red-600">
+                    {generateError}
+                  </span>
+                )}
+              </form>
+            )}
+
+            {reportingLoading ? (
+              <div className="text-sm text-neutral-500">Loading reporting periods…</div>
+            ) : reportingError ? (
+              <div className="text-sm text-red-600">{reportingError}</div>
+            ) : reportingPeriods.length === 0 ? (
+              <div className="text-sm text-neutral-500">
+                Belum ada reporting period untuk proyek ini.
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="text-xs text-neutral-600">
+                  Periode pelaporan:
+                  <select
+                    className="ml-2 rounded-md border border-slate-200 px-2 py-1 text-xs"
+                    value={selectedPeriodId ?? ""}
+                    onChange={(e) =>
+                      setSelectedPeriodId(
+                        e.target.value ? Number(e.target.value) : null
+                      )
+                    }
+                  >
+                    {reportingPeriods.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.period_date ?? p.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {avgCycleTime != null && (
+                  <span className="text-xs text-neutral-600">
+                    Rata-rata cycle time proyek:{" "}
+                    <span className="font-semibold">
+                      {avgCycleTime.toFixed(2)} hari
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="px-4">
+            {kpiLoading ? (
+              <div className="text-sm text-neutral-500">Loading KPI snapshots…</div>
+            ) : kpiError ? (
+              <div className="text-sm text-red-600">{kpiError}</div>
+            ) : kpiSnapshots.length === 0 ? (
+              <div className="text-sm text-neutral-500">
+                Belum ada snapshot KPI untuk periode yang dipilih.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <table className="min-w-full text-sm table-fixed">
+                  <thead className="bg-neutral-50 text-neutral-700">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium border-b w-[25%]">
+                        Periode
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium border-b w-[15%]">
+                        Total Task
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium border-b w-[15%]">
+                        Selesai
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium border-b w-[15%]">
+                        Overdue
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium border-b w-[30%]">
+                        Avg Cycle Time (hari)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kpiSnapshots.map((s: any) => (
+                      <tr key={s.id} className="hover:bg-neutral-50">
+                        <td className="px-3 py-2 border-t align-top whitespace-nowrap">
+                          {s.reporting_period?.period_date ??
+                            reportingPeriods.find((p: any) => p.id === s.period_id)
+                              ?.period_date ??
+                            s.period_id}
+                        </td>
+                        <td className="px-3 py-2 border-t align-top">
+                          {s.tasks_total ?? "-"}
+                        </td>
+                        <td className="px-3 py-2 border-t align-top">
+                          {s.tasks_done ?? "-"}
+                        </td>
+                        <td className="px-3 py-2 border-t align-top">
+                          {s.overdue_count ?? "-"}
+                        </td>
+                        <td className="px-3 py-2 border-t align-top">
+                          {typeof s.avg_cycle_time_days === "number"
+                            ? s.avg_cycle_time_days.toFixed(2)
+                            : s.avg_cycle_time_days ?? "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <p className="px-4 pb-2 text-[11px] text-neutral-500">
+            Data pada tabel ini dapat digunakan sebagai dasar penyusunan laporan
+            periodik (misalnya laporan mingguan atau bulanan) terkait kinerja
+            penyelesaian tugas dalam proyek.
+          </p>
         </DetailSectionCard>
       )}
 

@@ -49,6 +49,13 @@ export default function CreateProjectMilestonePage() {
   const router = useRouter();
   const params = useParams();
   const projectId = params?.id as string;
+  const todayLocal = (() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  })();
 
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -56,6 +63,7 @@ export default function CreateProjectMilestonePage() {
     due_planned: "",
     due_actual: "",
   });
+  const milestoneDueMax = form.due_planned || undefined;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -197,6 +205,29 @@ export default function CreateProjectMilestonePage() {
             return;
           }
         }
+        // If milestone due_planned is set, task planned dates must not exceed it.
+        // Use lexicographical compare because inputs are YYYY-MM-DD.
+        if (form.due_planned) {
+          const due = form.due_planned;
+          if (t.start_planned && t.start_planned > due) {
+            showToast({
+              variant: "error",
+              title: "Tanggal task tidak valid",
+              description: `Task #${i + 1} memiliki Start Planned setelah Due Planned milestone (${due}).`,
+            });
+            setSubmitting(false);
+            return;
+          }
+          if (t.end_planned && t.end_planned > due) {
+            showToast({
+              variant: "error",
+              title: "Tanggal task tidak valid",
+              description: `Task #${i + 1} memiliki End Planned setelah Due Planned milestone (${due}).`,
+            });
+            setSubmitting(false);
+            return;
+          }
+        }
         const pct = Number(t.percent_complete ?? 0);
         if (!(pct >= 0 && pct <= 100)) {
           showToast({
@@ -272,18 +303,15 @@ export default function CreateProjectMilestonePage() {
         const failures: Array<{ title: string; error: unknown }> = [];
         for (const t of rows) {
           try {
-            const pctVal = Number.isFinite(t.percent_complete)
-              ? Number(t.percent_complete)
-              : Number(t.percent_complete || 0);
-            const effectiveStatus =
-              pctVal >= 100 ? "Done" : (t.status || "To Do");
+            const pctVal = 0;
+            const effectiveStatus = t.status || "To Do";
             const dto: any = {
               title: t.title,
               status: effectiveStatus,
               priority: t.priority || 'Medium',
               start_planned: t.start_planned || null,
               end_planned: t.end_planned || null,
-              percent_complete: Number.isFinite(pctVal) ? pctVal : 0,
+              percent_complete: pctVal,
               project_id: Number(projectId) || undefined,
               milestone_id: Number(milestoneId) || undefined,
             };
@@ -430,7 +458,7 @@ export default function CreateProjectMilestonePage() {
             {/* Status hidden: default "Planned" used server-side */}
             <div>
               <label className="block text-sm mb-1">Due Planned</label>
-              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={todayLocal} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
               {fieldErrors.due_planned && <p className="text-xs text-red-600 mt-1">{fieldErrors.due_planned}</p>}
             </div>
             <div>
@@ -463,7 +491,6 @@ export default function CreateProjectMilestonePage() {
                     (t.title || "").trim().length > 0 ||
                     (t.start_planned || "").trim().length > 0 ||
                     (t.end_planned || "").trim().length > 0 ||
-                    Number(t.percent_complete || 0) > 0 ||
                     (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) ||
                     (Array.isArray(t.dependsOnKeys) && t.dependsOnKeys.length > 0);
                   const collapsed = !!collapsedTaskKeys[t.tempKey];
@@ -503,9 +530,6 @@ export default function CreateProjectMilestonePage() {
                         <span className="font-semibold text-slate-900 truncate max-w-[220px]">{t.title}</span>
                         <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                           {(t.start_planned || 'Start ?')} — {(t.end_planned || 'End ?')}
-                        </span>
-                        <span className="inline-flex items-center rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                          {Number(t.percent_complete ?? 0)}%
                         </span>
                         {Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0 && (
                           <span className="text-[11px] text-slate-600">
@@ -548,41 +572,18 @@ export default function CreateProjectMilestonePage() {
                         <label className="block text-sm mb-1">Start Planned</label>
                         <input type="date" value={t.start_planned}
                           onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, start_planned: e.target.value } : x))}
+                          min={todayLocal}
+                          max={milestoneDueMax}
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>
                       <div>
                         <label className="block text-sm mb-1">End Planned</label>
                         <input type="date" value={t.end_planned}
                           onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, end_planned: e.target.value } : x))}
+                          min={todayLocal}
+                          max={milestoneDueMax}
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm mb-1">Percent Complete</label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={String(t.percent_complete ?? "")}
-                        onChange={(e) => {
-                          const digitsOnly = e.target.value.replace(/\D/g, "");
-                          let pct = digitsOnly === "" ? 0 : Number(digitsOnly);
-                          if (!Number.isFinite(pct)) pct = 0;
-                          if (pct < 0) pct = 0;
-                          if (pct > 100) pct = 100;
-                          setTaskForms((s) =>
-                            s.map((x, i) =>
-                              i === idx
-                                ? {
-                                    ...x,
-                                    percent_complete: pct,
-                                    status: pct >= 100 ? "Done" : x.status || "To Do",
-                                  }
-                                : x
-                            )
-                          );
-                        }}
-                        className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner"
-                      />
                     </div>
                     <div>
                       <label className="block text-sm mb-1">Assignments</label>

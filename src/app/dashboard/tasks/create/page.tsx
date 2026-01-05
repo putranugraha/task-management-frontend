@@ -42,6 +42,13 @@ function CreateTaskPageContent() {
   const router = useRouter();
   const search = useSearchParams();
   const initialProjectId = search?.get('project_id');
+  const todayLocal = (() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  })();
   const [form, setForm] = useState<FormState>({
     project_id: initialProjectId ? Number(initialProjectId) : "",
     title: "",
@@ -64,6 +71,12 @@ function CreateTaskPageContent() {
   const [depsLoading, setDepsLoading] = useState(false);
   const { showToast } = useToast();
 
+  const milestoneDueMax = useMemo(() => {
+    if (!milestoneId) return undefined;
+    const m = milestones.find((x) => Number(x.id) === Number(milestoneId));
+    return (m?.due_planned as any) || undefined;
+  }, [milestones, milestoneId]);
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as any;
     if (name === 'percent_complete') {
@@ -82,6 +95,49 @@ function CreateTaskPageContent() {
     setSubmitting(true);
     setError(null);
     try {
+      // Validate planned dates (consistent with project task create flow)
+      if (form.start_planned && form.end_planned) {
+        const startTs = Date.parse(form.start_planned);
+        const endTs = Date.parse(form.end_planned);
+        if (Number.isFinite(startTs) && Number.isFinite(endTs) && startTs > endTs) {
+          const msg = "Start Planned tidak boleh setelah End Planned";
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      if (milestoneDueMax) {
+        const due = String(milestoneDueMax);
+        if (form.start_planned && form.start_planned > due) {
+          const msg = `Start Planned tidak boleh setelah Due Planned milestone (${due}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSubmitting(false);
+          return;
+        }
+        if (form.end_planned && form.end_planned > due) {
+          const msg = `End Planned tidak boleh setelah Due Planned milestone (${due}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
         milestone_id: milestoneId || null,
@@ -101,11 +157,12 @@ function CreateTaskPageContent() {
         }));
       }
       if (typeof form.dependencies !== 'undefined') {
-        // Send dependencies if user interacted; allow empty array to clear
+        // Simplified rule (like project create flow): only "blocked by" relationships.
+        // Always send FS + lag 0 to avoid exposing advanced scheduling knobs in UI.
         payload.dependencies = (form.dependencies || []).map((d: any) => ({
           depends_on_task_id: Number(d.depends_on_task_id),
-          type: (d.type as any) || 'FS',
-          lag_days: Number(d.lag_days ?? 0) || 0,
+          type: 'FS',
+          lag_days: 0,
         }));
       }
       // Primary endpoint
@@ -448,11 +505,27 @@ function CreateTaskPageContent() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-500">Start Planned</label>
-                <input type="date" name="start_planned" value={form.start_planned} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+                <input
+                  type="date"
+                  name="start_planned"
+                  value={form.start_planned}
+                  onChange={onChange}
+                  min={todayLocal}
+                  max={milestoneDueMax}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-500">End Planned</label>
-                <input type="date" name="end_planned" value={form.end_planned} onChange={onChange} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+                <input
+                  type="date"
+                  name="end_planned"
+                  value={form.end_planned}
+                  onChange={onChange}
+                  min={todayLocal}
+                  max={milestoneDueMax}
+                  className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                />
               </div>
             </div>
           </div>
@@ -503,70 +576,47 @@ function CreateTaskPageContent() {
               ) : depOptions.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">No dependency candidates.</div>
               ) : (
-                <select
-                  multiple
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-inner min-h-[120px]"
-                  value={(form.dependencies?.map(d => d.depends_on_task_id) ?? []) as any}
-                  onChange={(e) => {
-                    const values = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
-                    const unique = Array.from(new Set(values));
-                    setForm((s) => {
-                      const prev = s.dependencies || [];
-                      const next = unique.map((id) => {
-                        const found = prev.find(d => d.depends_on_task_id === id);
-                        return found ? found : { depends_on_task_id: id, type: 'FS' as const, lag_days: 0 };
-                      });
-                      return { ...s, dependencies: next };
-                    });
-                  }}
-                >
-                  {depOptions.map((o) => (
-                    <option key={o.id} value={o.id}>{o.title}</option>
-                  ))}
-                </select>
-              )}
-              {Array.isArray(form.dependencies) && form.dependencies.length > 0 && (
-                <div className="mt-2 grid gap-2">
-                  {form.dependencies.map((d, idx) => {
-                    const title = depOptions.find(o => o.id === d.depends_on_task_id)?.title ?? `#${d.depends_on_task_id}`;
+                <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-inner max-h-52 overflow-auto text-sm">
+                  <p className="px-2 pb-2 text-xs text-slate-500">
+                    Pilih task yang harus selesai dulu sebelum task ini bisa dimulai.
+                  </p>
+                  {depOptions.map((o) => {
+                    const checked = (form.dependencies || []).some(
+                      (d) => Number(d.depends_on_task_id) === Number(o.id)
+                    );
                     return (
-                      <div key={`${d.depends_on_task_id}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="rounded bg-neutral-100 px-2 py-1">{title}</span>
-                        <select
-                          className="rounded border px-2 py-1"
-                          value={(d.type as any) || 'FS'}
+                      <label
+                        key={o.id}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50"
+                      >
+                        <span className="text-slate-700">{o.title}</span>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                          checked={checked}
                           onChange={(e) => {
-                            const val = e.target.value as 'FS'|'SS'|'FF'|'SF';
-                            setForm((s) => ({
-                              ...s,
-                              dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, type: val } : x)
-                            }));
-                          }}
-                        >
-                          <option value="FS">FS</option>
-                          <option value="SS">SS</option>
-                          <option value="FF">FF</option>
-                          <option value="SF">SF</option>
-                        </select>
-                        <div className="flex items-center gap-1">
-                          <label className="text-xs text-neutral-600">Lag</label>
-                          <input
-                            type="number"
-                            className="w-20 rounded border px-2 py-1"
-                            value={Number(d.lag_days ?? 0)}
-                            onChange={(e) => {
-                              const val = Number(e.target.value || 0);
-                              setForm((s) => ({
+                            setForm((s) => {
+                              const prev = s.dependencies || [];
+                              if (e.target.checked) {
+                                if (prev.some((d) => Number(d.depends_on_task_id) === Number(o.id))) {
+                                  return s;
+                                }
+                                return {
+                                  ...s,
+                                  dependencies: [
+                                    ...prev,
+                                    { depends_on_task_id: Number(o.id), type: "FS" as const, lag_days: 0 },
+                                  ],
+                                };
+                              }
+                              return {
                                 ...s,
-                                dependencies: (s.dependencies || []).map((x) => x.depends_on_task_id === d.depends_on_task_id ? { ...x, lag_days: val } : x)
-                              }));
-                            }}
-                          />
-                        </div>
-                        <button type="button" className="ml-auto rounded border px-2 py-1 hover:bg-neutral-50" onClick={() => {
-                          setForm((s) => ({ ...s, dependencies: (s.dependencies || []).filter((x) => x.depends_on_task_id !== d.depends_on_task_id) }));
-                        }}>Remove</button>
-                      </div>
+                                dependencies: prev.filter((d) => Number(d.depends_on_task_id) !== Number(o.id)),
+                              };
+                            });
+                          }}
+                        />
+                      </label>
                     );
                   })}
                 </div>

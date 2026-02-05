@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { sanitizeRichText } from "@/lib/sanitize";
 
 type Props = {
   id?: string;
@@ -72,8 +73,9 @@ export function RichTextArea({
 
   React.useEffect(() => {
     if (!ref.current) return;
-    if (ref.current.innerHTML === value) return;
-    ref.current.innerHTML = value || "";
+    const clean = sanitizeRichText(value || "");
+    if (ref.current.innerHTML === clean) return;
+    ref.current.innerHTML = clean;
   }, [value]);
 
   React.useEffect(() => {
@@ -186,7 +188,7 @@ export function RichTextArea({
           contentEditable
           className={cn(
             "w-full rounded-b-2xl bg-white px-4 py-2 text-sm font-medium text-slate-700 outline-none",
-            "prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5",
+            "prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:list-inside [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:list-inside [&_ol]:pl-5 [&_li]:list-item",
             className
           )}
           style={{ minHeight }}

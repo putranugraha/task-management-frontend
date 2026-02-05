@@ -32,7 +32,7 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     label: "Milestones",
     path: "/dashboard/milestones",
-    permissions: ["melihat project", "mengelola project"],
+    roles: ["Admin", "Manager", "Member"],
   },
   {
     label: "Divisions",

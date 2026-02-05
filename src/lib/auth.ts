@@ -3,6 +3,20 @@
 import { getApiBaseUrl, shouldProxyApiThroughNext, shouldUseSanctum } from './config';
 import { apiRequest } from './api';
 
+function getCookieAttrs() {
+  if (typeof window === 'undefined') return 'Max-Age=0; path=/';
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  return `Max-Age=2592000; path=/; SameSite=Lax${secure}`;
+}
+
+function setAuthCookies(token: string, tokenType: string) {
+  if (typeof document === 'undefined') return;
+  const attrs = getCookieAttrs();
+  document.cookie = `app_access_token=${encodeURIComponent(token)}; ${attrs}`;
+  document.cookie = `app_token_type=${encodeURIComponent(tokenType)}; ${attrs}`;
+  document.cookie = `app_has_token=1; ${attrs}`;
+}
+
 // Attempt auto-login if enabled by env/flags.
 // Return true if login succeeded and token is present; otherwise false.
 export async function autoLoginIfEnabled(): Promise<boolean> {
@@ -43,10 +57,7 @@ export async function autoLoginIfEnabled(): Promise<boolean> {
     if (token) {
       localStorage.setItem('access_token', token);
       localStorage.setItem('token_type', tokenType);
-      // Set presence cookie for middleware guard (client side only)
-      if (typeof document !== 'undefined') {
-        document.cookie = 'app_has_token=1; Max-Age=2592000; path=/';
-      }
+      setAuthCookies(token, tokenType);
       if (data?.user) {
         localStorage.setItem('user', JSON.stringify(data.user));
       }

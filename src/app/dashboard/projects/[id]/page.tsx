@@ -22,6 +22,7 @@ import { Plus, MoreHorizontal, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
 import { useAuth } from "@/contexts/auth-context";
+import { sanitizeRichText } from "@/lib/sanitize";
 
 const EvmWidget = dynamic(
   () => import("@/components/evm/EvmWidget"),
@@ -377,6 +378,29 @@ export default function ProjectDetailPage() {
     };
   }, [id, activeTab, selectedPeriodId, showToast]);
 
+  const refreshKpiData = async (projectId: number, periodId: number | null) => {
+    setKpiLoading(true);
+    setKpiError(null);
+    try {
+      const [snapList, avg] = await Promise.all([
+        listKpiSnapshots(projectId, periodId ?? undefined),
+        getAverageCycleTimeByProject(projectId),
+      ]);
+      setKpiSnapshots(Array.isArray(snapList) ? snapList : []);
+      setAvgCycleTime(typeof avg === "number" && Number.isFinite(avg) ? avg : null);
+    } catch (e: any) {
+      const msg = e?.message ?? "Gagal memuat KPI snapshots";
+      setKpiError(msg);
+      showToast({
+        variant: "error",
+        title: "Gagal memuat KPI snapshots",
+        description: msg,
+      });
+    } finally {
+      setKpiLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full space-y-6">
@@ -600,6 +624,7 @@ export default function ProjectDetailPage() {
           <Row
             label="Scope"
             value={<HtmlInlinePreview html={data?.scope} />}
+            multiline
             onShowMore={
               data?.scope
                 ? () => setDetailModal({ label: "Scope", text: data.scope ?? "-" })
@@ -610,6 +635,7 @@ export default function ProjectDetailPage() {
           <Row
             label="Objective"
             value={<HtmlInlinePreview html={data?.objective} />}
+            multiline
             onShowMore={
               data?.objective
                 ? () => setDetailModal({ label: "Objective", text: data.objective ?? "-" })
@@ -785,6 +811,7 @@ export default function ProjectDetailPage() {
                       period_date: generateDate,
                       note: generateNote || undefined,
                     });
+                    let nextPeriodId: number | null = selectedPeriodId ?? null;
                     if (snap && typeof snap === "object") {
                       const periodId =
                         (snap as any).period_id ??
@@ -795,6 +822,7 @@ export default function ProjectDetailPage() {
                         generateDate;
                       if (periodId != null) {
                         const pid = Number(periodId);
+                        nextPeriodId = pid;
                         setSelectedPeriodId(pid);
                         setReportingPeriods((prev) => {
                           if (prev.some((p: any) => p.id === pid)) {
@@ -816,6 +844,8 @@ export default function ProjectDetailPage() {
                         });
                       }
                     }
+                    // Auto-refresh: even when periodId doesn't change (same period), refresh list so table updates without manual reload.
+                    await refreshKpiData(id, nextPeriodId);
                     showToast({
                       variant: "success",
                       title: "KPI snapshot berhasil dibuat",
@@ -1636,14 +1666,21 @@ type RowProps = {
   value: ReactNode;
   onShowMore?: () => void;
   showMoreLabel?: string;
+  multiline?: boolean;
 };
 
-function Row({ label, value, onShowMore, showMoreLabel }: RowProps) {
+function Row({ label, value, onShowMore, showMoreLabel, multiline }: RowProps) {
+  const containerClass = multiline
+    ? "min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-inner"
+    : "min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center";
+  const valueClass = multiline
+    ? "text-left w-full break-words"
+    : "truncate text-left w-full";
   return (
     <div className="space-y-1">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</div>
-      <div className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-inner flex items-center">
-        <div className="truncate text-left w-full">{value}</div>
+      <div className={containerClass}>
+        <div className={valueClass}>{value}</div>
       </div>
       {onShowMore && (
         <button
@@ -1667,10 +1704,11 @@ type DetailTextModalProps = {
 
 function HtmlInlinePreview({ html }: { html: string | null | undefined }) {
   if (!html) return <span>-</span>;
+  const clean = sanitizeRichText(html);
   return (
     <div
-      className="prose prose-sm max-w-none text-slate-700"
-      dangerouslySetInnerHTML={{ __html: html }}
+      className="prose prose-sm max-w-none text-slate-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+      dangerouslySetInnerHTML={{ __html: clean }}
     />
   );
 }
@@ -1683,6 +1721,7 @@ function DetailTextModal({ open, label, text, onClose }: DetailTextModalProps) {
   }, []);
 
   if (!mounted || !open || typeof document === "undefined") return null;
+  const cleanText = sanitizeRichText(text);
 
   return createPortal(
     <div className="fixed inset-0 z-[1200] flex items-center justify-center px-4">
@@ -1712,8 +1751,8 @@ function DetailTextModal({ open, label, text, onClose }: DetailTextModalProps) {
         <div className="mt-4 max-h-[60vh] overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-sm leading-relaxed text-slate-700">
           {text ? (
             <div
-              className="prose prose-sm max-w-none text-slate-700"
-              dangerouslySetInnerHTML={{ __html: text }}
+              className="prose prose-sm max-w-none text-slate-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+              dangerouslySetInnerHTML={{ __html: cleanText }}
             />
           ) : (
             "-"

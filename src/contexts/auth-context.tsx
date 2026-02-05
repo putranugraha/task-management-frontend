@@ -31,6 +31,27 @@ type ProfileResponse = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function getCookieAttrs() {
+  if (typeof window === "undefined") return "Max-Age=0; path=/";
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  return `Max-Age=2592000; path=/; SameSite=Lax${secure}`;
+}
+
+function setAuthCookies(token: string, tokenType: string) {
+  if (typeof document === "undefined") return;
+  const attrs = getCookieAttrs();
+  document.cookie = `app_access_token=${encodeURIComponent(token)}; ${attrs}`;
+  document.cookie = `app_token_type=${encodeURIComponent(tokenType)}; ${attrs}`;
+  document.cookie = `app_has_token=1; ${attrs}`;
+}
+
+function clearAuthCookies() {
+  if (typeof document === "undefined") return;
+  document.cookie = "app_has_token=; Max-Age=0; path=/";
+  document.cookie = "app_access_token=; Max-Age=0; path=/";
+  document.cookie = "app_token_type=; Max-Age=0; path=/";
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>(initialAuthState);
 
@@ -222,8 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (token) {
           window.localStorage.setItem("access_token", token);
           window.localStorage.setItem("token_type", tokenType);
-          window.document.cookie =
-            "app_has_token=1; Max-Age=2592000; path=/"; // 30 days
+          setAuthCookies(token, tokenType);
         }
 
         if (res.user) {
@@ -294,8 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.localStorage.removeItem("access_token");
         window.localStorage.removeItem("token_type");
         window.localStorage.removeItem("user");
-        window.document.cookie =
-          "app_has_token=; Max-Age=0; path=/"; // clear presence cookie
+        clearAuthCookies();
       }
 
       setState((prev) => ({

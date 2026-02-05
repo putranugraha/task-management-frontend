@@ -327,6 +327,8 @@ api.interceptors.response.use(
       if (typeof document !== 'undefined') {
         // Hapus flag presence token supaya middleware FE tidak lagi mengira masih login
         document.cookie = 'app_has_token=; Max-Age=0; path=/';
+        document.cookie = 'app_access_token=; Max-Age=0; path=/';
+        document.cookie = 'app_token_type=; Max-Age=0; path=/';
       }
       window.location.href = '/auth/login';
     }

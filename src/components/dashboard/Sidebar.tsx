@@ -229,6 +229,8 @@ function UserProfileCard({ collapsed }: { collapsed?: boolean }) {
         localStorage.removeItem("user");
         // Clear presence cookie used by middleware guard
         document.cookie = "app_has_token=; Max-Age=0; path=/";
+        document.cookie = "app_access_token=; Max-Age=0; path=/";
+        document.cookie = "app_token_type=; Max-Age=0; path=/";
         window.location.href = "/auth/login";
       }
     }

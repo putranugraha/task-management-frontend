@@ -71,5 +71,9 @@ export async function generateForProject(
   payload: GenerateKpiPayload
 ): Promise<KpiSnapshot> {
   const ep = `/api/projects/${encodeURIComponent(String(projectId))}/kpi-snapshots/generate`;
-  return await apiRequest<KpiSnapshot>("POST", ep, payload as any);
+  const res = await apiRequest<any>("POST", ep, payload as any);
+  if (res && typeof res === "object" && "data" in res) {
+    return (res as any).data as KpiSnapshot;
+  }
+  return res as KpiSnapshot;
 }

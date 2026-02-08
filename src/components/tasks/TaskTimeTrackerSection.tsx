@@ -30,6 +30,11 @@ type TimeEntry = {
   user_id?: number;
 };
 
+function toLocalISODate(d: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function formatHoursToHM(hours: number | string | null | undefined): string {
   if (hours == null) return "0 menit";
   const hNum =
@@ -338,15 +343,38 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
     setSavingTimer(true);
     const now = Date.now();
     const diffMs = now - timerStart;
-    const hours = Math.max(0, parseFloat((diffMs / 3_600_000).toFixed(2)));
-    const date = new Date().toISOString().slice(0, 10);
+    const timerHours = Math.max(0, parseFloat((diffMs / 3_600_000).toFixed(2)));
+    const date = toLocalISODate();
+
+    const findUserId = (e: TimeEntry): number => {
+      const uid = Number(e.user_id ?? e.user?.id ?? 0);
+      return Number.isFinite(uid) ? uid : 0;
+    };
+    const parseHours = (h: number | string | null | undefined): number => {
+      if (h == null) return 0;
+      const n = typeof h === "string" ? parseFloat(h) : Number(h);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    // Additive upsert: if an entry already exists for this (task, user, date),
+    // accumulate hours instead of overwriting (DB unique index enforces one row/day).
+    const existing = entries.find(
+      (e) =>
+        String(e?.date || "").slice(0, 10) === date &&
+        findUserId(e) === currentUserId
+    );
+    const totalHours = parseHours(existing?.hours) + timerHours;
+    const nextNote =
+      typeof existing?.note === "string" && existing.note.trim()
+        ? existing.note.trim()
+        : "Timer dari UI";
 
       const payload: TimeEntryPayload = {
         task_id: Number(taskId),
         user_id: currentUserId,
         date,
-        hours,
-        note: "Timer dari UI",
+        hours: totalHours,
+        note: nextNote,
       };
 
     try {

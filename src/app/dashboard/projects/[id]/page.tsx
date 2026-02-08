@@ -650,7 +650,7 @@ export default function ProjectDetailPage() {
           <div className="inline-flex rounded-xl border bg-white p-1 text-sm shadow-sm">
             {[
               { key: "overview", label: "Overview" },
-              { key: "evm", label: "EVM" },
+              { key: "evm", label: "Schedule Performance (Baseline)" },
               { key: "reporting", label: "Laporan KPI" },
               { key: "milestones", label: "Milestones" },
               { key: "baselines", label: "Baselines" },

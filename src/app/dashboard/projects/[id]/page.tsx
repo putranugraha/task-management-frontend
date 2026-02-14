@@ -36,6 +36,18 @@ const EvmWidget = dynamic(
   }
 );
 
+const EvmCostWidget = dynamic(
+  () => import("@/components/evm/EvmCostWidget"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full py-10 text-center text-sm text-slate-500">
+        Loading EVM costâ€¦
+      </div>
+    ),
+  }
+);
+
 const TaskProgressEditor = dynamic(
   () => import("@/components/tasks/TaskProgressEditor"),
   {
@@ -125,7 +137,9 @@ export default function ProjectDetailPage() {
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   // Local UI tab state
-  const [activeTab, setActiveTab] = useState<"overview" | "evm" | "milestones" | "baselines" | "tasks" | "reporting">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "evm" | "evm_cost" | "milestones" | "baselines" | "tasks" | "reporting"
+  >("overview");
   // Detail text modal for long fields like scope/objective
   const [detailModal, setDetailModal] = useState<{ label: string; text: string } | null>(null);
   // Current user id for time entries (from localStorage user object)
@@ -651,6 +665,7 @@ export default function ProjectDetailPage() {
             {[
               { key: "overview", label: "Overview" },
               { key: "evm", label: "Schedule Performance (Baseline)" },
+              { key: "evm_cost", label: "EVM (Cost-Based / IDR)" },
               { key: "reporting", label: "Laporan KPI" },
               { key: "milestones", label: "Milestones" },
               { key: "baselines", label: "Baselines" },
@@ -783,6 +798,12 @@ export default function ProjectDetailPage() {
       {activeTab === "evm" && data && (
         <DetailSectionCard className="w-full">
           <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
+        </DetailSectionCard>
+      )}
+
+      {activeTab === "evm_cost" && data && (
+        <DetailSectionCard className="w-full">
+          <EvmCostWidget projectId={data.id} reloadKey={evmReloadKey} />
         </DetailSectionCard>
       )}
 

@@ -46,6 +46,19 @@ const TaskTimeTrackerSection = dynamic(
   }
 );
 
+const TaskCostEntriesSection = dynamic(
+  () => import("@/components/tasks/TaskCostEntriesSection"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-44 rounded" />
+        <Skeleton className="h-10 w-full rounded-xl bg-neutral-200/60" />
+      </div>
+    ),
+  }
+);
+
 type Assignment = {
   user?: {
     id: number;
@@ -795,6 +808,10 @@ export default function TaskDetailPage() {
               />
             </DetailSectionCard>
           </DetailTwoColumnGrid>
+
+          <DetailSectionCard className="order-5">
+            <TaskCostEntriesSection taskId={id} />
+          </DetailSectionCard>
         </div>
       )}
     </div>

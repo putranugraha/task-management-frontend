@@ -23,6 +23,7 @@ export interface Task {
   end_actual: string | null; // YYYY-MM-DD
   duration_actual: number | null;
   percent_complete: number; // 0-100
+  budget_cost?: number | string | null; // IDR budget per task (for cost-based EVM)
   project?: { id: number; name: string } | null;
   milestone?: { id: number; name: string } | null;
   dependencies?: TaskDependencyLink[];

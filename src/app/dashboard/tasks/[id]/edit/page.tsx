@@ -23,6 +23,7 @@ type TaskDetail = {
   start_planned: string | null;
   end_planned: string | null;
   percent_complete: number;
+  budget_cost?: number | string | null;
   assignments?: { user_id: number; role_on_task: string | null }[];
   dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
@@ -96,6 +97,7 @@ export default function EditTaskPage() {
             start_planned: t.start_planned ?? "",
             end_planned: t.end_planned ?? "",
             percent_complete: Number(t.percent_complete ?? 0),
+            budget_cost: (t.budget_cost ?? "") as any,
             assignments: currentAssignments.length ? currentAssignments : undefined,
             dependencies: deps,
           });
@@ -329,6 +331,7 @@ export default function EditTaskPage() {
         start_planned: form.start_planned || null,
         end_planned: form.end_planned || null,
         percent_complete: Number(form.percent_complete ?? 0),
+        budget_cost: form.budget_cost === "" ? 0 : Number(form.budget_cost ?? 0),
       };
       if (form.assignments && form.assignments.length > 0) {
         // Backend requires non-null role_on_task; default to 'Member' if null/empty
@@ -671,6 +674,24 @@ export default function EditTaskPage() {
               }}
               className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
             />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-500">
+              Budget Cost (IDR)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              name="budget_cost"
+              value={String(form.budget_cost ?? "")}
+              onChange={onChange}
+              className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+              placeholder="0"
+            />
+            <div className="text-[11px] text-neutral-500">
+              Dipakai untuk PV/EV pada EVM cost-based (IDR).
+            </div>
           </div>
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-semibold text-slate-500">Description</label>

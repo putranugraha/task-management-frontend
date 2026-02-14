@@ -12,6 +12,7 @@ export type CreateTaskDto = {
   end_planned?: string | null;   // YYYY-MM-DD
   percent_complete?: number;     // 0-100
   project_id?: number;           // some backends require project_id even in nested route
+  budget_cost?: number | string | null; // IDR
 };
 
 export type UpdateTaskDto = Partial<CreateTaskDto>;

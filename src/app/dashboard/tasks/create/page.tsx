@@ -23,6 +23,7 @@ type FormState = {
   start_planned: string;
   end_planned: string;
   percent_complete: number;
+  budget_cost: string;
   assignments?: { user_id: number; role_on_task: string | null }[];
   dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
@@ -58,6 +59,7 @@ function CreateTaskPageContent() {
     start_planned: "",
     end_planned: "",
     percent_complete: 0,
+    budget_cost: "",
   });
   const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -81,6 +83,8 @@ function CreateTaskPageContent() {
     const { name, value, type } = e.target as any;
     if (name === 'percent_complete') {
       setForm((s) => ({ ...s, percent_complete: Number(value) }));
+    } else if (name === 'budget_cost') {
+      setForm((s) => ({ ...s, budget_cost: value }));
     } else if (name === 'project_id') {
       const val = value ? Number(value) : "";
       setForm((s) => ({ ...s, project_id: val }));
@@ -148,6 +152,7 @@ function CreateTaskPageContent() {
         start_planned: form.start_planned || null,
         end_planned: form.end_planned || null,
         percent_complete: Number(form.percent_complete ?? 0),
+        budget_cost: form.budget_cost === "" ? 0 : Number(form.budget_cost ?? 0),
       };
       if (form.assignments && form.assignments.length > 0) {
         // Backend requires non-null role_on_task; default to 'Member' if null/empty
@@ -487,6 +492,24 @@ function CreateTaskPageContent() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">
+                Budget Cost (IDR)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                name="budget_cost"
+                value={form.budget_cost}
+                onChange={onChange}
+                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                placeholder="0"
+              />
+              <div className="text-[11px] text-neutral-500">
+                Dipakai untuk PV/EV pada EVM cost-based (IDR).
+              </div>
             </div>
             {/* Status hidden on create; default "To Do" from form state is sent in payload */}
             {false && (

@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { useToast } from "@/components/ui/toast";
+import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
 
 const TASK_STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"] as const;
 const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
@@ -79,6 +80,7 @@ export default function CreateProjectMilestonePage() {
     priority: string;
     start_planned: string;
     end_planned: string;
+    budget_cost: string;
     percent_complete: number;
     dependsOnKeys?: number[];
     assigneeIds?: number[];
@@ -93,6 +95,7 @@ export default function CreateProjectMilestonePage() {
     priority: "Medium",
     start_planned: "",
     end_planned: "",
+    budget_cost: "",
     percent_complete: 0,
     dependsOnKeys: [],
     assigneeIds: [],
@@ -315,6 +318,13 @@ export default function CreateProjectMilestonePage() {
               project_id: Number(projectId) || undefined,
               milestone_id: Number(milestoneId) || undefined,
             };
+            const costStr = (t.budget_cost || '').trim();
+            if (costStr !== '') {
+              const costNum = Number(costStr);
+              if (Number.isFinite(costNum) && costNum >= 0) {
+                dto.budget_cost = costNum;
+              }
+            }
             if (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) {
               dto.assignments = t.assigneeIds.map((id) => ({ user_id: id, role_on_task: 'Member' }));
             }
@@ -491,6 +501,7 @@ export default function CreateProjectMilestonePage() {
                     (t.title || "").trim().length > 0 ||
                     (t.start_planned || "").trim().length > 0 ||
                     (t.end_planned || "").trim().length > 0 ||
+                    (t.budget_cost || "").trim().length > 0 ||
                     (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) ||
                     (Array.isArray(t.dependsOnKeys) && t.dependsOnKeys.length > 0);
                   const collapsed = !!collapsedTaskKeys[t.tempKey];
@@ -584,6 +595,23 @@ export default function CreateProjectMilestonePage() {
                           max={milestoneDueMax}
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>
+                    </div>
+                    <div>
+                      <IdrCurrencyInput
+                        id={`task_${t.tempKey}_budget_cost`}
+                        label="Budget Cost (IDR) (optional)"
+                        raw={t.budget_cost}
+                        onRawChange={(raw) =>
+                          setTaskForms((s) =>
+                            s.map((x, i) =>
+                              i === idx ? { ...x, budget_cost: raw } : x
+                            )
+                          )
+                        }
+                        placeholder="0"
+                        hint="Opsional. Isi jika task ini punya budget biaya untuk perhitungan EVM (Cost-Based / IDR)."
+                        inputClassName="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner"
+                      />
                     </div>
                     <div>
                       <label className="block text-sm mb-1">Assignments</label>

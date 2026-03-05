@@ -16,6 +16,13 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function getAuthHeaderFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  const token = window.localStorage.getItem('access_token');
+  if (!token) return null;
+  return `Bearer ${token}`;
+}
+
 // 1. Buat Axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -165,6 +172,9 @@ export async function apiRequest<T>(
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
+            ...(getAuthHeaderFromStorage()
+              ? { Authorization: getAuthHeaderFromStorage() as string }
+              : {}),
           },
           credentials: USE_SANCTUM ? 'include' : 'same-origin',
           body: data ? JSON.stringify(data) : undefined,
@@ -200,6 +210,17 @@ export async function apiRequest<T>(
           xhr.setRequestHeader('Accept', 'application/json');
           xhr.setRequestHeader('Content-Type', 'application/json');
           xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+          const auth = getAuthHeaderFromStorage();
+          if (auth) {
+            xhr.setRequestHeader('Authorization', auth);
+          }
+          if (USE_SANCTUM) {
+            const xsrf = getCookie('XSRF-TOKEN');
+            if (xsrf) {
+              xhr.setRequestHeader('X-XSRF-TOKEN', xsrf);
+            }
+          }
           
           xhr.withCredentials = USE_SANCTUM;
           xhr.timeout = 30000;
@@ -250,6 +271,17 @@ export async function apiRequest<T>(
         xhr.setRequestHeader('Accept', 'application/json');
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        const auth = getAuthHeaderFromStorage();
+        if (auth) {
+          xhr.setRequestHeader('Authorization', auth);
+        }
+        if (USE_SANCTUM) {
+          const xsrf = getCookie('XSRF-TOKEN');
+          if (xsrf) {
+            xhr.setRequestHeader('X-XSRF-TOKEN', xsrf);
+          }
+        }
         
         xhr.withCredentials = USE_SANCTUM;
         xhr.timeout = 30000;

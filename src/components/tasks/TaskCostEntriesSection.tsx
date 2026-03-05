@@ -11,6 +11,7 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
 
 type Props = {
   taskId: number;
@@ -47,6 +48,13 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
   const [category, setCategory] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [saving, setSaving] = useState(false);
+
+  const shiftYmd = (ymd: string, days: number): string => {
+    const base = ymd ? new Date(`${ymd}T00:00:00`) : new Date();
+    if (!Number.isFinite(base.getTime())) return toLocalISODate();
+    base.setDate(base.getDate() + days);
+    return toLocalISODate(base);
+  };
 
   const [deleteTarget, setDeleteTarget] = useState<TaskCostEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -252,20 +260,40 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
                 onChange={(e) => setIncurredOn(e.target.value)}
                 required
               />
+              <div className="mt-1 flex items-center gap-1">
+                <button
+                  type="button"
+                  className="h-7 px-2 rounded-md border text-[11px] hover:bg-neutral-50"
+                  onClick={() => setIncurredOn(toLocalISODate())}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className="h-7 px-2 rounded-md border text-[11px] hover:bg-neutral-50"
+                  onClick={() => setIncurredOn((d) => shiftYmd(d, 1))}
+                >
+                  +1d
+                </button>
+                <button
+                  type="button"
+                  className="h-7 px-2 rounded-md border text-[11px] hover:bg-neutral-50"
+                  onClick={() => setIncurredOn((d) => shiftYmd(d, 7))}
+                >
+                  +7d
+                </button>
+              </div>
             </div>
             <div>
-              <label className="block text-xs text-neutral-600 mb-1">
-                Amount (IDR)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+              <IdrCurrencyInput
+                id={`task_${taskId}_cost_amount`}
+                label="Amount (IDR)"
+                raw={amount}
+                onRawChange={setAmount}
                 required
+                placeholder="0"
+                labelClassName="block text-xs text-neutral-600 mb-1"
+                inputClassName="w-full border rounded-md px-3 py-2 text-sm"
               />
             </div>
             <div>

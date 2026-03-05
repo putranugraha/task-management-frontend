@@ -8,6 +8,10 @@ import type { KpiSnapshot } from "@/types/kpi-snapshot";
 import type { ReportingPeriod } from "@/types/reporting-period";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import {
+  groupKeyForPeriodDate,
+  type PeriodGranularity,
+} from "@/lib/reporting/as-of-periods";
 
 type TaskStats = {
   total: number;
@@ -32,6 +36,15 @@ const EvmWidget = dynamic(
     ),
   }
 );
+
+const EvmCostWidget = dynamic(() => import("@/components/evm/EvmCostWidget"), {
+  ssr: false,
+  loading: () => (
+    <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
+      Memuat ringkasan EVM (IDR)…
+    </div>
+  ),
+});
 
 type ProjectSummary = {
   id: number;
@@ -86,6 +99,8 @@ export default function ReportsPage() {
   const [kpiLoading, setKpiLoading] = useState(false);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [avgCycleTime, setAvgCycleTime] = useState<number | null>(null);
+  const [kpiGranularity, setKpiGranularity] =
+    useState<PeriodGranularity>("daily");
 
   // Load projects for dropdown
   useEffect(() => {
@@ -317,10 +332,61 @@ export default function ReportsPage() {
       ? projects.find((p) => p.id === selectedProjectId) ?? null
       : null;
 
+  const displayKpiSnapshots = useMemo(() => {
+    if (!kpiSnapshots.length) return [];
+    if (kpiGranularity === "daily") return kpiSnapshots;
+
+    const periodIdToDate = new Map<number, string>();
+    for (const p of reportingPeriods) {
+      if (Number.isFinite(p.id) && p.period_date) {
+        periodIdToDate.set(Number(p.id), String(p.period_date).trim());
+      }
+    }
+
+    type Row = KpiSnapshotWithPeriod & { __date: string; __group: string };
+    const rows: Row[] = [];
+    for (const s of kpiSnapshots) {
+      const fromRel = String(s.reporting_period?.period_date ?? "").trim();
+      const fromMap = periodIdToDate.get(Number(s.period_id ?? 0)) || "";
+      const date = fromRel || fromMap;
+      if (!date) continue;
+      const group = groupKeyForPeriodDate(date, kpiGranularity);
+      rows.push({ ...s, __date: date, __group: group });
+    }
+
+    const best = new Map<string, Row>();
+    for (const r of rows) {
+      const prev = best.get(r.__group);
+      if (!prev) {
+        best.set(r.__group, r);
+        continue;
+      }
+      if (r.__date > prev.__date) best.set(r.__group, r);
+      else if (
+        r.__date === prev.__date &&
+        Number(r.id ?? 0) > Number(prev.id ?? 0)
+      ) {
+        best.set(r.__group, r);
+      }
+    }
+
+    const reps: Row[] = Array.from(best.values());
+    // keep ascending sort so "latest" is last (same as previous behavior)
+    reps.sort((a, b) => a.__date.localeCompare(b.__date));
+
+    return reps.map((r) => {
+      const { __date, __group, ...rest } = r;
+      return {
+        ...(rest as KpiSnapshotWithPeriod),
+        period_label: `${__group} (as of ${__date})`,
+      };
+    });
+  }, [kpiSnapshots, reportingPeriods, kpiGranularity]);
+
   const latestKpi = useMemo(() => {
-    if (!kpiSnapshots.length) return null;
-    return kpiSnapshots[kpiSnapshots.length - 1];
-  }, [kpiSnapshots]);
+    if (!displayKpiSnapshots.length) return null;
+    return displayKpiSnapshots[displayKpiSnapshots.length - 1];
+  }, [displayKpiSnapshots]);
 
   const handlePrint = () => {
     if (typeof window === "undefined") return;
@@ -332,7 +398,7 @@ export default function ReportsPage() {
   };
 
   const handleExportKpiCsv = () => {
-    if (!kpiSnapshots.length || !selectedProject) return;
+    if (!displayKpiSnapshots.length || !selectedProject) return;
     const headers = [
       "Project ID",
       "Project Name",
@@ -342,7 +408,7 @@ export default function ReportsPage() {
       "Overdue Count",
       "Avg Cycle Time (days)",
     ];
-    const rows = kpiSnapshots.map((s) => [
+    const rows = displayKpiSnapshots.map((s) => [
       String(selectedProject.id),
       selectedProject.name,
       s.period_label,
@@ -376,7 +442,7 @@ export default function ReportsPage() {
     const a = document.createElement("a");
     a.href = url;
     const safeName = selectedProject.name.replace(/[^a-z0-9_-]+/gi, "_");
-    a.download = `kpi_report_${safeName || selectedProject.id}.csv`;
+    a.download = `kpi_${kpiGranularity}_report_${safeName || selectedProject.id}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -588,6 +654,28 @@ export default function ReportsPage() {
           )}
         </div>
 
+        {selectedProject && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <span className="font-semibold">Tampilan:</span>
+            <select
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              value={kpiGranularity}
+              onChange={(e) =>
+                setKpiGranularity(e.target.value as PeriodGranularity)
+              }
+            >
+              <option value="daily">Harian (Daily)</option>
+              <option value="weekly">Mingguan (Weekly)</option>
+              <option value="monthly">Bulanan (Monthly)</option>
+            </select>
+            {kpiGranularity !== "daily" && (
+              <span className="text-[11px] text-slate-500">
+                Menampilkan snapshot terakhir per periode (as-of).
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mt-4">
           {kpiLoading ? (
             <div className="space-y-3">
@@ -600,7 +688,7 @@ export default function ReportsPage() {
             <div className="text-sm text-slate-400">
               Pilih project terlebih dahulu untuk melihat KPI snapshot.
             </div>
-          ) : !kpiSnapshots.length ? (
+          ) : !displayKpiSnapshots.length ? (
             <div className="text-sm text-slate-400">
               Belum ada snapshot KPI untuk project ini.
             </div>
@@ -659,7 +747,7 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {kpiSnapshots.map((s) => (
+                    {displayKpiSnapshots.map((s) => (
                       <tr
                         key={`${s.id}-${s.period_id}`}
                         className="rounded-xl border border-slate-100 bg-white align-middle shadow-sm"
@@ -695,8 +783,7 @@ export default function ReportsPage() {
           <div>
             <h2 className="text-sm font-semibold text-slate-800">EVM</h2>
             <p className="text-xs text-slate-500">
-              Earned Value Management untuk memantau kinerja biaya dan jadwal
-              project.
+              Menampilkan 2 mode: schedule performance (effort-based) dan cost-based (IDR).
             </p>
           </div>
           {selectedProject && (
@@ -714,7 +801,10 @@ export default function ReportsPage() {
               Pilih project untuk melihat ringkasan EVM.
             </div>
           ) : (
-            <EvmWidget projectId={selectedProject.id} />
+            <div className="space-y-6">
+              <EvmWidget projectId={selectedProject.id} />
+              <EvmCostWidget projectId={selectedProject.id} />
+            </div>
           )}
         </div>
       </div>
@@ -753,4 +843,3 @@ function SummaryStatCard({
     </div>
   );
 }
-

@@ -710,6 +710,7 @@ export default function TasksPage() {
                                   const actor = h.changer?.name ?? "System";
                                   const fromLabel = h.from_status ?? "Tidak diketahui";
                                   const toLabel = h.to_status || "Tidak diketahui";
+                                  const isStatusChange = h.from_status !== h.to_status;
                                   return (
                                     <div
                                       key={h.id}
@@ -717,14 +718,25 @@ export default function TasksPage() {
                                     >
                                       <div className="space-y-0.5">
                                         <div className="font-semibold">
-                                          {actor} mengubah status dari{" "}
-                                          <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold">
-                                            {fromLabel}
-                                          </span>
-                                          {" "}menjadi{" "}
-                                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                            {toLabel}
-                                          </span>
+                                          {isStatusChange ? (
+                                            <>
+                                              {actor} mengubah status dari{" "}
+                                              <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold">
+                                                {fromLabel}
+                                              </span>
+                                              {" "}menjadi{" "}
+                                              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                                {toLabel}
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              {actor} memperbarui detail task{" "}
+                                              <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-semibold">
+                                                Status: {toLabel}
+                                              </span>
+                                            </>
+                                          )}
                                         </div>
                                         {h.note && (
                                           <div className="text-[11px] text-slate-500">
@@ -736,7 +748,7 @@ export default function TasksPage() {
                                         </div>
                                       </div>
                                       <div className="whitespace-nowrap text-[11px] text-slate-400">
-                                        {h.created_at ? new Date(h.created_at).toLocaleString() : ""}
+                                        {h.created_at ? new Date(h.created_at).toLocaleString("id-ID") : ""}
                                       </div>
                                     </div>
                                   );

@@ -40,8 +40,22 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const accessToken = req.cookies.get("app_access_token")?.value || "";
-  const tokenType = req.cookies.get("app_token_type")?.value || "Bearer";
+  const rawAccessToken = req.cookies.get("app_access_token")?.value || "";
+  const rawTokenType = req.cookies.get("app_token_type")?.value || "Bearer";
+  const accessToken = (() => {
+    try {
+      return decodeURIComponent(rawAccessToken);
+    } catch {
+      return rawAccessToken;
+    }
+  })();
+  const tokenType = (() => {
+    try {
+      return decodeURIComponent(rawTokenType);
+    } catch {
+      return rawTokenType;
+    }
+  })();
   const hasSanctum = Boolean(
     req.cookies.get("XSRF-TOKEN")?.value ||
     req.cookies.get("laravel_session")?.value

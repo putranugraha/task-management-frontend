@@ -10,13 +10,13 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { RichTextArea } from "@/components/ui/RichTextArea";
+import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
 
 type SimpleUser = { id: number; name: string };
 
 type FormState = {
   name: string;
   client_name: string;
-  value_amount: string; // keep as string input, convert on submit
   scope: string;
   objective: string;
   division_owner_id: number | "";
@@ -41,7 +41,6 @@ export default function CreateProjectPage() {
   const [form, setForm] = useState<FormState>({
     name: "",
     client_name: "",
-    value_amount: "",
     scope: "",
     objective: "",
     division_owner_id: "",
@@ -59,43 +58,6 @@ export default function CreateProjectPage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    // Khusus untuk value_amount, format sebagai Rupiah saat user mengetik
-    if (name === "value_amount") {
-      const inputEvent = e.nativeEvent as InputEvent;
-      let raw = valueAmountRaw;
-
-      if (inputEvent?.inputType === "insertText" && /\d/.test(inputEvent.data ?? "")) {
-        // Tambah digit di belakang (5 -> 50 -> 500)
-        raw = raw + (inputEvent.data ?? "");
-      } else if (inputEvent?.inputType === "deleteContentBackward") {
-        // Backspace: hapus digit terakhir
-        raw = raw.slice(0, -1);
-      } else {
-        // Fallback (misal paste): ambil semua digit dari value sekarang
-        raw = value.replace(/\D/g, "");
-      }
-
-      setValueAmountRaw(raw);
-
-      if (!raw) {
-        setForm((s) => ({ ...s, value_amount: "" }));
-        return;
-      }
-
-      const numeric = Number(raw);
-      const formattedRaw = new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(numeric);
-      // Pastikan ada satu spasi setelah "Rp" dan normalisasi spasi lain
-      const withSpace = formattedRaw.replace("Rp", "Rp ");
-      const normalized = withSpace.replace(/\s+/g, " ");
-      setForm((s) => ({ ...s, value_amount: normalized }));
-      return;
-    }
-
     setForm((s) => ({ ...s, [name]: value }));
   };
 
@@ -104,8 +66,7 @@ export default function CreateProjectPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const rawValueDigits = valueAmountRaw || form.value_amount.replace(/\D/g, "");
-      const numericValue = rawValueDigits ? Number(rawValueDigits) : 0;
+      const numericValue = valueAmountRaw ? Number(valueAmountRaw) : 0;
 
       const payload: Record<string, any> = {
         name: form.name,
@@ -150,12 +111,12 @@ export default function CreateProjectPage() {
   // Checklist similar to Create User for consistency
   const checklistItems = useMemo(() => {
     return [
-      { key: "basic", label: "Isi nama, client, dan nilai proyek", completed: Boolean(form.name && form.client_name && form.value_amount) },
+      { key: "basic", label: "Isi nama, client, dan nilai proyek", completed: Boolean(form.name && form.client_name && valueAmountRaw) },
       { key: "timeline", label: "Atur tanggal mulai dan selesai", completed: Boolean(form.start_planned && form.end_planned) },
       { key: "owner", label: "Pilih owner proyek", completed: Boolean(form.division_owner_id) },
       { key: "scope", label: "Lengkapi scope dan objective", completed: Boolean(form.scope && form.objective) },
     ];
-  }, [form]);
+  }, [form, valueAmountRaw]);
 
   const checklistProgress = useMemo(() => {
     const total = checklistItems.length;
@@ -272,8 +233,14 @@ export default function CreateProjectPage() {
               <input id="client_name" name="client_name" value={form.client_name} onChange={onChange} required className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="PT. Contoh Abadi" />
             </div>
             <div className="space-y-2">
-              <label htmlFor="value_amount" className="text-sm font-semibold text-slate-500">Value (IDR)</label>
-              <input id="value_amount" name="value_amount" value={form.value_amount} onChange={onChange} inputMode="decimal" className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" placeholder="500000000" />
+              <IdrCurrencyInput
+                id="value_amount"
+                name="value_amount"
+                label="Value (IDR)"
+                raw={valueAmountRaw}
+                onRawChange={setValueAmountRaw}
+                placeholder="500000000"
+              />
             </div>
           </div>
 

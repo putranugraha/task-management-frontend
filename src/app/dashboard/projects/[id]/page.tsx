@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
@@ -11,6 +11,7 @@ import { listByProject as listTasksByProject, updateStatus as updateTaskStatus }
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
+import type { ReportingPeriod } from "@/types/reporting-period";
 import dynamic from "next/dynamic";
 import { totalByTask as totalHoursByTask } from "@/lib/api/time-entries";
 import { listByProject as listReportingPeriods } from "@/lib/api/reporting-periods";
@@ -23,6 +24,10 @@ import { useToast } from "@/components/ui/toast";
 import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
 import { useAuth } from "@/contexts/auth-context";
 import { sanitizeRichText } from "@/lib/sanitize";
+import {
+  buildAsOfPeriodOptions,
+  type PeriodGranularity,
+} from "@/lib/reporting/as-of-periods";
 
 const EvmWidget = dynamic(
   () => import("@/components/evm/EvmWidget"),
@@ -120,7 +125,7 @@ export default function ProjectDetailPage() {
   const [taskTotalHoursLoading, setTaskTotalHoursLoading] = useState<Record<number, boolean>>({});
   const [taskTotalHoursError, setTaskTotalHoursError] = useState<Record<number, string | null>>({});
   // KPI reporting state
-  const [reportingPeriods, setReportingPeriods] = useState<any[]>([]);
+  const [reportingPeriods, setReportingPeriods] = useState<ReportingPeriod[]>([]);
   const [reportingLoading, setReportingLoading] = useState(false);
   const [reportingError, setReportingError] = useState<string | null>(null);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
@@ -128,6 +133,8 @@ export default function ProjectDetailPage() {
   const [kpiLoading, setKpiLoading] = useState(false);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [avgCycleTime, setAvgCycleTime] = useState<number | null>(null);
+  const [reportingGranularity, setReportingGranularity] =
+    useState<PeriodGranularity>("daily");
   const [generateDate, setGenerateDate] = useState<string>(() => {
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -151,6 +158,19 @@ export default function ProjectDetailPage() {
 
   const isMemberOnly =
     hasRole("Member") && !hasRole("Admin") && !hasRole("Manager") && !can("mengelola project");
+
+  const periodOptions = useMemo(
+    () => buildAsOfPeriodOptions(reportingPeriods, reportingGranularity),
+    [reportingPeriods, reportingGranularity]
+  );
+  const selectedPeriodOption = useMemo(
+    () =>
+      selectedPeriodId != null
+        ? periodOptions.find((o) => Number(o.id) === Number(selectedPeriodId)) ??
+          null
+        : null,
+    [periodOptions, selectedPeriodId]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -328,14 +348,18 @@ export default function ProjectDetailPage() {
         if (!mounted) return;
         const arr = Array.isArray(list) ? list : [];
         if (arr.length > 0) {
-          arr.sort((a: any, b: any) => {
+          arr.sort((a: ReportingPeriod, b: ReportingPeriod) => {
             const da = a.period_date ? Date.parse(a.period_date) : 0;
             const db = b.period_date ? Date.parse(b.period_date) : 0;
             return db - da;
           });
           setReportingPeriods(arr);
-          if (selectedPeriodId == null) {
-            setSelectedPeriodId(arr[0].id ?? null);
+          const reps = buildAsOfPeriodOptions(arr, reportingGranularity);
+          const selectedOk =
+            selectedPeriodId != null &&
+            reps.some((o) => Number(o.id) === Number(selectedPeriodId));
+          if (!selectedOk) {
+            setSelectedPeriodId(reps[0]?.id ?? (arr[0]?.id ?? null));
           }
         }
       } catch (e: any) {
@@ -354,7 +378,7 @@ export default function ProjectDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [id, activeTab, selectedPeriodId, showToast]);
+  }, [id, activeTab, selectedPeriodId, reportingGranularity, showToast]);
 
   // Fetch KPI snapshots and average cycle time when reporting tab active
   useEffect(() => {
@@ -844,9 +868,11 @@ export default function ProjectDetailPage() {
                       if (periodId != null) {
                         const pid = Number(periodId);
                         nextPeriodId = pid;
+                        // Ensure the newly generated daily period is visible even when user was viewing weekly/monthly.
+                        setReportingGranularity("daily");
                         setSelectedPeriodId(pid);
                         setReportingPeriods((prev) => {
-                          if (prev.some((p: any) => p.id === pid)) {
+                          if (prev.some((p) => p.id === pid)) {
                             return prev;
                           }
                           const next = [
@@ -933,6 +959,28 @@ export default function ProjectDetailPage() {
             ) : (
               <div className="flex flex-wrap items-center gap-3">
                 <label className="text-xs text-neutral-600">
+                  Tampilan:
+                  <select
+                    className="ml-2 rounded-md border border-slate-200 px-2 py-1 text-xs"
+                    value={reportingGranularity}
+                    onChange={(e) => {
+                      const next = e.target.value as PeriodGranularity;
+                      setReportingGranularity(next);
+                      const opts = buildAsOfPeriodOptions(reportingPeriods, next);
+                      const keep =
+                        selectedPeriodId != null &&
+                        opts.some(
+                          (o) => Number(o.id) === Number(selectedPeriodId)
+                        );
+                      setSelectedPeriodId(keep ? selectedPeriodId : (opts[0]?.id ?? null));
+                    }}
+                  >
+                    <option value="daily">Harian (Daily)</option>
+                    <option value="weekly">Mingguan (Weekly)</option>
+                    <option value="monthly">Bulanan (Monthly)</option>
+                  </select>
+                </label>
+                <label className="text-xs text-neutral-600">
                   Periode pelaporan:
                   <select
                     className="ml-2 rounded-md border border-slate-200 px-2 py-1 text-xs"
@@ -943,9 +991,9 @@ export default function ProjectDetailPage() {
                       )
                     }
                   >
-                    {reportingPeriods.map((p: any) => (
+                    {periodOptions.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.period_date ?? p.id}
+                        {p.label}
                       </option>
                     ))}
                   </select>
@@ -997,8 +1045,12 @@ export default function ProjectDetailPage() {
                     {kpiSnapshots.map((s: any) => (
                       <tr key={s.id} className="hover:bg-neutral-50">
                         <td className="px-3 py-2 border-t align-top whitespace-nowrap">
-                          {s.reporting_period?.period_date ??
-                            reportingPeriods.find((p: any) => p.id === s.period_id)
+                          {selectedPeriodOption &&
+                          selectedPeriodId != null &&
+                          Number(s.period_id) === Number(selectedPeriodId)
+                            ? selectedPeriodOption.label
+                            : s.reporting_period?.period_date ??
+                            reportingPeriods.find((p) => p.id === s.period_id)
                               ?.period_date ??
                             s.period_id}
                         </td>

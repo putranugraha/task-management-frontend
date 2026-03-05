@@ -91,14 +91,28 @@ export async function updateProgress(id: number | string, percent_complete: numb
 }
 
 // Convenience alias matching FE flow docs (sends both keys for compatibility)
-export async function saveProgress(id: number | string, percent: number): Promise<Task> {
+export async function saveProgress(
+  id: number | string,
+  percent: number,
+  opts?: { progress_date?: string }
+): Promise<Task> {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
   return await apiRequest<Task>('PATCH', `/api/tasks/${id}/progress`, {
     percent: p,
     percent_complete: p,
+    ...(opts?.progress_date ? { progress_date: String(opts.progress_date) } : {}),
   } as any);
 }
 
 export async function complete(id: number | string): Promise<Task> {
   return await apiRequest<Task>('PATCH', `/api/tasks/${id}/complete`);
+}
+
+export async function completeWithDate(
+  id: number | string,
+  opts?: { progress_date?: string }
+): Promise<Task> {
+  return await apiRequest<Task>('PATCH', `/api/tasks/${id}/complete`, {
+    ...(opts?.progress_date ? { progress_date: String(opts.progress_date) } : {}),
+  } as any);
 }

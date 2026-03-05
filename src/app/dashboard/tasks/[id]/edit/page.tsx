@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ChevronsUpDown, Check } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
 
 type TaskDetail = {
   id: number;
@@ -97,7 +98,7 @@ export default function EditTaskPage() {
             start_planned: t.start_planned ?? "",
             end_planned: t.end_planned ?? "",
             percent_complete: Number(t.percent_complete ?? 0),
-            budget_cost: (t.budget_cost ?? "") as any,
+            budget_cost: String(t.budget_cost ?? "").split(/[.,]/)[0].replace(/\D/g, ""),
             assignments: currentAssignments.length ? currentAssignments : undefined,
             dependencies: deps,
           });
@@ -676,22 +677,15 @@ export default function EditTaskPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-500">
-              Budget Cost (IDR)
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={1}
+            <IdrCurrencyInput
+              id="budget_cost"
               name="budget_cost"
-              value={String(form.budget_cost ?? "")}
-              onChange={onChange}
-              className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+              label="Budget Cost (IDR)"
+              raw={String(form.budget_cost ?? "")}
+              onRawChange={(raw) => applyFieldUpdate("budget_cost", raw)}
               placeholder="0"
+              hint="Dipakai untuk PV/EV pada EVM cost-based (IDR)."
             />
-            <div className="text-[11px] text-neutral-500">
-              Dipakai untuk PV/EV pada EVM cost-based (IDR).
-            </div>
           </div>
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-semibold text-slate-500">Description</label>

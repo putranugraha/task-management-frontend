@@ -143,7 +143,7 @@ export default function EvmCostWidget({
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, any> = { date: when };
+      const params: Record<string, any> = { as_of: when };
       if (activeBaselineId != null) params.baseline_id = activeBaselineId;
       const res = await apiRequest<any>(
         "GET",
@@ -177,6 +177,7 @@ export default function EvmCostWidget({
   const ac = asNumber(data?.ac) ?? 0;
 
   const budgetNotAllocated = bac <= 0 && pv <= 0 && ev <= 0;
+  const taskBudgetMissing = bac > 0 && pv <= 0 && ev <= 0;
   const noActualCost = ac <= 0;
 
   return (
@@ -235,6 +236,11 @@ export default function EvmCostWidget({
                 Budget belum dialokasikan (BAC/PV/EV masih 0). Set `budget_cost` pada task atau isi `projects.value_amount`.
               </div>
             )}
+            {!budgetNotAllocated && taskBudgetMissing && (
+              <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Task `budget_cost` belum diisi (PV/EV masih 0) meskipun BAC sudah ada. Isi `budget_cost` pada task agar PV/EV bisa dihitung.
+              </div>
+            )}
             {!budgetNotAllocated && isAllZeroish(data) && (
               <div className="mb-3 text-xs text-neutral-600">
                 Belum ada progress dan/atau biaya aktual sampai tanggal as-of.
@@ -271,4 +277,3 @@ export default function EvmCostWidget({
     </div>
   );
 }
-

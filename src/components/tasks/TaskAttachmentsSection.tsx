@@ -8,7 +8,7 @@ import {
   rejectAttachment,
   type TaskAttachment,
 } from "@/lib/api/task-attachments";
-import { saveProgress, complete } from "@/lib/api/tasks";
+import { saveProgress, complete, completeWithDate } from "@/lib/api/tasks";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
@@ -56,6 +56,24 @@ export default function TaskAttachmentsSection({
   const [progressValue, setProgressValue] = useState<number>(initialPctNumber);
   const [progressInput, setProgressInput] = useState<string>(
     String(initialPctNumber)
+  );
+  // Debug helper to simulate historical dates without waiting for real days.
+  // Enabled by default in non-production, or explicitly via NEXT_PUBLIC_DEBUG_DATES=true.
+  const DEBUG_DATES =
+    process.env.NODE_ENV !== "production" ||
+    process.env.NEXT_PUBLIC_DEBUG_DATES === "true";
+  const toLocalISODate = (d: Date = new Date()): string => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+  const shiftYmd = (ymd: string, days: number): string => {
+    const base = ymd ? new Date(`${ymd}T00:00:00`) : new Date();
+    if (!Number.isFinite(base.getTime())) return toLocalISODate();
+    base.setDate(base.getDate() + days);
+    return toLocalISODate(base);
+  };
+  const [progressDate, setProgressDate] = useState<string>(() =>
+    toLocalISODate()
   );
 
   useEffect(() => {
@@ -153,7 +171,10 @@ export default function TaskAttachmentsSection({
         // Setelah lampiran disetujui, tawarkan update progres task jika diminta.
         if (progressMode === "complete") {
           try {
-            const updated = await complete(taskId);
+            const updated =
+              DEBUG_DATES && progressDate
+                ? await completeWithDate(taskId, { progress_date: progressDate })
+                : await complete(taskId);
             const pct = Number((updated as any)?.percent_complete ?? 100);
             if (Number.isFinite(pct)) {
               onPercentChange?.(pct);
@@ -180,7 +201,11 @@ export default function TaskAttachmentsSection({
           const raw = Number(progressValue ?? initialPercent ?? 0);
           const pct = Math.max(0, Math.min(100, Number.isFinite(raw) ? raw : 0));
           try {
-            const updated = await saveProgress(taskId, pct);
+            const updated = await saveProgress(
+              taskId,
+              pct,
+              DEBUG_DATES && progressDate ? { progress_date: progressDate } : undefined
+            );
             const latest = Number((updated as any)?.percent_complete ?? pct);
             onPercentChange?.(
               Number.isFinite(latest) ? latest : pct
@@ -425,6 +450,49 @@ export default function TaskAttachmentsSection({
             <p className="text-xs text-neutral-500">
               Setelah lampiran disetujui, kamu bisa langsung mengatur progres task berdasarkan hasil review.
             </p>
+            {DEBUG_DATES && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-end justify-between gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-1">
+                      Debug: Progress Date
+                    </label>
+                    <input
+                      type="date"
+                      value={progressDate}
+                      onChange={(e) => setProgressDate(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 px-2 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                    />
+                    <div className="mt-1 text-[11px] text-neutral-500">
+                      Untuk testing EV historis. Akan disimpan sebagai entry progress pada tanggal ini.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 pb-[2px]">
+                    <button
+                      type="button"
+                      className="h-8 px-2 rounded-md border text-xs hover:bg-white"
+                      onClick={() => setProgressDate(toLocalISODate())}
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      className="h-8 px-2 rounded-md border text-xs hover:bg-white"
+                      onClick={() => setProgressDate((d) => shiftYmd(d, 1))}
+                    >
+                      +1d
+                    </button>
+                    <button
+                      type="button"
+                      className="h-8 px-2 rounded-md border text-xs hover:bg-white"
+                      onClick={() => setProgressDate((d) => shiftYmd(d, 7))}
+                    >
+                      +7d
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input

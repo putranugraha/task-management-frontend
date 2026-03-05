@@ -13,6 +13,7 @@ import { ChevronLeft, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { useToast } from "@/components/ui/toast";
+import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
 
 type FormState = {
   project_id: number | "";
@@ -494,22 +495,15 @@ function CreateTaskPageContent() {
               </DropdownMenu>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-500">
-                Budget Cost (IDR)
-              </label>
-              <input
-                type="number"
-                min={0}
-                step={1}
+              <IdrCurrencyInput
+                id="budget_cost"
                 name="budget_cost"
-                value={form.budget_cost}
-                onChange={onChange}
-                className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                label="Budget Cost (IDR)"
+                raw={form.budget_cost}
+                onRawChange={(raw) => setForm((s) => ({ ...s, budget_cost: raw }))}
                 placeholder="0"
+                hint="Dipakai untuk PV/EV pada EVM cost-based (IDR)."
               />
-              <div className="text-[11px] text-neutral-500">
-                Dipakai untuk PV/EV pada EVM cost-based (IDR).
-              </div>
             </div>
             {/* Status hidden on create; default "To Do" from form state is sent in payload */}
             {false && (

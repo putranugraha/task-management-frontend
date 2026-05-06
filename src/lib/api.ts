@@ -136,7 +136,7 @@ export async function apiRequest<T>(
       withCredentials: shouldSendStateful ? true : api.defaults.withCredentials,
       ...config,
     });
-    if (process.env.NODE_ENV !== 'production') {
+    if (API_DEBUG && process.env.NODE_ENV !== 'production') {
       console.log(`Successful response from ${url}`, response.status);
       console.log('Response data:', response.data);
     }

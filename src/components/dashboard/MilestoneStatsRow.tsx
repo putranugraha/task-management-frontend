@@ -47,11 +47,11 @@ export default function MilestoneStatsRow({ stats, loading }: { stats: Stats; lo
   ];
 
   return (
-    <div className="grid min-w-full w-full grid-cols-1 gap-5 md:grid-cols-3">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-5 lg:grid-cols-3">
       {cards.map(({ key, title, gradient, Icon, value, delta, deltaColor }) => (
         <div
           key={key}
-          className={`group flex h-full w-full flex-col justify-between rounded-2xl bg-gradient-to-br ${gradient} p-6 text-white shadow-sm transition-transform duration-200 hover:scale-[1.02] hover:shadow-lg`}
+          className={`group flex h-full w-full min-w-0 flex-col justify-between rounded-2xl bg-gradient-to-br ${gradient} p-6 text-white shadow-sm transition-transform duration-200 hover:scale-[1.02] hover:shadow-lg`}
         >
           <div className="flex items-start justify-between">
             <div>

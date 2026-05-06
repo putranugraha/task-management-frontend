@@ -35,11 +35,15 @@ export default function TaskAttachmentsSection({
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const { loading: permLoading, allowed } = usePermissionGuard([
-    "mengelola lampiran",
+  const { loading: uploadPermLoading, allowed: uploadAllowed } = usePermissionGuard([
+    "membuat lampiran",
   ]);
+  const { loading: moderatePermLoading, allowed: moderateAllowed } = usePermissionGuard([
+    "mengubah lampiran",
+  ]);
+  const canUpload = uploadAllowed && !uploadPermLoading;
   const canModerate =
-    !permLoading && allowed && (hasRole("Admin") || hasRole("Manager"));
+    !moderatePermLoading && moderateAllowed && (hasRole("Admin") || hasRole("Manager"));
   const { showToast } = useToast();
   const [moderateTarget, setModerateTarget] = useState<{
     id: number;
@@ -383,7 +387,7 @@ export default function TaskAttachmentsSection({
         )}
       </div>
 
-      {allowed && !permLoading && (
+      {canUpload && (
         <form
           onSubmit={handleUpload}
           className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-3 text-sm flex flex-col gap-2"

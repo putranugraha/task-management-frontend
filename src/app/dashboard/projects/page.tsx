@@ -31,10 +31,48 @@ type PaginatedResponse<T> = {
 };
 
 const DEFAULT_PER_PAGE = 10;
+const PROJECTS_CACHE_TTL_MS = 60_000;
+const PROJECTS_LIST_CACHE_KEY = "dashboard:projects:list:";
+const PROJECTS_STATS_CACHE_KEY = "dashboard:projects:stats:";
+
+type ProjectsListCacheEntry = {
+  rows: ProjectRow[];
+  paginationMeta: PaginationMeta | null;
+  fetchedAt: number;
+};
+
+type ProjectsStatsCacheEntry = {
+  stats: { total: number; active: number; completed: number };
+  fetchedAt: number;
+};
+
+const projectsListMemoryCache = new Map<string, ProjectsListCacheEntry>();
+const projectsStatsMemoryCache = new Map<string, ProjectsStatsCacheEntry>();
+const projectsListInFlight = new Map<string, Promise<ProjectsListCacheEntry>>();
+const projectsStatsInFlight = new Map<string, Promise<ProjectsStatsCacheEntry>>();
+
+function readSessionCache<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
 
 export default function ProjectsPage() {
   const { can } = useAuth();
-  const canManageProject = can("mengelola project");
+  const canCreateProject = can("membuat project");
+  const canUpdateProject = can("mengubah project");
+  const canDeleteProject = can("menghapus project");
 
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,44 +89,78 @@ export default function ProjectsPage() {
   const [stats, setStats] = useState<{ total: number; active: number; completed: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
-  const fetchProjects = async (opts?: { page?: number; perPage?: number; search?: string }) => {
+  const fetchProjects = async (opts?: { page?: number; perPage?: number; search?: string; force?: boolean }) => {
     const pageParam = opts?.page ?? page ?? 1;
     const perPageParam = opts?.perPage ?? rowsPerPage ?? DEFAULT_PER_PAGE;
     const searchParam = opts?.search ?? search ?? "";
+    const force = opts?.force ?? false;
+    const cacheKey = `${PROJECTS_LIST_CACHE_KEY}${pageParam}:${perPageParam}:${searchParam.trim().toLowerCase()}`;
+
+    if (!force) {
+      const cached =
+        projectsListMemoryCache.get(cacheKey) ??
+        readSessionCache<ProjectsListCacheEntry>(cacheKey);
+      if (cached) {
+        const age = Date.now() - cached.fetchedAt;
+        if (age >= 0 && age <= PROJECTS_CACHE_TTL_MS) {
+          setRows(cached.rows);
+          setPaginationMeta(cached.paginationMeta);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     try {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams();
-      params.set("page", String(pageParam));
-      params.set("per_page", String(perPageParam));
-      if (searchParam.trim()) {
-        params.set("search", searchParam.trim());
+      let request = projectsListInFlight.get(cacheKey);
+      if (!request) {
+        request = (async () => {
+          const params = new URLSearchParams();
+          params.set("page", String(pageParam));
+          params.set("per_page", String(perPageParam));
+          if (searchParam.trim()) {
+            params.set("search", searchParam.trim());
+          }
+          const res = await apiRequest<MaybePaginated<Project>>("GET", `/api/projects?${params.toString()}`);
+          const isArray = Array.isArray(res);
+          const list = isArray ? res : ((res as PaginatedResponse<Project>).data ?? []);
+          const meta = !isArray && (res as PaginatedResponse<Project>).meta
+            ? (res as PaginatedResponse<Project>).meta as PaginationMeta
+            : null;
+          const mapped: ProjectRow[] = list.map((p: any) => {
+            const owner = p.division_owner || p.owner || p.project_owner || null;
+            const ownerObj = owner
+              ? { id: Number(owner.id ?? owner.user_id ?? 0), name: owner.name ?? owner.full_name ?? owner.email ?? 'Unknown' }
+              : null;
+            return {
+              id: Number(p.id),
+              name: p.name,
+              client_name: p.client_name ?? p.client ?? '-',
+              value_amount: typeof p.value_amount === 'string' ? p.value_amount : Number(p.value_amount ?? 0),
+              status: p.status ?? 'Planned',
+              division_owner: ownerObj,
+              start_planned: p.start_planned ?? null,
+              end_planned: p.end_planned ?? null,
+              created_at: p.created_at,
+            } as ProjectRow;
+          });
+          return {
+            rows: mapped,
+            paginationMeta: meta,
+            fetchedAt: Date.now(),
+          } satisfies ProjectsListCacheEntry;
+        })();
+        projectsListInFlight.set(cacheKey, request);
       }
-      const res = await apiRequest<MaybePaginated<Project>>("GET", `/api/projects?${params.toString()}`);
-      const isArray = Array.isArray(res);
-      const list = isArray ? res : ((res as PaginatedResponse<Project>).data ?? []);
-      const meta = !isArray && (res as PaginatedResponse<Project>).meta
-        ? (res as PaginatedResponse<Project>).meta as PaginationMeta
-        : null;
-      const mapped: ProjectRow[] = list.map((p: any) => {
-        const owner = p.division_owner || p.owner || p.project_owner || null;
-        const ownerObj = owner
-          ? { id: Number(owner.id ?? owner.user_id ?? 0), name: owner.name ?? owner.full_name ?? owner.email ?? 'Unknown' }
-          : null;
-        return {
-          id: Number(p.id),
-          name: p.name,
-          client_name: p.client_name ?? p.client ?? '-',
-          value_amount: typeof p.value_amount === 'string' ? p.value_amount : Number(p.value_amount ?? 0),
-          status: p.status ?? 'Planned',
-          division_owner: ownerObj,
-          start_planned: p.start_planned ?? null,
-          end_planned: p.end_planned ?? null,
-          created_at: p.created_at,
-        } as ProjectRow;
-      });
-      setRows(mapped);
-      setPaginationMeta(meta);
+
+      const cacheEntry = await request;
+      setRows(cacheEntry.rows);
+      setPaginationMeta(cacheEntry.paginationMeta);
+      projectsListMemoryCache.set(cacheKey, cacheEntry);
+      writeSessionCache(cacheKey, cacheEntry);
     } catch (e: any) {
       const msg = e?.message ?? "Failed to load projects";
       setError(msg);
@@ -98,30 +170,60 @@ export default function ProjectsPage() {
         description: msg,
       });
     } finally {
+      projectsListInFlight.delete(cacheKey);
       setLoading(false);
     }
   };
 
   const fetchProjectStats = async (opts?: { search?: string }) => {
     const searchParam = opts?.search ?? search ?? "";
+    const cacheKey = `${PROJECTS_STATS_CACHE_KEY}${searchParam.trim().toLowerCase()}`;
+    const cached =
+      projectsStatsMemoryCache.get(cacheKey) ??
+      readSessionCache<ProjectsStatsCacheEntry>(cacheKey);
+
+    if (cached) {
+      const age = Date.now() - cached.fetchedAt;
+      if (age >= 0 && age <= PROJECTS_CACHE_TTL_MS) {
+        setStats(cached.stats);
+        setStatsLoading(false);
+        return;
+      }
+    }
+
     try {
       setStatsLoading(true);
-      const params = new URLSearchParams();
-      if (searchParam.trim()) {
-        params.set("search", searchParam.trim());
+      let request = projectsStatsInFlight.get(cacheKey);
+      if (!request) {
+        request = (async () => {
+          const params = new URLSearchParams();
+          if (searchParam.trim()) {
+            params.set("search", searchParam.trim());
+          }
+          const res = await apiRequest<{ total: number; active: number; completed: number }>(
+            "GET",
+            `/api/projects/stats?${params.toString()}`
+          );
+          return {
+            stats: {
+              total: res.total ?? 0,
+              active: res.active ?? 0,
+              completed: res.completed ?? 0,
+            },
+            fetchedAt: Date.now(),
+          } satisfies ProjectsStatsCacheEntry;
+        })();
+        projectsStatsInFlight.set(cacheKey, request);
       }
-      const res = await apiRequest<{ total: number; active: number; completed: number }>(
-        "GET",
-        `/api/projects/stats?${params.toString()}`
-      );
-      setStats({
-        total: res.total ?? 0,
-        active: res.active ?? 0,
-        completed: res.completed ?? 0,
-      });
+
+      const cacheEntry = await request;
+      setStats(cacheEntry.stats);
+      projectsStatsMemoryCache.set(cacheKey, cacheEntry);
+      writeSessionCache(cacheKey, cacheEntry);
     } catch {
       // Jika gagal, biarkan stats tetap nilai sebelumnya agar kartu tidak kosong
     } finally {
+      projectsStatsInFlight.delete(cacheKey);
       setStatsLoading(false);
     }
   };
@@ -134,9 +236,27 @@ export default function ProjectsPage() {
     return () => clearTimeout(handle);
   }, [search]);
 
-  // Initial stats load (sekali saat mount, tidak ikut search)
+  // Initial stats load after first paint so the main table fetch gets priority.
   useEffect(() => {
-    fetchProjectStats();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const run = () => {
+      fetchProjectStats();
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(run, { timeout: 1200 });
+    } else {
+      timeoutId = setTimeout(run, 250);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (idleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -149,7 +269,19 @@ export default function ProjectsPage() {
     setDeleteLoading(true);
     try {
       await apiRequest("DELETE", `/api/projects/${deleteTarget.id}`);
-      await fetchProjects();
+      projectsListMemoryCache.clear();
+      projectsStatsMemoryCache.clear();
+      if (typeof window !== "undefined") {
+        Object.keys(window.sessionStorage)
+          .filter(
+            (key) =>
+              key.startsWith(PROJECTS_LIST_CACHE_KEY) ||
+              key.startsWith(PROJECTS_STATS_CACHE_KEY)
+          )
+          .forEach((key) => window.sessionStorage.removeItem(key));
+      }
+      await fetchProjects({ force: true });
+      await fetchProjectStats();
       showToast({
         variant: "success",
         title: "Project dihapus",
@@ -174,7 +306,8 @@ export default function ProjectsPage() {
 
   const baseColumns = useProjectColumns(handleDelete, {
     minimal: true,
-    canManage: canManageProject,
+    canEdit: canUpdateProject,
+    canDelete: canDeleteProject,
   }) as unknown as Column<ProjectRow>[];
 
   // Column visibility controls, mirroring Users page
@@ -370,7 +503,7 @@ export default function ProjectsPage() {
                 </div>
               )}
             </div>
-            {canManageProject && (
+            {canCreateProject && (
               <Link
                 href="/dashboard/projects/create"
                 className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"

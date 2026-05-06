@@ -30,7 +30,7 @@ type FormState = {
 
 export default function CreateProjectPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola project",
+    "membuat project",
   ]);
 
   if (!authLoading && !allowed) {

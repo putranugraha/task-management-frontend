@@ -30,8 +30,11 @@ const statusClasses = (value?: string | null) => {
 
 export function useRoleColumns(
   onDelete?: (row: RoleRow) => void,
-  opts?: { onDetail?: (row: RoleRow) => void }
+  opts?: { onDetail?: (row: RoleRow) => void; canEdit?: boolean; canDelete?: boolean }
 ): Column<RoleRow>[] {
+  const canEdit = opts?.canEdit ?? true;
+  const canDelete = opts?.canDelete ?? true;
+
   return [
     {
       key: "name",
@@ -86,21 +89,25 @@ export function useRoleColumns(
       className: "min-w-[190px]",
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
-          <Link
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-            href={`/dashboard/roles/${row.id}/edit`}
-            title={`Edit ${row.name}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </Link>
-          <button
-            type="button"
-            onClick={() => onDelete?.(row)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-            title={`Delete ${row.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canEdit && (
+            <Link
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+              href={`/dashboard/roles/${row.id}/edit`}
+              title={`Edit ${row.name}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </Link>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete?.(row)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+              title={`Delete ${row.name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
           {opts?.onDetail ? (
             <button
               type="button"

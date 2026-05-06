@@ -24,9 +24,11 @@ export type Column<T> = {
 
 export function useTaskColumns(
   onDelete?: (row: TaskRow) => void,
-  opts?: { onDetail?: (row: TaskRow) => void; canManage?: boolean }
+  opts?: { onDetail?: (row: TaskRow) => void; canManage?: boolean; canEdit?: boolean; canDelete?: boolean }
 ): Column<TaskRow>[] {
   const canManage = opts?.canManage !== false;
+  const canEdit = opts?.canEdit ?? canManage;
+  const canDelete = opts?.canDelete ?? canManage;
   return [
     { key: "title", header: "Title", className: "min-w-[220px]" },
     { key: "project", header: "Project", className: "min-w-[160px]", render: (r) => r.project?.name ?? '-' },
@@ -42,8 +44,9 @@ export function useTaskColumns(
       className: "min-w-[190px]",
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
-          {canManage && (
+          {(canEdit || canDelete) && (
             <>
+              {canEdit && (
               <Link
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
                 href={`/dashboard/tasks/${row.id}/edit`}
@@ -51,6 +54,8 @@ export function useTaskColumns(
               >
                 <Pencil className="h-4 w-4" />
               </Link>
+              )}
+              {canDelete && (
               <button
                 type="button"
                 onClick={() => onDelete?.(row)}
@@ -59,6 +64,7 @@ export function useTaskColumns(
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+              )}
             </>
           )}
           {opts?.onDetail ? (

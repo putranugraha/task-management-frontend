@@ -16,13 +16,18 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
 export default function RolesPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola roles",
+    "melihat roles",
   ]);
+  const { can } = useAuth();
+  const canCreateRoles = can("membuat roles");
+  const canUpdateRoles = can("mengubah roles");
+  const canDeleteRoles = can("menghapus roles");
 
   if (!authLoading && !allowed) {
     return <Forbidden />;
@@ -212,7 +217,11 @@ export default function RolesPage() {
     }
   };
 
-  const columns = useRoleColumns(handleDelete, { onDetail: openDetail }) as unknown as Column<RoleRow>[];
+  const columns = useRoleColumns(handleDelete, {
+    onDetail: openDetail,
+    canEdit: canUpdateRoles,
+    canDelete: canDeleteRoles,
+  }) as unknown as Column<RoleRow>[];
 
   useEffect(() => {
     if (!detailOpen) return;
@@ -467,13 +476,15 @@ export default function RolesPage() {
                 </div>
               )}
             </div>
-            <Link
-              href="/dashboard/roles/create"
-              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-            >
-              <Plus className="h-4 w-4" />
-              Create Role
-            </Link>
+            {canCreateRoles && (
+              <Link
+                href="/dashboard/roles/create"
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                <Plus className="h-4 w-4" />
+                Create Role
+              </Link>
+            )}
           </div>
         </div>
 

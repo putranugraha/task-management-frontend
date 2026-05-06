@@ -40,7 +40,7 @@ type FieldErrors = Partial<Record<keyof CreateMilestoneDto, string>> & { [k: str
 
 export default function CreateProjectMilestonePage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola project",
+    "membuat project",
   ]);
 
   if (!authLoading && !allowed) {

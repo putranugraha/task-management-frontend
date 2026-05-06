@@ -34,7 +34,9 @@ type PaginatedResponse<T> = {
 
 export default function MilestonesPage() {
   const { can } = useAuth();
-  const canManageProject = can("mengelola project");
+  const canCreateProject = can("membuat project");
+  const canUpdateProject = can("mengubah project");
+  const canDeleteProject = can("menghapus project");
 
   const [rows, setRows] = useState<MilestoneRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -187,7 +189,8 @@ export default function MilestonesPage() {
   const columns = useMilestoneColumns({
     onDelete: handleDelete,
     onDetail: openDetail,
-    canManage: canManageProject,
+    canEdit: canUpdateProject,
+    canDelete: canDeleteProject,
   });
 
   // Lock body scroll when modal is open
@@ -404,7 +407,7 @@ export default function MilestonesPage() {
                 </div>
               )}
             </div>
-            {canManageProject && (
+            {canCreateProject && (
               <Link
                 href="/dashboard/milestones/create"
                 className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -476,7 +479,7 @@ export default function MilestonesPage() {
                 <div className="flex items-center gap-3">
                   {detailData && (
                     <>
-                      {canManageProject && (detailData.project?.id || detailData.project_id) && (
+                      {(detailData.project?.id || detailData.project_id) && (
                         <button
                           type="button"
                           onClick={() =>

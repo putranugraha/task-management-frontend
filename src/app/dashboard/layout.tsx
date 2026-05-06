@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { NotificationProvider } from "@/contexts/notification-context";
 import {
   SidebarProvider,
   SidebarInset,
@@ -32,18 +33,20 @@ export default function DashboardLayout({
   }, [state.isInitialized, state.token, router]);
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex bg-background text-foreground">
-        <AppSidebar />
-        <SidebarInset className="flex flex-1 min-w-0 flex-col md:peer-data-[variant=inset]:m-0 md:peer-data-[variant=inset]:rounded-none md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0">
-          <DesktopTopBar />
-          <MobileTopBar />
-          <main className="flex-1 min-w-0 w-full max-w-none px-2 md:px-4 py-6 md:py-8">
-            {children}
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+    <NotificationProvider>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full items-stretch bg-background text-foreground">
+          <AppSidebar />
+          <SidebarInset className="flex flex-1 min-w-0 flex-col md:peer-data-[variant=inset]:m-0 md:peer-data-[variant=inset]:rounded-none md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0">
+            <DesktopTopBar />
+            <MobileTopBar />
+            <main className="flex w-full min-w-0 flex-1 flex-col px-3 py-6 md:px-5 md:py-8 xl:px-6">
+              {children}
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </NotificationProvider>
   );
 }
 

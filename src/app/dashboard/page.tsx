@@ -1,76 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import type { ActivityLog } from "@/lib/api/activity-logs";
+import { listActivityLogs } from "@/lib/api/activity-logs";
 import ProjectStatsRow from "@/components/dashboard/ProjectStatsRow";
 import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
 import MilestoneStatsRow from "@/components/dashboard/MilestoneStatsRow";
 import { Skeleton } from "@/components/ui/skeleton";
-import DataTable from "./users/data-table";
-import type { Column } from "./users/columns";
 
-const ACTIVITY_LOGS_PER_PAGE = 10;
 const RECENT_ACTIVITY_ROWS = 5;
-
-const LATEST_ACTIVITY_COLUMNS: Column<ActivityLog>[] = [
-  {
-    key: "time",
-    header: "Waktu",
-    className: "min-w-[200px]",
-    render: (row) =>
-      row.time ? (
-        <span className="text-sm font-medium text-slate-700">
-          {new Date(row.time).toLocaleString()}
-        </span>
-      ) : (
-        <span className="text-xs text-neutral-400">-</span>
-      ),
-  },
-  {
-    key: "actor_name",
-    header: "Actor",
-    className: "min-w-[140px]",
-    render: (row) => (
-      <span className="text-sm font-semibold text-slate-800">
-        {row.actor_name ?? "-"}
-      </span>
-    ),
-  },
-  {
-    key: "event",
-    header: "Event",
-    className: "min-w-[220px]",
-    render: (row) => (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-700">{row.event ?? "-"}</span>
-        {row.log_name && (
-          <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-            {row.log_name}
-          </span>
-        )}
-      </div>
-    ),
-  },
-  {
-    key: "subject",
-    header: "Target",
-    className: "min-w-[220px]",
-    render: (row) =>
-      row.subject_type ? (
-        <span className="text-sm text-slate-700">
-          {row.subject_type}
-          {row.subject_id ? ` #${row.subject_id}` : ""}
-        </span>
-      ) : (
-        <span className="text-xs text-neutral-400">-</span>
-      ),
-  },
-];
+const DASHBOARD_STATS_CACHE_KEY = "dashboard:overview:stats";
+const DASHBOARD_ACTIVITY_CACHE_KEY = "dashboard:overview:activity";
 
 export default function DashboardPage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [projectStatsApi, setProjectStatsApi] = useState<{
@@ -90,17 +37,42 @@ export default function DashboardPage() {
   } | null>(null);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const rawStats = window.sessionStorage.getItem(DASHBOARD_STATS_CACHE_KEY);
+      if (rawStats) {
+        const parsed = JSON.parse(rawStats) as {
+          projectStatsApi: typeof projectStatsApi;
+          taskStatsApi: typeof taskStatsApi;
+          milestoneStatsApi: typeof milestoneStatsApi;
+        };
+        setProjectStatsApi(parsed.projectStatsApi ?? null);
+        setTaskStatsApi(parsed.taskStatsApi ?? null);
+        setMilestoneStatsApi(parsed.milestoneStatsApi ?? null);
+        setStatsLoading(false);
+      }
+
+      const rawActivity = window.sessionStorage.getItem(DASHBOARD_ACTIVITY_CACHE_KEY);
+      if (rawActivity) {
+        const parsed = JSON.parse(rawActivity) as ActivityLog[];
+        setActivityLogs(Array.isArray(parsed) ? parsed : []);
+        setActivityLoading(false);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      setLoading(true);
+      setStatsLoading(true);
       setError(null);
       setProjectStatsApi(null);
       setTaskStatsApi(null);
       setMilestoneStatsApi(null);
 
       try {
-        const [projectsStatsRes, taskStatsRes, milestoneStatsRes, activityRes] =
+        const [projectsStatsRes, taskStatsRes, milestoneStatsRes] =
           await Promise.all([
             apiRequest<{
               total: number;
@@ -117,10 +89,6 @@ export default function DashboardPage() {
               completed: number;
               overdue: number;
             }>("GET", "/api/milestones/stats").catch(() => null),
-            apiRequest<ActivityLog[] | { data: ActivityLog[] }>(
-              "GET",
-              `/api/activity-logs?per_page=${ACTIVITY_LOGS_PER_PAGE}`
-            ),
           ]);
 
         if (cancelled) return;
@@ -153,17 +121,41 @@ export default function DashboardPage() {
             : null
         );
 
-        setActivityLogs(
-          Array.isArray(activityRes)
-            ? activityRes
-            : ((activityRes as any).data ?? [])
-        );
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem(
+            DASHBOARD_STATS_CACHE_KEY,
+            JSON.stringify({
+              projectStatsApi: projectsStatsRes
+                ? {
+                    total: projectsStatsRes.total ?? 0,
+                    active: projectsStatsRes.active ?? 0,
+                    completed: projectsStatsRes.completed ?? 0,
+                  }
+                : null,
+              taskStatsApi: taskStatsRes
+                ? {
+                    total: taskStatsRes.total ?? 0,
+                    completed: taskStatsRes.completed ?? 0,
+                    in_progress: taskStatsRes.in_progress ?? 0,
+                  }
+                : null,
+              milestoneStatsApi: milestoneStatsRes
+                ? {
+                    total: milestoneStatsRes.total ?? 0,
+                    completed: milestoneStatsRes.completed ?? 0,
+                    overdue: milestoneStatsRes.overdue ?? 0,
+                  }
+                : null,
+            })
+          );
+        }
+
       } catch (e: any) {
         if (!cancelled) {
           setError(e?.message ?? "Gagal memuat data dashboard");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setStatsLoading(false);
       }
     })();
 
@@ -172,65 +164,80 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const projectStats = useMemo(() => {
-    return {
-      total: projectStatsApi?.total ?? 0,
-      active: projectStatsApi?.active ?? 0,
-      completed: projectStatsApi?.completed ?? 0,
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const loadActivity = async () => {
+      try {
+        const rows = await listActivityLogs({
+          per_page: RECENT_ACTIVITY_ROWS,
+        });
+        if (!cancelled) {
+          setActivityLogs(rows.slice(0, RECENT_ACTIVITY_ROWS));
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem(
+              DASHBOARD_ACTIVITY_CACHE_KEY,
+              JSON.stringify(rows.slice(0, RECENT_ACTIVITY_ROWS))
+            );
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setActivityLogs([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setActivityLoading(false);
+        }
+      }
     };
-  }, [projectStatsApi]);
 
-  const taskStats = useMemo(() => {
-    const total = taskStatsApi?.total ?? 0;
-    const completed = taskStatsApi?.completed ?? 0;
-    const inProgress = taskStatsApi?.in_progress ?? 0;
+    setActivityLoading(true);
+    timeoutId = setTimeout(() => {
+      loadActivity().catch(() => {});
+    }, 250);
 
-    const base = total || 1;
-    const completedPercent = Math.round((completed / base) * 100);
-    const inProgressPercent = Math.round((inProgress / base) * 100);
-    const totalPercent = completedPercent;
-
-    return {
-      total,
-      completed,
-      inProgress,
-      totalPercent,
-      completedPercent,
-      inProgressPercent,
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [taskStatsApi]);
+  }, []);
 
-  const milestoneStats = useMemo(() => {
-    const total = milestoneStatsApi?.total ?? 0;
-    const completed = milestoneStatsApi?.completed ?? 0;
-    const overdue = milestoneStatsApi?.overdue ?? 0;
+  const projectStats = {
+    total: projectStatsApi?.total ?? 0,
+    active: projectStatsApi?.active ?? 0,
+    completed: projectStatsApi?.completed ?? 0,
+  };
 
-    const base = total || 1;
-    const completedPercent = Math.round((completed / base) * 100);
-    const overduePercent = Math.round((overdue / base) * 100);
-    const totalPercent = completedPercent;
+  const taskTotal = taskStatsApi?.total ?? 0;
+  const taskCompleted = taskStatsApi?.completed ?? 0;
+  const taskInProgress = taskStatsApi?.in_progress ?? 0;
+  const taskBase = taskTotal || 1;
+  const taskStats = {
+    total: taskTotal,
+    completed: taskCompleted,
+    inProgress: taskInProgress,
+    totalPercent: Math.round((taskCompleted / taskBase) * 100),
+    completedPercent: Math.round((taskCompleted / taskBase) * 100),
+    inProgressPercent: Math.round((taskInProgress / taskBase) * 100),
+  };
 
-    return {
-      total,
-      completed,
-      overdue,
-      totalPercent,
-      completedPercent,
-      overduePercent,
-    };
-  }, [milestoneStatsApi]);
-
-  const recentActivity = useMemo(() => {
-    const sorted = [...activityLogs].sort((a, b) => {
-      const ta = a.time ? Date.parse(a.time) : 0;
-      const tb = b.time ? Date.parse(b.time) : 0;
-      return tb - ta;
-    });
-    return sorted.slice(0, RECENT_ACTIVITY_ROWS);
-  }, [activityLogs]);
+  const milestoneTotal = milestoneStatsApi?.total ?? 0;
+  const milestoneCompleted = milestoneStatsApi?.completed ?? 0;
+  const milestoneOverdue = milestoneStatsApi?.overdue ?? 0;
+  const milestoneBase = milestoneTotal || 1;
+  const milestoneStats = {
+    total: milestoneTotal,
+    completed: milestoneCompleted,
+    overdue: milestoneOverdue,
+    totalPercent: Math.round((milestoneCompleted / milestoneBase) * 100),
+    completedPercent: Math.round((milestoneCompleted / milestoneBase) * 100),
+    overduePercent: Math.round((milestoneOverdue / milestoneBase) * 100),
+  };
 
   return (
-    <div className="w-full space-y-6">
+    <div className="flex w-full min-w-0 max-w-none flex-col space-y-6">
       <div>
         <h1 className="text-3xl font-semibold text-slate-900">
           Overview Dashboard
@@ -246,11 +253,11 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
+      <div className="w-full min-w-0 rounded-[32px] border border-transparent bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.08)] ring-1 ring-slate-100 backdrop-blur">
         <div className="space-y-4 border-b border-slate-100 px-6 py-6">
-          <ProjectStatsRow stats={projectStats} loading={loading} />
-          <TaskStatsRow stats={taskStats} loading={loading} />
-          <MilestoneStatsRow stats={milestoneStats} loading={loading} />
+          <ProjectStatsRow stats={projectStats} loading={statsLoading} />
+          <TaskStatsRow stats={taskStats} loading={statsLoading} />
+          <MilestoneStatsRow stats={milestoneStats} loading={statsLoading} />
         </div>
 
         <div className="border-t border-slate-100">
@@ -263,15 +270,15 @@ export default function DashboardPage() {
                 Beberapa aktivitas terakhir dari Activity Log.
               </p>
             </div>
-            <a
+            <Link
               href="/dashboard/activity-log"
               className="inline-flex items-center rounded-full bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
             >
               Lihat semua
-            </a>
+            </Link>
           </div>
           <div className="px-6 py-4">
-            {loading ? (
+            {activityLoading ? (
               <div className="space-y-3">
                 {Array.from({ length: 4 }).map((_, idx) => (
                   <div
@@ -286,17 +293,46 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            ) : recentActivity.length === 0 ? (
+            ) : activityLogs.length === 0 ? (
               <p className="text-xs text-slate-400">
                 Belum ada aktivitas yang tercatat.
               </p>
             ) : (
-              <DataTable<ActivityLog>
-                columns={LATEST_ACTIVITY_COLUMNS}
-                data={recentActivity}
-                loading={false}
-                emptyText="Belum ada aktivitas yang tercatat."
-              />
+              <div className="space-y-3">
+                {activityLogs.map((row) => (
+                  <div
+                    key={row.id}
+                    className="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {row.actor_name ?? "-"}
+                        </p>
+                        <p className="text-sm text-slate-600">
+                          {row.event ?? "-"}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                          {row.log_name && (
+                            <span className="rounded-full bg-white px-2 py-0.5 font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
+                              {row.log_name}
+                            </span>
+                          )}
+                          {row.subject_type && (
+                            <span>
+                              {row.subject_type}
+                              {row.subject_id ? ` #${row.subject_id}` : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs font-medium text-slate-400">
+                        {row.time ? new Date(row.time).toLocaleString() : "-"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

@@ -22,13 +22,19 @@ export function useMilestoneColumns(
     onChanged,
     onComplete,
     canManage,
+    canEdit,
+    canDelete,
   }: {
     onDelete?: (row: MilestoneRow) => void;
     onChanged?: () => void;
     onComplete?: (row: MilestoneRow) => void;
     canManage?: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
   }
 ): Column<MilestoneRow>[] {
+  const resolvedCanEdit = canEdit ?? canManage ?? true;
+  const resolvedCanDelete = canDelete ?? canManage ?? true;
   return [
     { key: "name", header: "Name" },
     { key: "status", header: "Status" },
@@ -44,7 +50,8 @@ export function useMilestoneColumns(
           onDelete={onDelete}
           onChanged={onChanged}
           onComplete={onComplete}
-          canManage={canManage}
+          canEdit={resolvedCanEdit}
+          canDelete={resolvedCanDelete}
         />
       ),
     },
@@ -56,19 +63,22 @@ function RowActions({
   onDelete,
   onChanged,
   onComplete,
-  canManage = true,
+  canEdit = true,
+  canDelete = true,
 }: {
   row: MilestoneRow;
   onDelete?: (row: MilestoneRow) => void;
   onChanged?: () => void;
   onComplete?: (row: MilestoneRow) => void;
-  canManage?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const isCompleted = (row.status || '').toLowerCase() === 'completed';
   return (
     <div className="inline-flex flex-wrap items-center justify-center gap-3 text-sm">
-      {canManage && (
+      {(canEdit || canDelete) && (
         <>
+          {canEdit && (
           <Link
             href={`/dashboard/milestones/${row.id}/edit`}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
@@ -76,6 +86,8 @@ function RowActions({
           >
             <Pencil className="h-4 w-4" />
           </Link>
+          )}
+          {canEdit && (
           <button
             type="button"
             disabled={isCompleted}
@@ -87,6 +99,8 @@ function RowActions({
           >
             <CheckCircle2 className="h-4 w-4" />
           </button>
+          )}
+          {canDelete && (
           <button
             type="button"
             onClick={() => onDelete?.(row)}
@@ -95,6 +109,7 @@ function RowActions({
           >
             <Trash2 className="h-4 w-4" />
           </button>
+          )}
         </>
       )}
       <Link

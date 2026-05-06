@@ -31,7 +31,7 @@ const STATUS_OPTIONS = ["Planned", "In Progress", "Completed", "On Hold"] as con
 
 export default function EditProjectPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola project",
+    "mengubah project",
   ]);
 
   if (!authLoading && !allowed) {

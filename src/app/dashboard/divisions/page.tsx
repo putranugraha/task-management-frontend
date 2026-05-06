@@ -13,6 +13,7 @@ import { SlidersHorizontal, Plus, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> =
   | T[]
@@ -22,6 +23,11 @@ type MaybePaginated<T> =
   | { items: T[] };
 
 export default function DivisionsPage() {
+  const { can } = useAuth();
+  const canCreateProject = can("membuat project");
+  const canUpdateProject = can("mengubah project");
+  const canDeleteProject = can("menghapus project");
+
   const [rows, setRows] = useState<DivisionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +123,12 @@ export default function DivisionsPage() {
     }
   };
 
-  const baseColumns = useDivisionColumns(handleDelete, { minimal: false, onDetail: openDetail }) as unknown as Column<DivisionRow>[];
+  const baseColumns = useDivisionColumns(handleDelete, {
+    minimal: false,
+    onDetail: openDetail,
+    canEdit: canUpdateProject,
+    canDelete: canDeleteProject,
+  }) as unknown as Column<DivisionRow>[];
 
   // Column visibility (mirrors Users page)
   const togglableColumns = useMemo(() => baseColumns.filter((c) => c.key !== "actions"), [baseColumns]);
@@ -337,13 +348,15 @@ export default function DivisionsPage() {
               </div>
             )}
           </div>
-          <Link
-            href="/dashboard/divisions/create"
-            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-          >
-            <Plus className="h-4 w-4" />
-            Create Division
-          </Link>
+          {canCreateProject && (
+            <Link
+              href="/dashboard/divisions/create"
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+            >
+              <Plus className="h-4 w-4" />
+              Create Division
+            </Link>
+          )}
         </div>
       </div>
 

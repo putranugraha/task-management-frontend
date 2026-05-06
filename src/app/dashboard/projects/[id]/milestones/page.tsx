@@ -18,8 +18,10 @@ export default function ProjectMilestonesPage() {
   const params = useParams();
   const projectId = params?.id as string;
   const { can } = useAuth();
-  const canManageProject = can("mengelola project");
-  const canManageTasks = can("mengelola tugas");
+  const canCreateProject = can("membuat project");
+  const canUpdateProject = can("mengubah project");
+  const canDeleteProject = can("menghapus project");
+  const canCreateTasks = can("membuat tugas");
   const { showToast } = useToast();
 
   const [rows, setRows] = useState<MilestoneRow[]>([]);
@@ -199,7 +201,8 @@ export default function ProjectMilestonesPage() {
   const columns = useMilestoneColumns({
     onDelete: handleDelete,
     onComplete: handleComplete,
-    canManage: canManageProject,
+    canEdit: canUpdateProject,
+    canDelete: canDeleteProject,
   });
 
   const activeTasksCountForTarget =
@@ -239,7 +242,7 @@ export default function ProjectMilestonesPage() {
             Kelola milestones dan tasks yang terkait dalam project ini.
           </p>
         </div>
-        {canManageProject && (
+        {canCreateProject && (
           <Link
             href={`/dashboard/projects/${projectId}/milestones/create`}
             className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -289,7 +292,7 @@ export default function ProjectMilestonesPage() {
               Tasks dalam project ini beserta milestone yang terkait.
             </p>
           </div>
-          {canManageTasks && (
+          {canCreateTasks && (
             <Link
               href={`/dashboard/tasks/create?project_id=${projectId}`}
               className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
@@ -329,7 +332,7 @@ export default function ProjectMilestonesPage() {
                   header: "Actions",
                   render: (r: TaskRow) => (
                     <div className="flex justify-end gap-2 text-sm">
-                      {canManageTasks && (
+                      {canCreateTasks && (
                         <a
                           className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
                           href={`/dashboard/tasks/${r.id}/edit`}

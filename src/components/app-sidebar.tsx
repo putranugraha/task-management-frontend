@@ -11,7 +11,6 @@ import {
   BarChart2,
   Users as UsersIconLucide,
   ShieldCheck,
-  Settings as SettingsIconLucide,
   Bell,
   Building2,
   ListChecks,
@@ -50,7 +49,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     { title: "Users", url: "/dashboard/users", icon: UsersIconLucide },
     { title: "Roles", url: "/dashboard/roles", icon: ShieldCheck },
     { title: "Activity Log", url: "/dashboard/activity-log", icon: ListChecks },
-    { title: "Settings", url: "/dashboard/settings", icon: SettingsIconLucide },
   ];
 
   const navItems = React.useMemo(

@@ -34,7 +34,7 @@ const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
 function CreateTaskPageContent() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola tugas",
+    "membuat tugas",
   ]);
 
   if (!authLoading && !allowed) {

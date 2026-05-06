@@ -26,10 +26,14 @@ export function useMilestoneColumns(
     onDetail?: (row: MilestoneRow) => void;
     onComplete?: (row: MilestoneRow) => void;
     canManage?: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
   }
 ): Column<MilestoneRow>[] {
   const handlers = options || {};
   const canManage = handlers.canManage !== false;
+  const canEdit = handlers.canEdit ?? canManage;
+  const canDelete = handlers.canDelete ?? canManage;
 
   return [
     {
@@ -80,8 +84,9 @@ export function useMilestoneColumns(
       className: "min-w-[190px]",
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
-          {canManage && (
+          {(canEdit || canDelete) && (
             <>
+              {canEdit && (
               <Link
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
                 href={`/dashboard/milestones/${row.id}/edit`}
@@ -89,6 +94,8 @@ export function useMilestoneColumns(
               >
                 <Pencil className="h-4 w-4" />
               </Link>
+              )}
+              {canDelete && (
               <button
                 type="button"
                 onClick={() => handlers.onDelete?.(row)}
@@ -97,6 +104,7 @@ export function useMilestoneColumns(
               >
                 <Trash2 className="h-4 w-4" />
               </button>
+              )}
             </>
           )}
           {handlers.onDetail ? (

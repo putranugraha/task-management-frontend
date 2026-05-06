@@ -34,7 +34,7 @@ const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
 export default function EditTaskPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola tugas",
+    "mengubah tugas",
   ]);
 
   if (!authLoading && !allowed) {

@@ -55,8 +55,24 @@ function clearAuthCookies() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>(initialAuthState);
 
-  const syncFromStorage = useCallback(() => {
+  const clearStoredAuth = useCallback(() => {
     if (typeof window === "undefined") return;
+
+    window.localStorage.removeItem("access_token");
+    window.localStorage.removeItem("token_type");
+    window.localStorage.removeItem("user");
+    window.localStorage.removeItem("auth_meta");
+    clearAuthCookies();
+  }, []);
+
+  const readStoredAuth = useCallback(() => {
+    if (typeof window === "undefined") {
+      return {
+        token: null,
+        user: null,
+        meta: null,
+      };
+    }
 
     const token = window.localStorage.getItem("access_token");
     const rawUser = window.localStorage.getItem("user");
@@ -88,25 +104,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    setState((prev) => ({
-      ...prev,
+    return {
       token: token || null,
       user,
-      roles: meta?.roles ?? prev.roles,
-      permissions: meta?.permissions ?? prev.permissions,
-      primary_role:
-        typeof meta?.primary_role === "undefined"
-          ? prev.primary_role
-          : meta.primary_role ?? null,
-      dashboard_type:
-        typeof meta?.dashboard_type === "undefined"
-          ? prev.dashboard_type
-          : meta.dashboard_type ?? null,
-      home_path:
-        typeof meta?.home_path === "undefined"
-          ? prev.home_path
-          : meta.home_path ?? null,
-    }));
+      meta,
+    };
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -159,13 +161,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInitialized: true,
       }));
     } catch {
-      setState((prev) => ({
-        ...prev,
+      clearStoredAuth();
+      setState({
+        ...initialAuthState,
         isLoading: false,
         isInitialized: true,
-      }));
+      });
     }
-  }, []);
+  }, [clearStoredAuth]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -173,30 +176,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     const initialize = async () => {
-      setState((prev) => ({ ...prev, isLoading: true }));
+      const { token, user, meta } = readStoredAuth();
 
-      const token =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem("access_token")
-          : null;
-
-      syncFromStorage();
-
-      // Jika tidak ada token sama sekali, langsung anggap belum login.
       if (!token) {
         if (!cancelled) {
-          setState((prev) => ({
-            ...prev,
-            isInitialized: true,
+          setState({
+            ...initialAuthState,
             isLoading: false,
-          }));
+            isInitialized: true,
+          });
         }
         return;
       }
 
-      // Jika ada token, validasi dulu ke backend lewat /api/profile.
-      // refreshProfile akan mengatur isInitialized dan isLoading sendiri,
-      // termasuk saat token sudah tidak valid.
+      if (!cancelled) {
+        setState({
+          ...initialAuthState,
+          token,
+          user,
+          roles: meta?.roles ?? initialAuthState.roles,
+          permissions: meta?.permissions ?? initialAuthState.permissions,
+          primary_role:
+            typeof meta?.primary_role === "undefined"
+              ? initialAuthState.primary_role
+              : meta.primary_role ?? null,
+          dashboard_type:
+            typeof meta?.dashboard_type === "undefined"
+              ? initialAuthState.dashboard_type
+              : meta.dashboard_type ?? null,
+          home_path:
+            typeof meta?.home_path === "undefined"
+              ? initialAuthState.home_path
+              : meta.home_path ?? null,
+          isLoading: true,
+          isInitialized: false,
+        });
+      }
+
       if (!cancelled) {
         await refreshProfile();
       }
@@ -204,18 +220,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initialize().catch(() => {
       if (!cancelled) {
-        setState((prev) => ({
-          ...prev,
+        clearStoredAuth();
+        setState({
+          ...initialAuthState,
           isLoading: false,
           isInitialized: true,
-        }));
+        });
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [refreshProfile, syncFromStorage]);
+  }, [clearStoredAuth, readStoredAuth, refreshProfile]);
 
   const login = useCallback(
     async (email: string, password: string): Promise<LoginResponse | void> => {
@@ -314,6 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.localStorage.removeItem("access_token");
         window.localStorage.removeItem("token_type");
         window.localStorage.removeItem("user");
+        window.localStorage.removeItem("auth_meta");
         clearAuthCookies();
       }
 
@@ -339,10 +357,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (permission: string) => {
       if (!permission) return false;
       if (!state) return false;
-
-      if (state.roles.includes("Admin") || state.primary_role === "Admin") {
-        return true;
-      }
 
       return state.permissions.includes(permission);
     },

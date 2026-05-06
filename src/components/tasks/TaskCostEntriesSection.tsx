@@ -34,10 +34,14 @@ function formatIDR(value: number | string | null | undefined): string {
 
 export default function TaskCostEntriesSection({ taskId }: Props) {
   const { showToast } = useToast();
-  const { loading: permLoading, allowed } = usePermissionGuard([
-    "mengelola project",
+  const { loading: createPermLoading, allowed: createAllowed } = usePermissionGuard([
+    "mengubah project",
   ]);
-  const canManage = !permLoading && allowed;
+  const { loading: deletePermLoading, allowed: deleteAllowed } = usePermissionGuard([
+    "menghapus project",
+  ]);
+  const canCreate = !createPermLoading && createAllowed;
+  const canDelete = !deletePermLoading && deleteAllowed;
 
   const [items, setItems] = useState<TaskCostEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -91,7 +95,7 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canManage) return;
+    if (!canCreate) return;
     if (!incurredOn) return;
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt < 0) {
@@ -201,7 +205,7 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
                 <th className="text-left font-medium px-3 py-2 border-b">
                   Note
                 </th>
-                {canManage && (
+                {canDelete && (
                   <th className="text-right font-medium px-3 py-2 border-b w-[90px]">
                     Actions
                   </th>
@@ -227,7 +231,7 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
                       {it.note || "-"}
                     </span>
                   </td>
-                  {canManage && (
+                  {canDelete && (
                     <td className="px-3 py-2 border-t align-top text-right">
                       <button
                         type="button"
@@ -246,9 +250,9 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
         </div>
       )}
 
-      {canManage && (
+      {canCreate && (
         <form onSubmit={submit} className="mt-3 grid gap-2">
-          <div className="grid gap-2 md:grid-cols-4">
+          <div className="grid gap-2 md:grid-cols-3">
             <div>
               <label className="block text-xs text-neutral-600 mb-1">
                 Incurred on
@@ -308,15 +312,6 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
                 onChange={(e) => setCategory(e.target.value)}
               />
             </div>
-            <div className="flex items-end">
-              <button
-                type="submit"
-                className="w-full h-[38px] px-3 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-60"
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Add entry"}
-              </button>
-            </div>
           </div>
 
           <div>
@@ -327,6 +322,16 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="inline-flex h-9 min-w-[160px] items-center justify-center rounded-full border border-[#00674F] bg-[#00674F] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005341] disabled:opacity-60"
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Add entry"}
+            </button>
           </div>
         </form>
       )}

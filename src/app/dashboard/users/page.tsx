@@ -19,13 +19,19 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
 export default function UsersPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengelola users",
+    "melihat users",
   ]);
+  const { can, state } = useAuth();
+  const canCreateUsers = can("membuat users");
+  const canUpdateUsers = can("mengubah users");
+  const canDeleteUsers = can("menghapus users");
+  const currentUserId = Number(state.user?.id ?? 0);
 
   if (!authLoading && !allowed) {
     return <Forbidden />;
@@ -80,11 +86,30 @@ export default function UsersPage() {
   useEffect(() => { fetchUsers(); }, []);
 
   const handleDelete = (row: UserRow) => {
+    if (Number(row.id) === currentUserId) {
+      showToast({
+        variant: "warning",
+        title: "Aksi tidak tersedia",
+        description: "Akun yang sedang digunakan tidak dapat dihapus.",
+      });
+      return;
+    }
+
     setDeleteTarget(row);
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    if (Number(deleteTarget.id) === currentUserId) {
+      showToast({
+        variant: "warning",
+        title: "Aksi tidak tersedia",
+        description: "Akun yang sedang digunakan tidak dapat dihapus.",
+      });
+      setDeleteTarget(null);
+      return;
+    }
+
     setDeleteLoading(true);
     try {
       await apiRequest("DELETE", `/api/users/${deleteTarget.id}`);
@@ -156,7 +181,12 @@ export default function UsersPage() {
     }
   };
 
-  const columns = useUserColumns(handleDelete, { onDetail: openDetail });
+  const columns = useUserColumns(handleDelete, {
+    onDetail: openDetail,
+    canEdit: canUpdateUsers,
+    canDelete: canDeleteUsers,
+    currentUserId,
+  });
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -391,13 +421,15 @@ export default function UsersPage() {
                 </div>
               )}
             </div>
-            <Link
-              href="/dashboard/users/create"
-              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-            >
-              <Plus className="h-4 w-4" />
-              Create User
-            </Link>
+            {canCreateUsers && (
+              <Link
+                href="/dashboard/users/create"
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                <Plus className="h-4 w-4" />
+                Create User
+              </Link>
+            )}
           </div>
         </div>
 

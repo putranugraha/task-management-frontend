@@ -24,9 +24,16 @@ export type Column<T> = {
 
 export function useDivisionColumns(
   onDelete?: (row: DivisionRow) => void,
-  opts?: { minimal?: boolean; onDetail?: (row: DivisionRow) => void }
+  opts?: {
+    minimal?: boolean;
+    onDetail?: (row: DivisionRow) => void;
+    canEdit?: boolean;
+    canDelete?: boolean;
+  }
 ): Column<DivisionRow>[] {
   const minimal = opts?.minimal === true;
+  const canEdit = opts?.canEdit ?? true;
+  const canDelete = opts?.canDelete ?? true;
 
   const minimalCols: Column<DivisionRow>[] = [
     {
@@ -149,20 +156,24 @@ export function useDivisionColumns(
               <ArrowRight className="h-3.5 w-3.5" />
             </a>
           )}
-          <a
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-            href={`/dashboard/divisions/${row.id}/edit`}
-            title={`Edit ${row.name}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </a>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-            onClick={() => onDelete?.(row)}
-            title={`Delete ${row.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canEdit && (
+            <a
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+              href={`/dashboard/divisions/${row.id}/edit`}
+              title={`Edit ${row.name}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </a>
+          )}
+          {canDelete && (
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+              onClick={() => onDelete?.(row)}
+              title={`Delete ${row.name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ),
     },

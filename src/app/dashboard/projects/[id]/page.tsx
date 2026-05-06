@@ -95,7 +95,7 @@ type ProjectDetail = {
 export default function ProjectDetailPage() {
   const params = useParams();
   const id = Number(params?.id);
-  const { hasRole, can } = useAuth();
+  const { can } = useAuth();
 
   const [data, setData] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,9 +155,10 @@ export default function ProjectDetailPage() {
   })() : null;
   const currentUserId = Number((currentUser?.id ?? currentUser?.user_id) ?? 0);
   const { showToast } = useToast();
-
-  const isMemberOnly =
-    hasRole("Member") && !hasRole("Admin") && !hasRole("Manager") && !can("mengelola project");
+  const canCreateProject = can("membuat project");
+  const canUpdateProject = can("mengubah project");
+  const canDeleteProject = can("menghapus project");
+  const canCreateTask = can("membuat tugas");
 
   const periodOptions = useMemo(
     () => buildAsOfPeriodOptions(reportingPeriods, reportingGranularity),
@@ -606,15 +607,17 @@ export default function ProjectDetailPage() {
               </span>
             </div>
           </div>
-          {!isMemberOnly && (
+          {(canCreateProject || canUpdateProject || canCreateTask) && (
             <div className="flex items-center gap-2">
-              <a
-                href={data ? `/dashboard/projects/${data.id}/milestones/create` : "#"}
-                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-              >
-                <Plus className="h-4 w-4" />
-                Add Milestone
-              </a>
+              {canCreateProject && (
+                <a
+                  href={data ? `/dashboard/projects/${data.id}/milestones/create` : "#"}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Milestone
+                </a>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -625,32 +628,38 @@ export default function ProjectDetailPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl border border-slate-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.14)]">
-                  <DropdownMenuItem
-                    disabled={!data}
-                    onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/edit`)}
-                  >
-                    Edit Project
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!data}
-                    onSelect={() =>
-                      data && (location.href = `/dashboard/tasks/create?project_id=${data.id}`)
-                    }
-                  >
-                    Add Task
-                  </DropdownMenuItem>
+                  {canUpdateProject && (
+                    <DropdownMenuItem
+                      disabled={!data}
+                      onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/edit`)}
+                    >
+                      Edit Project
+                    </DropdownMenuItem>
+                  )}
+                  {canCreateTask && (
+                    <DropdownMenuItem
+                      disabled={!data}
+                      onSelect={() =>
+                        data && (location.href = `/dashboard/tasks/create?project_id=${data.id}`)
+                      }
+                    >
+                      Add Task
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     disabled={!data}
                     onSelect={() => data && (location.href = `/dashboard/projects/${data.id}/gantt`)}
                   >
                     View Gantt
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!canBaseline}
-                    onSelect={() => setBaselineModalOpen(true)}
-                  >
-                    {canBaseline ? 'Create Baseline' : 'Create Baseline (unavailable)'}
-                  </DropdownMenuItem>
+                  {canCreateProject && (
+                    <DropdownMenuItem
+                      disabled={!canBaseline}
+                      onSelect={() => setBaselineModalOpen(true)}
+                    >
+                      {canBaseline ? 'Create Baseline' : 'Create Baseline (unavailable)'}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onSelect={() => history.back()}>Back</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -843,7 +852,7 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="px-4 space-y-3">
-            {!isMemberOnly && (
+            {canCreateProject && (
               <form
                 className="flex flex-wrap items-center gap-3 text-xs"
                 onSubmit={async (e) => {

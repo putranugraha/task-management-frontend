@@ -8,7 +8,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { usePathname } from "next/navigation";
 import { listMyNotifications } from "@/lib/api/notifications";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -28,7 +27,6 @@ export function NotificationProvider({
   children: React.ReactNode;
 }) {
   const { state } = useAuth();
-  const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState<number | null>(null);
 
   const isAuthenticated = !!state?.user && !!state?.token;
@@ -55,35 +53,6 @@ export function NotificationProvider({
     });
   }, []);
 
-  useEffect(() => {
-    if (!state?.isInitialized || !isAuthenticated) return;
-
-    let cancelled = false;
-
-    async function run() {
-      try {
-        const res = await listMyNotifications({
-          only_unread: true,
-          page: 1,
-          per_page: 1,
-        });
-        if (!cancelled) {
-          setUnreadCount(res.meta?.total ?? 0);
-        }
-      } catch {
-        if (!cancelled) {
-          setUnreadCount(0);
-        }
-      }
-    }
-
-    run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [state?.isInitialized, isAuthenticated]);
-
   const value: NotificationContextValue = useMemo(
     () => ({
       unreadCount,
@@ -94,9 +63,33 @@ export function NotificationProvider({
   );
 
   useEffect(() => {
-    if (!state?.isInitialized || !isAuthenticated) return;
-    refreshUnreadCount().catch(() => {});
-  }, [state?.isInitialized, pathname, refreshUnreadCount, isAuthenticated]);
+    if (!state?.isInitialized) return;
+
+    if (!isAuthenticated) {
+      setUnreadCount(null);
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const run = () => {
+      refreshUnreadCount().catch(() => {});
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(run, { timeout: 1500 });
+    } else {
+      timeoutId = setTimeout(run, 300);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (idleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, [state?.isInitialized, refreshUnreadCount, isAuthenticated]);
 
   return (
     <NotificationContext.Provider value={value}>

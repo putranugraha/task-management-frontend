@@ -24,6 +24,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/contexts/auth-context"
 
 export function NavProjects({
   projects,
@@ -35,6 +36,8 @@ export function NavProjects({
   }[]
 }) {
   const { isMobile } = useSidebar()
+  const { can } = useAuth()
+  const canDeleteProject = can("menghapus project")
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -68,11 +71,15 @@ export function NavProjects({
                   <Share className="text-muted-foreground" />
                   <span>Share Project</span>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <Trash2 className="text-muted-foreground" />
-                  <span>Delete Project</span>
-                </DropdownMenuItem>
+                {canDeleteProject && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <Trash2 className="text-muted-foreground" />
+                      <span>Delete Project</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>

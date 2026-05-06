@@ -54,13 +54,22 @@ const statusClasses = (value: string) => {
 
 export function useUserColumns(
   onDelete?: (row: UserRow) => void,
-  opts?: { minimal?: boolean; onDetail?: (row: UserRow) => void }
+  opts?: {
+    minimal?: boolean;
+    onDetail?: (row: UserRow) => void;
+    canEdit?: boolean;
+    canDelete?: boolean;
+    currentUserId?: number | null;
+  }
 ): Column<UserRow>[] {
   const handleDelete = useCallback((row: UserRow) => {
     if (onDelete) onDelete(row);
   }, [onDelete]);
 
   const minimal = opts?.minimal === true;
+  const canEdit = opts?.canEdit ?? true;
+  const canDelete = opts?.canDelete ?? true;
+  const currentUserId = opts?.currentUserId ?? null;
 
   const baseCols: Column<UserRow>[] = useMemo(() => ([
     {
@@ -199,21 +208,25 @@ export function useUserColumns(
       className: "min-w-[190px]",
       render: (row) => (
         <div className="flex items-center justify-end gap-3">
-          <Link
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
-            href={`/dashboard/users/${row.id}/edit`}
-            title={`Edit ${row.name}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </Link>
-          <button
-            type="button"
-            onClick={() => handleDelete(row)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-            title={`Delete ${row.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {canEdit && (
+            <Link
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#00674F]/10 text-[#00674F] transition hover:bg-[#00674F]/20"
+              href={`/dashboard/users/${row.id}/edit`}
+              title={`Edit ${row.name}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </Link>
+          )}
+          {canDelete && Number(row.id) !== Number(currentUserId) && (
+            <button
+              type="button"
+              onClick={() => handleDelete(row)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
+              title={`Delete ${row.name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
           {opts?.onDetail ? (
             <button
               type="button"

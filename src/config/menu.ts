@@ -17,12 +17,12 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     label: "Projects",
     path: "/dashboard/projects",
-    permissions: ["melihat project", "mengelola project"],
+    permissions: ["melihat project", "membuat project", "mengubah project", "menghapus project"],
   },
   {
     label: "Tasks",
     path: "/dashboard/tasks",
-    permissions: ["melihat tugas", "mengelola tugas", "mengelola tugas sendiri"],
+    permissions: ["melihat tugas", "membuat tugas", "mengubah tugas", "menghapus tugas", "mengelola tugas sendiri"],
   },
   {
     label: "Notifications",
@@ -47,12 +47,12 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     label: "Users",
     path: "/dashboard/users",
-    permissions: ["mengelola users"],
+    permissions: ["melihat users", "membuat users", "mengubah users", "menghapus users"],
   },
   {
     label: "Roles",
     path: "/dashboard/roles",
-    permissions: ["mengelola roles"],
+    permissions: ["melihat roles", "membuat roles", "mengubah roles", "menghapus roles"],
   },
   {
     label: "Activity Log",

@@ -10,6 +10,7 @@ import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { useToast } from "@/components/ui/toast";
+import { useAuth } from "@/contexts/auth-context";
 
 type RoleDetail = {
   id: number;
@@ -23,6 +24,7 @@ export default function EditRolePage() {
   const router = useRouter();
   const id = Number(params?.id);
   const { showToast } = useToast();
+  const { refreshProfile } = useAuth();
 
   const [form, setForm] = useState<RoleDetail | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -115,6 +117,7 @@ export default function EditRolePage() {
       };
 
       await apiRequest("PUT", `/api/roles/${form.id}`, payload);
+      await refreshProfile();
       const okMsg = "Perubahan role berhasil disimpan.";
       setSuccessMessage(okMsg);
       showToast({

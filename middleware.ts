@@ -2,25 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Server-side guard for dashboard pages.
-// Uses token cookies or Sanctum session cookies, then validates via /api/profile.
+// This app uses bearer tokens. Avoid validating via /api/profile on every
+// navigation because that adds a blocking API round-trip to every dashboard request.
 
 const DASHBOARD_PREFIX = "/dashboard";
 const LOGIN_PATH = "/auth/login";
-const PROFILE_PATH = "/api/profile";
-
-function getApiBaseUrl() {
-  const internal = process.env.INTERNAL_API_BASE_URL;
-  const publicBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  const publicUrl = process.env.NEXT_PUBLIC_API_URL;
-  return (
-    internal ||
-    publicBase ||
-    publicUrl ||
-    (process.env.NODE_ENV === "production"
-      ? "https://api.centralsagamandala.com"
-      : "http://localhost:8000")
-  );
-}
 
 function redirectToLogin(req: NextRequest) {
   const url = req.nextUrl.clone();
@@ -40,8 +26,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  const hasTokenFlag = req.cookies.get("app_has_token")?.value === "1";
   const rawAccessToken = req.cookies.get("app_access_token")?.value || "";
-  const rawTokenType = req.cookies.get("app_token_type")?.value || "Bearer";
   const accessToken = (() => {
     try {
       return decodeURIComponent(rawAccessToken);
@@ -49,46 +35,12 @@ export async function middleware(req: NextRequest) {
       return rawAccessToken;
     }
   })();
-  const tokenType = (() => {
-    try {
-      return decodeURIComponent(rawTokenType);
-    } catch {
-      return rawTokenType;
-    }
-  })();
-  const hasSanctum = Boolean(
-    req.cookies.get("XSRF-TOKEN")?.value ||
-    req.cookies.get("laravel_session")?.value
-  );
 
-  if (!accessToken && !hasSanctum) {
+  if (!hasTokenFlag || !accessToken) {
     return redirectToLogin(req);
   }
 
-  const headers = new Headers();
-  headers.set("Accept", "application/json");
-  const cookieHeader = req.headers.get("cookie");
-  if (cookieHeader) {
-    headers.set("cookie", cookieHeader);
-  }
-  if (accessToken) {
-    headers.set("Authorization", `${tokenType} ${accessToken}`);
-  }
-
-  try {
-    const baseUrl = getApiBaseUrl();
-    const res = await fetch(new URL(PROFILE_PATH, baseUrl), {
-      method: "GET",
-      headers,
-      cache: "no-store",
-    });
-    if (res.ok) {
-      return NextResponse.next();
-    }
-    return redirectToLogin(req);
-  } catch {
-    return redirectToLogin(req);
-  }
+  return NextResponse.next();
 }
 
 export const config = {

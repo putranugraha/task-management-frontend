@@ -23,6 +23,39 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 // This lives for the lifetime of the JS bundle (per tab) and is safe for dashboard use.
 let tasksCache: { rows: TaskRow[]; fetchedAt: number } | null = null;
 const TASKS_CACHE_TTL_MS = 60_000; // 60 seconds
+const TASKS_LIST_CACHE_KEY = "dashboard:tasks:list:";
+const TASKS_STATS_CACHE_KEY = "dashboard:tasks:stats";
+
+type TasksListCacheEntry = {
+  rows: TaskRow[];
+  paginationMeta: PaginationMeta | null;
+  fetchedAt: number;
+};
+
+type TasksStatsCacheEntry = {
+  stats: { total: number; completed: number; in_progress: number };
+  fetchedAt: number;
+};
+
+const tasksListMemoryCache = new Map<string, TasksListCacheEntry>();
+let tasksStatsMemoryCache: TasksStatsCacheEntry | null = null;
+
+function readSessionCache<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
 
 const DataTable = dynamic(
   () => import("../users/data-table"),
@@ -57,7 +90,9 @@ const DEFAULT_PER_PAGE = 10;
 
 export default function TasksPage() {
   const { can } = useAuth();
-  const canManageTasks = can("mengelola tugas");
+  const canCreateTasks = can("membuat tugas");
+  const canUpdateTasks = can("mengubah tugas");
+  const canDeleteTasks = can("menghapus tugas");
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +103,29 @@ export default function TasksPage() {
   const [stats, setStats] = useState<{ total: number; completed: number; in_progress: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
-  const fetchTasks = async (opts?: { page?: number; perPage?: number; showLoading?: boolean }) => {
+  const fetchTasks = async (opts?: { page?: number; perPage?: number; showLoading?: boolean; force?: boolean }) => {
     const showLoading = opts?.showLoading ?? true;
     const pageParam = opts?.page ?? 1;
     const perPageParam = opts?.perPage ?? DEFAULT_PER_PAGE;
+    const force = opts?.force ?? false;
+    const cacheKey = `${TASKS_LIST_CACHE_KEY}${pageParam}:${perPageParam}`;
+
+    if (!force) {
+      const cached =
+        tasksListMemoryCache.get(cacheKey) ??
+        readSessionCache<TasksListCacheEntry>(cacheKey);
+      if (cached) {
+        const age = Date.now() - cached.fetchedAt;
+        if (age >= 0 && age <= TASKS_CACHE_TTL_MS) {
+          setRows(cached.rows);
+          setPaginationMeta(cached.paginationMeta);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     try {
       if (showLoading) {
         setLoading(true);
@@ -102,6 +156,13 @@ export default function TasksPage() {
       const deduped = Array.from(dedupedMap.values());
       setRows(deduped);
       setPaginationMeta(meta);
+      const cacheEntry: TasksListCacheEntry = {
+        rows: deduped,
+        paginationMeta: meta,
+        fetchedAt: Date.now(),
+      };
+      tasksListMemoryCache.set(cacheKey, cacheEntry);
+      writeSessionCache(cacheKey, cacheEntry);
       if (pageParam === 1) {
         tasksCache = { rows: deduped, fetchedAt: Date.now() };
       }
@@ -119,6 +180,18 @@ export default function TasksPage() {
   };
 
   const fetchTaskStats = async () => {
+    const cached =
+      tasksStatsMemoryCache ??
+      readSessionCache<TasksStatsCacheEntry>(TASKS_STATS_CACHE_KEY);
+    if (cached) {
+      const age = Date.now() - cached.fetchedAt;
+      if (age >= 0 && age <= TASKS_CACHE_TTL_MS) {
+        setStats(cached.stats);
+        setStatsLoading(false);
+        return;
+      }
+    }
+
     try {
       setStatsLoading(true);
       const res = await apiRequest<{ total: number; completed: number; in_progress: number }>(
@@ -130,6 +203,16 @@ export default function TasksPage() {
         completed: res.completed ?? 0,
         in_progress: res.in_progress ?? 0,
       });
+      const cacheEntry: TasksStatsCacheEntry = {
+        stats: {
+          total: res.total ?? 0,
+          completed: res.completed ?? 0,
+          in_progress: res.in_progress ?? 0,
+        },
+        fetchedAt: Date.now(),
+      };
+      tasksStatsMemoryCache = cacheEntry;
+      writeSessionCache(TASKS_STATS_CACHE_KEY, cacheEntry);
     } catch {
       // Biarkan stats tetap dihitung dari rows jika request gagal
     } finally {
@@ -155,7 +238,24 @@ export default function TasksPage() {
     setDeleteLoading(true);
     try {
       await apiRequest("DELETE", `/api/tasks/${deleteTarget.id}`);
-      await fetchTasks({ page: 1, perPage: DEFAULT_PER_PAGE, showLoading: false });
+      tasksCache = null;
+      tasksListMemoryCache.clear();
+      tasksStatsMemoryCache = null;
+      if (typeof window !== "undefined") {
+        Object.keys(window.sessionStorage)
+          .filter(
+            (key) =>
+              key.startsWith(TASKS_LIST_CACHE_KEY) || key === TASKS_STATS_CACHE_KEY
+          )
+          .forEach((key) => window.sessionStorage.removeItem(key));
+      }
+      await fetchTasks({
+        page: 1,
+        perPage: DEFAULT_PER_PAGE,
+        showLoading: false,
+        force: true,
+      });
+      await fetchTaskStats();
       showToast({
         variant: "success",
         title: "Task dihapus",
@@ -189,6 +289,7 @@ export default function TasksPage() {
         updated_at?: string | null;
         start_actual?: string | null;
         end_actual?: string | null;
+        budget_cost?: number | string | null;
         milestone?: { id: number; name: string } | null;
         assignees?: { id: number; name: string }[];
       }) | null
@@ -253,6 +354,7 @@ export default function TasksPage() {
         description: payload.description ?? null,
         start_actual: payload.start_actual ?? null,
         end_actual: payload.end_actual ?? null,
+        budget_cost: payload.budget_cost ?? null,
         created_at: payload.created_at ?? null,
         updated_at: payload.updated_at ?? null,
         milestone: payload.milestone ? { id: Number(payload.milestone.id), name: payload.milestone.name } : null,
@@ -288,7 +390,8 @@ export default function TasksPage() {
   // Columns
   const columns = useTaskColumns(handleDelete, {
     onDetail: openDetail,
-    canManage: canManageTasks,
+    canEdit: canUpdateTasks,
+    canDelete: canDeleteTasks,
   });
 
   // Column menu + search + pagination (mirror from Users)
@@ -520,7 +623,7 @@ export default function TasksPage() {
                 </div>
               )}
             </div>
-            {canManageTasks && (
+            {canCreateTasks && (
               <Link
                 href="/dashboard/tasks/create"
                 className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -678,6 +781,7 @@ export default function TasksPage() {
                         <Row label="Priority" value={detailData.priority ?? '-'} />
                         <Row label="Status" value={detailData.status ?? '-'} />
                         <Row label="Progress" value={`${detailData.percent_complete ?? 0}%`} />
+                        <Row label="Cost" value={formatIdr(detailData.budget_cost)} />
                         <Row label="Start Planned" value={detailData.start_planned ?? '-'} />
                         <Row label="End Planned" value={detailData.end_planned ?? '-'} />
                         <Row label="Start Actual" value={detailData.start_actual ?? '-'} />
@@ -863,4 +967,15 @@ function renderDueChip(endPlanned?: string | null) {
   return (
     <span className={["inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide", cls].join(" ")}>{text}</span>
   );
+}
+
+function formatIdr(value?: number | string | null) {
+  if (value === null || value === undefined || value === "") return "-";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }

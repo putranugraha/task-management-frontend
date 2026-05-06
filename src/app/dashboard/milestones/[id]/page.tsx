@@ -30,7 +30,9 @@ export default function MilestoneDetailPage() {
   const router = useRouter();
   const id = Number(params?.id);
   const { can } = useAuth();
-  const canManageTasks = can("mengelola tugas");
+  const canCreateTasks = can("membuat tugas");
+  const canUpdateTasks = can("mengubah tugas");
+  const canDeleteTasks = can("menghapus tugas");
   const { showToast } = useToast();
 
   const [milestone, setMilestone] = useState<Milestone | null>(null);
@@ -186,13 +188,14 @@ export default function MilestoneDetailPage() {
           <TaskActions
             row={row}
             onChanged={fetchTasks}
-            canManage={canManageTasks}
+            canEdit={canUpdateTasks}
+            canDelete={canDeleteTasks}
           />
         ),
       },
     ] as any;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canManageTasks]);
+  }, [canUpdateTasks, canDeleteTasks]);
   if (loading) {
     return (
       <div className="w-full space-y-6">
@@ -325,7 +328,7 @@ export default function MilestoneDetailPage() {
       <DetailSectionCard>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-slate-800">Tasks</h3>
-          {canManageTasks && (
+          {canCreateTasks && (
             <button
               onClick={() => setModalOpen(true)}
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
@@ -528,11 +531,13 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 function TaskActions({
   row,
   onChanged,
-  canManage,
+  canEdit,
+  canDelete,
 }: {
   row: TaskRow;
   onChanged: () => void;
-  canManage: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
@@ -574,20 +579,24 @@ function TaskActions({
       >
         Detail
       </a>
-      {canManage && (
+      {(canEdit || canDelete) && (
         <>
+          {canEdit && (
           <a
             className="px-2 py-1 rounded-md border hover:bg-neutral-50 text-sm"
             href={`/dashboard/tasks/${row.id}/edit`}
           >
             Edit
           </a>
+          )}
+          {canDelete && (
           <button
             className="px-2 py-1 rounded-md border text-red-600 hover:bg-red-50 text-sm"
             onClick={() => setDeleteOpen(true)}
           >
             Delete
           </button>
+          )}
           <ConfirmDialog
             open={deleteOpen}
             title="Hapus task ini?"

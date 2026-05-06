@@ -21,7 +21,7 @@ export function getApiBaseUrl() {
   // Force localhost backend when site is opened from localhost,
   // even if a stale NEXT_PUBLIC_* value was baked during build.
   if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')) {
-    const base = 'http://localhost:8000';
+    const base = 'http://127.0.0.1:8000';
     if (process.env.NODE_ENV !== 'production') {
       console.log('[config] Inferred local API base:', base);
     }

@@ -416,8 +416,7 @@ export default function TaskDetailPage() {
     () =>
       hasRole("Admin") ||
       hasRole("Manager") ||
-      can("mengelola project") ||
-      can("mengelola tugas"),
+      can("mengubah tugas"),
     [hasRole, can]
   );
 
@@ -425,7 +424,7 @@ export default function TaskDetailPage() {
     () =>
       hasRole("Admin") ||
       hasRole("Manager") ||
-      can("mengelola project"),
+      can("membuat project"),
     [hasRole, can]
   );
 
@@ -498,6 +497,18 @@ export default function TaskDetailPage() {
                 </div>
               </div>
               <div>
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">Start Actual</div>
+                <div className="font-semibold mt-0.5">
+                  {isLoading ? "Loading…" : data?.start_actual ?? "-"}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500">End Actual</div>
+                <div className="font-semibold mt-0.5">
+                  {isLoading ? "Loading…" : data?.end_actual ?? "-"}
+                </div>
+              </div>
+              <div>
                 <div className="text-[11px] uppercase tracking-wide text-neutral-500">Created At</div>
                 <div className="font-semibold mt-0.5">
                   {isLoading ? "Loading…" : data?.created_at ?? "-"}
@@ -550,12 +561,27 @@ export default function TaskDetailPage() {
               value={isLoading ? "Loading…" : (data?.end_planned ?? "-")}
             />
             <Row
+              label="Start Actual"
+              value={isLoading ? "Loading…" : (data?.start_actual ?? "-")}
+            />
+            <Row
+              label="End Actual"
+              value={isLoading ? "Loading…" : (data?.end_actual ?? "-")}
+            />
+            <Row
               label="Created At"
               value={isLoading ? "Loading…" : (data?.created_at ?? "-")}
             />
             <Row
               label="Updated At"
               value={isLoading ? "Loading…" : (data?.updated_at ?? "-")}
+            />
+          </div>
+
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            <Row
+              label="Budget Cost"
+              value={isLoading ? "Loading..." : formatIdr(data?.budget_cost)}
             />
           </div>
 
@@ -827,6 +853,17 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+function formatIdr(value?: number | string | null) {
+  if (value === null || value === undefined || value === "") return "-";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function getInitials(name?: string | null, fallback?: string | null) {

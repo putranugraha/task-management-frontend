@@ -21,7 +21,7 @@ type FormState = {
 };
 
 export default function CreateMilestonePage() {
-  const { loading: authLoading, allowed } = usePermissionGuard(["mengelola project"]);
+  const { loading: authLoading, allowed } = usePermissionGuard(["membuat project"]);
 
   if (!authLoading && !allowed) {
     return <Forbidden />;

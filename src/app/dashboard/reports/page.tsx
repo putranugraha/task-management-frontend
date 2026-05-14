@@ -397,58 +397,6 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExportKpiCsv = () => {
-    if (!displayKpiSnapshots.length || !selectedProject) return;
-    const headers = [
-      "Project ID",
-      "Project Name",
-      "Period",
-      "Tasks Total",
-      "Tasks Done",
-      "Overdue Count",
-      "Avg Cycle Time (days)",
-    ];
-    const rows = displayKpiSnapshots.map((s) => [
-      String(selectedProject.id),
-      selectedProject.name,
-      s.period_label,
-      String(s.tasks_total ?? 0),
-      String(s.tasks_done ?? 0),
-      String(s.overdue_count ?? 0),
-      String(s.avg_cycle_time_days ?? 0),
-    ]);
-
-    const csv = [headers, ...rows]
-      .map((line) =>
-        line
-          .map((cell) => {
-            const value = cell ?? "";
-            if (/[",\n]/.test(value)) {
-              return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-          })
-          .join(",")
-      )
-      .join("\r\n");
-
-    const blob =
-      typeof Blob !== "undefined"
-        ? new Blob([csv], { type: "text/csv;charset=utf-8;" })
-        : null;
-    if (!blob || typeof window === "undefined") return;
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const safeName = selectedProject.name.replace(/[^a-z0-9_-]+/gi, "_");
-    a.download = `kpi_${kpiGranularity}_report_${safeName || selectedProject.id}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between print:block">
@@ -458,7 +406,7 @@ export default function ReportsPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Ringkasan performa proyek, KPI snapshot, dan EVM. Gunakan filter
-            project di bawah ini lalu cetak atau export laporan.
+            project di bawah ini lalu cetak laporan.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -519,14 +467,6 @@ export default function ReportsPage() {
               className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] print:hidden"
             >
               Cetak laporan
-            </button>
-            <button
-              type="button"
-              onClick={handleExportKpiCsv}
-              disabled={!kpiSnapshots.length || !selectedProject}
-              className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] disabled:cursor-not-allowed disabled:opacity-50 print:hidden"
-            >
-              Export KPI (CSV)
             </button>
           </div>
         </div>

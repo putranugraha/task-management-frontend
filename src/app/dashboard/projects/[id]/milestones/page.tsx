@@ -41,8 +41,8 @@ export default function ProjectMilestonesPage() {
   const [projectTasksFull, setProjectTasksFull] = useState<Task[]>([]);
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<MilestoneRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<MilestoneRow | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [completeTarget, setCompleteTarget] = useState<MilestoneRow | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
 
@@ -124,35 +124,35 @@ export default function ProjectMilestonesPage() {
 
   useEffect(() => { if (projectId) { fetchList(); fetchProjectTasks(); } }, [projectId]);
 
-  const handleDelete = (row: MilestoneRow) => {
-    setDeleteTarget(row);
+  const handleArchive = (row: MilestoneRow) => {
+    setArchiveTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    setArchiveLoading(true);
     try {
-      await remove(deleteTarget.id);
+      await remove(archiveTarget.id);
       await fetchList();
       showToast({
         variant: "success",
-        title: "Milestone dihapus",
-        description: `Milestone "${deleteTarget.name}" berhasil dihapus.`,
+        title: "Milestone di-archive",
+        description: `Milestone "${archiveTarget.name}" berhasil dipindahkan ke archive.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus milestone";
+        "Gagal archive milestone";
       showToast({
         variant: "error",
-        title: "Gagal menghapus milestone",
+        title: "Gagal archive milestone",
         description: msg,
       });
     } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setArchiveLoading(false);
+      setArchiveTarget(null);
     }
   };
 
@@ -199,7 +199,7 @@ export default function ProjectMilestonesPage() {
   };
 
   const columns = useMilestoneColumns({
-    onDelete: handleDelete,
+    onDelete: handleArchive,
     onComplete: handleComplete,
     canEdit: canUpdateProject,
     canDelete: canDeleteProject,
@@ -242,13 +242,25 @@ export default function ProjectMilestonesPage() {
             Kelola milestones dan tasks yang terkait dalam project ini.
           </p>
         </div>
-        {canCreateProject && (
-          <Link
-            href={`/dashboard/projects/${projectId}/milestones/create`}
-            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-          >
-            Create Milestone
-          </Link>
+        {(canCreateProject || canDeleteProject) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {canDeleteProject && (
+              <Link
+                href={`/dashboard/milestones/archive?project_id=${projectId}`}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
+              >
+                Archive
+              </Link>
+            )}
+            {canCreateProject && (
+              <Link
+                href={`/dashboard/projects/${projectId}/milestones/create`}
+                className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+              >
+                Create Milestone
+              </Link>
+            )}
+          </div>
         )}
       </div>
 
@@ -353,19 +365,19 @@ export default function ProjectMilestonesPage() {
       </div>
 
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Hapus milestone ini?"
+        open={!!archiveTarget}
+        title="Archive milestone ini?"
         description={
-          deleteTarget
-            ? `Milestone "${deleteTarget.name}" akan dihapus dari project ini.`
+          archiveTarget
+            ? `Milestone "${archiveTarget.name}" akan dipindahkan ke archive dan bisa di-restore nanti.`
             : ""
         }
-        confirmLabel="Hapus"
+        confirmLabel="Archive"
         cancelLabel="Batal"
         variant="danger"
-        loading={deleteLoading}
-        onConfirm={confirmDelete}
-        onCancel={() => !deleteLoading && setDeleteTarget(null)}
+        loading={archiveLoading}
+        onConfirm={confirmArchive}
+        onCancel={() => !archiveLoading && setArchiveTarget(null)}
       />
 
       <ConfirmDialog

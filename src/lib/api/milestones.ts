@@ -69,7 +69,20 @@ export async function update(id: number | string, dto: UpdateMilestoneDto): Prom
 }
 
 export async function remove(id: number | string): Promise<void> {
-  await apiRequest('DELETE', `/api/milestones/${id}`);
+    await apiRequest('DELETE', `/api/milestones/${id}`);
+}
+
+export async function listArchived(params?: { project_id?: number | string; search?: string }): Promise<Milestone[]> {
+  const query = new URLSearchParams();
+  if (params?.project_id) query.set('project_id', String(params.project_id));
+  if (params?.search?.trim()) query.set('search', params.search.trim());
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const res = await apiRequest<Milestone[] | { data: Milestone[] }>('GET', `/api/milestones/archived${suffix}`);
+  return Array.isArray(res) ? res : (res as any).data ?? [];
+}
+
+export async function restore(id: number | string): Promise<Milestone> {
+  return await apiRequest<Milestone>('PATCH', `/api/milestones/${id}/restore`);
 }
 
 export async function updateStatus(id: number | string, status: MilestoneStatus): Promise<Milestone> {

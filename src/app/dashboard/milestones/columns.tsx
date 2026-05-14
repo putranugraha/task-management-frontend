@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArrowRight, Pencil } from "lucide-react";
 
 export type MilestoneRow = {
   id: number;
@@ -99,10 +99,10 @@ export function useMilestoneColumns(
               <button
                 type="button"
                 onClick={() => handlers.onDelete?.(row)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-                title={`Delete ${row.name}`}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-amber-100 text-amber-700 transition hover:bg-amber-200"
+                title={`Archive ${row.name}`}
               >
-                <Trash2 className="h-4 w-4" />
+                <Archive className="h-4 w-4" />
               </button>
               )}
             </>

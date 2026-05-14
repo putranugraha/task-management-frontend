@@ -1,12 +1,13 @@
 "use client";
 
-import { Pencil, Trash2, ArrowRight } from "lucide-react";
+import { ArrowRight, Building2, CircleOff, Pencil } from "lucide-react";
 
 export type DivisionRow = {
   id: number;
   code: string;
   name: string;
   description?: string | null;
+  status?: string | null;
   users?: { id: number; name: string }[];
   users_count?: number;
   created_at?: string;
@@ -22,11 +23,24 @@ export type Column<T> = {
   align?: "left" | "center" | "right";
 };
 
+const isInactiveDivision = (row: DivisionRow) => {
+  const status = String(row.status ?? "").toLowerCase();
+  return status.includes("non") || status.includes("inaktif") || status.includes("inactive");
+};
+
+const statusClasses = (value?: string | null) => {
+  return isInactiveDivision({ status: value } as DivisionRow)
+    ? "bg-rose-50 text-rose-500 ring-1 ring-rose-200"
+    : "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200";
+};
+
 export function useDivisionColumns(
-  onDelete?: (row: DivisionRow) => void,
+  onDeactivate?: (row: DivisionRow) => void,
   opts?: {
     minimal?: boolean;
     onDetail?: (row: DivisionRow) => void;
+    onActivate?: (row: DivisionRow) => void;
+    activatingId?: number | null;
     canEdit?: boolean;
     canDelete?: boolean;
   }
@@ -62,6 +76,20 @@ export function useDivisionColumns(
       className: "min-w-[220px]",
       render: (r) => (
         <span className="text-sm text-slate-600 line-clamp-2">{r.description ?? '-'}</span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "center",
+      render: (r) => (
+        <span className={["inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold", statusClasses(r.status)].join(" ")}>
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current/40" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+          </span>
+          {r.status ?? "Aktif"}
+        </span>
       ),
     },
   ];
@@ -103,6 +131,20 @@ export function useDivisionColumns(
       render: (r) => (
         <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
           {typeof r.users_count === 'number' ? r.users_count : (Array.isArray(r.users) ? r.users.length : 0)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "center",
+      render: (r) => (
+        <span className={["inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold", statusClasses(r.status)].join(" ")}>
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current/40" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+          </span>
+          {r.status ?? "Aktif"}
         </span>
       ),
     },
@@ -165,13 +207,23 @@ export function useDivisionColumns(
               <Pencil className="h-4 w-4" />
             </a>
           )}
-          {canDelete && (
+          {canEdit && isInactiveDivision(row) && (
             <button
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-              onClick={() => onDelete?.(row)}
-              title={`Delete ${row.name}`}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:opacity-60"
+              onClick={() => opts?.onActivate?.(row)}
+              disabled={Number(opts?.activatingId) === Number(row.id)}
+              title={`Aktifkan ${row.name}`}
             >
-              <Trash2 className="h-4 w-4" />
+              <Building2 className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && !isInactiveDivision(row) && (
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-amber-50 text-amber-600 transition hover:bg-amber-100"
+              onClick={() => onDeactivate?.(row)}
+              title={`Nonaktifkan ${row.name}`}
+            >
+              <CircleOff className="h-4 w-4" />
             </button>
           )}
         </div>

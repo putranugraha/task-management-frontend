@@ -14,6 +14,7 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { useToast } from "@/components/ui/toast";
 import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
+import TaskDependencyEditor from "@/components/tasks/TaskDependencyEditor";
 
 type FormState = {
   project_id: number | "";
@@ -163,12 +164,10 @@ function CreateTaskPageContent() {
         }));
       }
       if (typeof form.dependencies !== 'undefined') {
-        // Simplified rule (like project create flow): only "blocked by" relationships.
-        // Always send FS + lag 0 to avoid exposing advanced scheduling knobs in UI.
         payload.dependencies = (form.dependencies || []).map((d: any) => ({
           depends_on_task_id: Number(d.depends_on_task_id),
-          type: 'FS',
-          lag_days: 0,
+          type: d.type || 'FS',
+          lag_days: Number(d.lag_days ?? 0) || 0,
         }));
       }
       // Primary endpoint
@@ -590,53 +589,12 @@ function CreateTaskPageContent() {
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Dependencies</h2>
               {depsLoading ? (
                 <Skeleton className="h-24 w-full rounded-xl bg-neutral-200/50" />
-              ) : depOptions.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">No dependency candidates.</div>
               ) : (
-                <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-inner max-h-52 overflow-auto text-sm">
-                  <p className="px-2 pb-2 text-xs text-slate-500">
-                    Pilih task yang harus selesai dulu sebelum task ini bisa dimulai.
-                  </p>
-                  {depOptions.map((o) => {
-                    const checked = (form.dependencies || []).some(
-                      (d) => Number(d.depends_on_task_id) === Number(o.id)
-                    );
-                    return (
-                      <label
-                        key={o.id}
-                        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50"
-                      >
-                        <span className="text-slate-700">{o.title}</span>
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
-                          checked={checked}
-                          onChange={(e) => {
-                            setForm((s) => {
-                              const prev = s.dependencies || [];
-                              if (e.target.checked) {
-                                if (prev.some((d) => Number(d.depends_on_task_id) === Number(o.id))) {
-                                  return s;
-                                }
-                                return {
-                                  ...s,
-                                  dependencies: [
-                                    ...prev,
-                                    { depends_on_task_id: Number(o.id), type: "FS" as const, lag_days: 0 },
-                                  ],
-                                };
-                              }
-                              return {
-                                ...s,
-                                dependencies: prev.filter((d) => Number(d.depends_on_task_id) !== Number(o.id)),
-                              };
-                            });
-                          }}
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
+                <TaskDependencyEditor
+                  value={form.dependencies || []}
+                  options={depOptions}
+                  onChange={(dependencies) => setForm((s) => ({ ...s, dependencies }))}
+                />
               )}
             </div>
           ) : null}

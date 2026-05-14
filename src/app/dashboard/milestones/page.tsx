@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { SlidersHorizontal, X, Plus } from "lucide-react";
+import { Archive, SlidersHorizontal, X, Plus } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import type { Milestone } from "@/types/milestone";
 import DataTable from "../users/data-table";
@@ -47,8 +47,8 @@ export default function MilestonesPage() {
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { showToast } = useToast();
-  const [deleteTarget, setDeleteTarget] = useState<MilestoneRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<MilestoneRow | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [page, setPage] = useState(1);
@@ -121,36 +121,36 @@ export default function MilestonesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDelete = (row: MilestoneRow) => {
-    setDeleteTarget(row);
+  const handleArchive = (row: MilestoneRow) => {
+    setArchiveTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    setArchiveLoading(true);
     try {
-      await apiRequest("DELETE", `/api/milestones/${deleteTarget.id}`);
+      await apiRequest("DELETE", `/api/milestones/${archiveTarget.id}`);
       await fetchMilestones({ page: 1, perPage: rowsPerPage, search });
       showToast({
         variant: "success",
-        title: "Milestone dihapus",
-        description: `Milestone "${deleteTarget.name}" berhasil dihapus.`,
+        title: "Milestone di-archive",
+        description: `Milestone "${archiveTarget.name}" berhasil dipindahkan ke archive.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus milestone";
+        "Gagal archive milestone";
       showToast({
         variant: "error",
-        title: "Gagal menghapus milestone",
+        title: "Gagal archive milestone",
         description: msg,
       });
     }
     finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setArchiveLoading(false);
+      setArchiveTarget(null);
     }
   };
 
@@ -187,7 +187,7 @@ export default function MilestonesPage() {
   };
 
   const columns = useMilestoneColumns({
-    onDelete: handleDelete,
+    onDelete: handleArchive,
     onDetail: openDetail,
     canEdit: canUpdateProject,
     canDelete: canDeleteProject,
@@ -407,6 +407,18 @@ export default function MilestonesPage() {
                 </div>
               )}
             </div>
+            {canDeleteProject && (
+              <Link
+                href="/dashboard/milestones/archive"
+                className="group inline-flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
+              >
+                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-slate-50 text-slate-400 transition group-hover:bg-[#00674F]/10 group-hover:text-[#00674F]">
+                  <span className="absolute inset-0 rounded-lg border border-white/40" />
+                  <Archive className="h-[18px] w-[18px]" />
+                </span>
+                Archive
+              </Link>
+            )}
             {canCreateProject && (
               <Link
                 href="/dashboard/milestones/create"
@@ -572,15 +584,15 @@ export default function MilestonesPage() {
       )}
 
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Hapus milestone ini?"
-        description={deleteTarget ? `Milestone "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
-        confirmLabel="Hapus"
+        open={!!archiveTarget}
+        title="Archive milestone ini?"
+        description={archiveTarget ? `Milestone "${archiveTarget.name}" akan dipindahkan ke archive dan bisa di-restore nanti.` : ""}
+        confirmLabel="Archive"
         cancelLabel="Batal"
         variant="danger"
-        loading={deleteLoading}
-        onConfirm={confirmDelete}
-        onCancel={() => !deleteLoading && setDeleteTarget(null)}
+        loading={archiveLoading}
+        onConfirm={confirmArchive}
+        onCancel={() => !archiveLoading && setArchiveTarget(null)}
       />
     </div>
   );

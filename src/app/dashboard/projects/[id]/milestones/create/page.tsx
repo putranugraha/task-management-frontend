@@ -12,6 +12,7 @@ import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { useToast } from "@/components/ui/toast";
 import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
+import TaskDependencyEditor from "@/components/tasks/TaskDependencyEditor";
 
 const TASK_STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"] as const;
 const TASK_PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
@@ -82,7 +83,7 @@ export default function CreateProjectMilestonePage() {
     end_planned: string;
     budget_cost: string;
     percent_complete: number;
-    dependsOnKeys?: number[];
+    dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
     assigneeIds?: number[];
   };
   const [taskForms, setTaskForms] = useState<TaskForm[]>([]);
@@ -97,7 +98,7 @@ export default function CreateProjectMilestonePage() {
     end_planned: "",
     budget_cost: "",
     percent_complete: 0,
-    dependsOnKeys: [],
+    dependencies: [],
     assigneeIds: [],
   }]));
   const removeTask = (idx: number) => setTaskForms((s) => s.filter((_, i) => i !== idx));
@@ -328,10 +329,19 @@ export default function CreateProjectMilestonePage() {
             if (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) {
               dto.assignments = t.assigneeIds.map((id) => ({ user_id: id, role_on_task: 'Member' }));
             }
-            // translate dependencies to created ids (only previous tasks allowed)
-            const depIds = (t.dependsOnKeys || []).map(k => createdMap.get(k)).filter(Boolean) as number[];
-            if (depIds.length) {
-              dto.dependencies = depIds.map(id => ({ depends_on_task_id: id, type: 'FS', lag_days: 0 }));
+            const dependencies = (t.dependencies || [])
+              .map((dep) => {
+                const createdId = createdMap.get(Number(dep.depends_on_task_id));
+                if (!createdId) return null;
+                return {
+                  depends_on_task_id: createdId,
+                  type: dep.type || 'FS',
+                  lag_days: Number(dep.lag_days ?? 0) || 0,
+                };
+              })
+              .filter(Boolean);
+            if (dependencies.length) {
+              dto.dependencies = dependencies;
             }
             let createdTask: any = null;
             try {
@@ -503,7 +513,7 @@ export default function CreateProjectMilestonePage() {
                     (t.end_planned || "").trim().length > 0 ||
                     (t.budget_cost || "").trim().length > 0 ||
                     (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) ||
-                    (Array.isArray(t.dependsOnKeys) && t.dependsOnKeys.length > 0);
+                    (Array.isArray(t.dependencies) && t.dependencies.length > 0);
                   const collapsed = !!collapsedTaskKeys[t.tempKey];
                   return (
                   <div key={t.tempKey} className="relative overflow-hidden rounded-2xl border border-slate-200 p-4 grid gap-3 bg-white/95 ring-1 ring-slate-100 shadow-[0_12px_24px_rgba(15,23,42,0.06),0_10px_24px_rgba(0,103,79,0.12)] transition hover:shadow-[0_16px_32px_rgba(15,23,42,0.08),0_14px_32px_rgba(0,103,79,0.18)]">
@@ -648,31 +658,19 @@ export default function CreateProjectMilestonePage() {
                     {idx > 0 && (
                       <div>
                         <label className="block text-sm mb-1">Depends On (previous tasks)</label>
-                        <div className="border rounded-md p-2 max-h-40 overflow-auto text-sm">
-                          {taskForms.slice(0, idx).map((cand, cidx) => {
-                            const checked = (t.dependsOnKeys || []).includes(cand.tempKey);
-                            const label = (cand.title && cand.title.trim()) ? cand.title : `Task #${cidx + 1}`;
-                            return (
-                              <label key={cand.tempKey} className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    setTaskForms((s) => s.map((x, i) => {
-                                      if (i !== idx) return x;
-                                      const set = new Set(x.dependsOnKeys || []);
-                                      if (e.target.checked) set.add(cand.tempKey); else set.delete(cand.tempKey);
-                                      return { ...x, dependsOnKeys: Array.from(set) };
-                                    }));
-                                  }}
-                                />
-                                <span className="truncate">{label}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Dukungan tipe/lag akan ditambahkan berikutnya.</p>
+                        <TaskDependencyEditor
+                          value={t.dependencies || []}
+                          options={taskForms.slice(0, idx).map((cand, cidx) => ({
+                            id: cand.tempKey,
+                            title: (cand.title && cand.title.trim()) ? cand.title : `Task #${cidx + 1}`,
+                            status: cand.status,
+                          }))}
+                          onChange={(dependencies) => {
+                            setTaskForms((s) => s.map((x, i) => (
+                              i === idx ? { ...x, dependencies } : x
+                            )));
+                          }}
+                        />
                       </div>
                     )}
                     </>

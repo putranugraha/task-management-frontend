@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowRight, Pencil, ShieldCheck, ShieldX } from "lucide-react";
 
 export type RoleRow = {
   id: number;
@@ -28,12 +28,25 @@ const statusClasses = (value?: string | null) => {
   return "bg-emerald-50 text-emerald-500 ring-1 ring-emerald-200";
 };
 
+const isInactiveRole = (row: RoleRow) => {
+  const status = String(row.status ?? "").toLowerCase();
+  return status.includes("non") || status.includes("inaktif") || status.includes("inactive") || status.includes("no");
+};
+
 export function useRoleColumns(
-  onDelete?: (row: RoleRow) => void,
-  opts?: { onDetail?: (row: RoleRow) => void; canEdit?: boolean; canDelete?: boolean }
+  onDeactivate?: (row: RoleRow) => void,
+  opts?: {
+    onDetail?: (row: RoleRow) => void;
+    onActivate?: (row: RoleRow) => void;
+    activatingId?: number | null;
+    currentRoleNames?: string[];
+    canEdit?: boolean;
+    canDelete?: boolean;
+  }
 ): Column<RoleRow>[] {
   const canEdit = opts?.canEdit ?? true;
   const canDelete = opts?.canDelete ?? true;
+  const currentRoleNames = new Set((opts?.currentRoleNames ?? []).map((role) => role.toLowerCase()));
 
   return [
     {
@@ -98,14 +111,25 @@ export function useRoleColumns(
               <Pencil className="h-4 w-4" />
             </Link>
           )}
-          {canDelete && (
+          {canEdit && isInactiveRole(row) && (
             <button
               type="button"
-              onClick={() => onDelete?.(row)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-              title={`Delete ${row.name}`}
+              onClick={() => opts?.onActivate?.(row)}
+              disabled={Number(opts?.activatingId) === Number(row.id)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100 disabled:opacity-60"
+              title={`Aktifkan ${row.name}`}
             >
-              <Trash2 className="h-4 w-4" />
+              <ShieldCheck className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && !isInactiveRole(row) && !currentRoleNames.has(String(row.name ?? "").toLowerCase()) && (
+            <button
+              type="button"
+              onClick={() => onDeactivate?.(row)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-amber-50 text-amber-600 transition hover:bg-amber-100"
+              title={`Nonaktifkan ${row.name}`}
+            >
+              <ShieldX className="h-4 w-4" />
             </button>
           )}
           {opts?.onDetail ? (

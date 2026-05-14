@@ -43,7 +43,16 @@ export function NavMain({
         {items.map((item) => (
           <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip={item.title}>
+              <SidebarMenuButton
+                asChild
+                isActive={item.isActive}
+                tooltip={item.title}
+                className={
+                  item.isActive
+                    ? "relative bg-[#E5F4EF] pl-3 font-semibold text-[#00674F] shadow-sm hover:bg-[#D9EFE8] hover:text-[#00674F] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-1 before:rounded-r-full before:bg-[#00674F] [&>svg]:text-[#00674F]"
+                    : "text-slate-600 hover:bg-[#EAF4F1] hover:text-[#00674F] [&>svg]:text-slate-500 [&>svg]:transition-colors hover:[&>svg]:text-[#00674F]"
+                }
+              >
                 <Link href={item.url}>
                   <item.icon />
                   <span>{item.title}</span>

@@ -30,6 +30,7 @@ export interface Task {
   dependents?: TaskDependencyLink[];
   created_at: string; // ISO
   updated_at: string; // ISO
+  deleted_at?: string | null; // ISO
 }
 
 export interface ApiResponse<T> {

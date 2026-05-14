@@ -41,8 +41,9 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
-  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<UserRow | null>(null);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+  const [activateLoadingId, setActivateLoadingId] = useState<number | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -85,54 +86,80 @@ export default function UsersPage() {
 
   useEffect(() => { fetchUsers(); }, []);
 
-  const handleDelete = (row: UserRow) => {
+  const handleDeactivate = (row: UserRow) => {
     if (Number(row.id) === currentUserId) {
       showToast({
         variant: "warning",
         title: "Aksi tidak tersedia",
-        description: "Akun yang sedang digunakan tidak dapat dihapus.",
+        description: "Akun yang sedang digunakan tidak dapat dinonaktifkan.",
       });
       return;
     }
 
-    setDeleteTarget(row);
+    setDeactivateTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    if (Number(deleteTarget.id) === currentUserId) {
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return;
+    if (Number(deactivateTarget.id) === currentUserId) {
       showToast({
         variant: "warning",
         title: "Aksi tidak tersedia",
-        description: "Akun yang sedang digunakan tidak dapat dihapus.",
+        description: "Akun yang sedang digunakan tidak dapat dinonaktifkan.",
       });
-      setDeleteTarget(null);
+      setDeactivateTarget(null);
       return;
     }
 
-    setDeleteLoading(true);
+    setDeactivateLoading(true);
     try {
-      await apiRequest("DELETE", `/api/users/${deleteTarget.id}`);
+      await apiRequest("DELETE", `/api/users/${deactivateTarget.id}`);
       await fetchUsers();
       showToast({
         variant: "success",
-        title: "User dihapus",
-        description: `User ${deleteTarget.name} berhasil dihapus.`,
+        title: "User dinonaktifkan",
+        description: `User ${deactivateTarget.name} berhasil dinonaktifkan.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus user";
+        "Gagal menonaktifkan user";
       showToast({
         variant: "error",
-        title: "Gagal menghapus user",
+        title: "Gagal menonaktifkan user",
         description: msg,
       });
     } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setDeactivateLoading(false);
+      setDeactivateTarget(null);
+    }
+  };
+
+  const handleActivate = async (row: UserRow) => {
+    setActivateLoadingId(Number(row.id));
+    try {
+      await apiRequest("PATCH", `/api/users/${row.id}/activate`);
+      await fetchUsers();
+      showToast({
+        variant: "success",
+        title: "User diaktifkan",
+        description: `User ${row.name} berhasil diaktifkan kembali.`,
+      });
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal mengaktifkan user";
+      showToast({
+        variant: "error",
+        title: "Gagal mengaktifkan user",
+        description: msg,
+      });
+    } finally {
+      setActivateLoadingId(null);
     }
   };
 
@@ -181,8 +208,10 @@ export default function UsersPage() {
     }
   };
 
-  const columns = useUserColumns(handleDelete, {
+  const columns = useUserColumns(handleDeactivate, {
     onDetail: openDetail,
+    onActivate: handleActivate,
+    activatingId: activateLoadingId,
     canEdit: canUpdateUsers,
     canDelete: canDeleteUsers,
     currentUserId,
@@ -436,17 +465,17 @@ export default function UsersPage() {
         <DataTable columns={visibleColumns as Column<UserRow>[]} data={paginatedRows} loading={loading} />
 
         <ConfirmDialog
-          open={!!deleteTarget}
-          title="Hapus user ini?"
-          description={deleteTarget ? `User "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
-          confirmLabel="Hapus"
+          open={!!deactivateTarget}
+          title="Nonaktifkan user ini?"
+          description={deactivateTarget ? `User "${deactivateTarget.name}" tidak bisa login sampai diaktifkan kembali.` : ""}
+          confirmLabel="Nonaktifkan"
           cancelLabel="Batal"
           variant="danger"
-          loading={deleteLoading}
-          onConfirm={confirmDelete}
+          loading={deactivateLoading}
+          onConfirm={confirmDeactivate}
           onCancel={() => {
-            if (deleteLoading) return;
-            setDeleteTarget(null);
+            if (deactivateLoading) return;
+            setDeactivateTarget(null);
           }}
         />
 

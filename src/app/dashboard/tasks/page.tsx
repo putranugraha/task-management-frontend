@@ -14,7 +14,7 @@ import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
 import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { SlidersHorizontal, AlertCircle, X } from "lucide-react";
+import { Archive, SlidersHorizontal, AlertCircle, X } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -98,8 +98,8 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null);
   const { showToast } = useToast();
-  const [deleteTarget, setDeleteTarget] = useState<TaskRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<TaskRow | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [stats, setStats] = useState<{ total: number; completed: number; in_progress: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
@@ -229,15 +229,15 @@ export default function TasksPage() {
     }
   }, []);
 
-  const handleDelete = (row: TaskRow) => {
-    setDeleteTarget(row);
+  const handleArchive = (row: TaskRow) => {
+    setArchiveTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    setArchiveLoading(true);
     try {
-      await apiRequest("DELETE", `/api/tasks/${deleteTarget.id}`);
+      await apiRequest("DELETE", `/api/tasks/${archiveTarget.id}`);
       tasksCache = null;
       tasksListMemoryCache.clear();
       tasksStatsMemoryCache = null;
@@ -258,23 +258,23 @@ export default function TasksPage() {
       await fetchTaskStats();
       showToast({
         variant: "success",
-        title: "Task dihapus",
-        description: `Task "${deleteTarget.title}" berhasil dihapus.`,
+        title: "Task di-archive",
+        description: `Task "${archiveTarget.title}" berhasil dipindahkan ke archive.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus task";
+        "Gagal archive task";
       showToast({
         variant: "error",
-        title: "Gagal menghapus task",
+        title: "Gagal archive task",
         description: msg,
       });
     } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setArchiveLoading(false);
+      setArchiveTarget(null);
     }
   };
 
@@ -388,7 +388,7 @@ export default function TasksPage() {
     };
 
   // Columns
-  const columns = useTaskColumns(handleDelete, {
+  const columns = useTaskColumns(handleArchive, {
     onDetail: openDetail,
     canEdit: canUpdateTasks,
     canDelete: canDeleteTasks,
@@ -623,6 +623,18 @@ export default function TasksPage() {
                 </div>
               )}
             </div>
+            {canDeleteTasks && (
+              <Link
+                href="/dashboard/tasks/archive"
+                className="group inline-flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
+              >
+                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-slate-50 text-slate-400 transition group-hover:bg-[#00674F]/10 group-hover:text-[#00674F]">
+                  <span className="absolute inset-0 rounded-lg border border-white/40" />
+                  <Archive className="h-[18px] w-[18px]" />
+                </span>
+                Archive
+              </Link>
+            )}
             {canCreateTasks && (
               <Link
                 href="/dashboard/tasks/create"
@@ -873,15 +885,15 @@ export default function TasksPage() {
         </div>, document.body)}
 
         <ConfirmDialog
-          open={!!deleteTarget}
-          title="Hapus task ini?"
-          description={deleteTarget ? `Task "${deleteTarget.title}" akan dihapus dari sistem.` : ""}
-          confirmLabel="Hapus"
+          open={!!archiveTarget}
+          title="Archive task ini?"
+          description={archiveTarget ? `Task "${archiveTarget.title}" akan dipindahkan ke archive dan bisa di-restore nanti.` : ""}
+          confirmLabel="Archive"
           cancelLabel="Batal"
           variant="danger"
-          loading={deleteLoading}
-          onConfirm={confirmDelete}
-          onCancel={() => !deleteLoading && setDeleteTarget(null)}
+          loading={archiveLoading}
+          onConfirm={confirmArchive}
+          onCancel={() => !archiveLoading && setArchiveTarget(null)}
         />
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-5 text-sm text-slate-600">

@@ -7,7 +7,8 @@ import {
   ArrowRight,
   Mail,
   ShieldCheck,
-  Trash2,
+  UserCheck,
+  UserX,
   Pencil,
 } from "lucide-react";
 
@@ -52,19 +53,26 @@ const statusClasses = (value: string) => {
   return "bg-emerald-50 text-emerald-500 ring-1 ring-emerald-200";
 };
 
+const isInactiveUser = (row: UserRow) => {
+  const status = String(row.status ?? "").toLowerCase();
+  return !row.is_active || status.includes("non") || status.includes("inaktif") || status.includes("inactive");
+};
+
 export function useUserColumns(
-  onDelete?: (row: UserRow) => void,
+  onDeactivate?: (row: UserRow) => void,
   opts?: {
     minimal?: boolean;
     onDetail?: (row: UserRow) => void;
+    onActivate?: (row: UserRow) => void;
+    activatingId?: number | null;
     canEdit?: boolean;
     canDelete?: boolean;
     currentUserId?: number | null;
   }
 ): Column<UserRow>[] {
-  const handleDelete = useCallback((row: UserRow) => {
-    if (onDelete) onDelete(row);
-  }, [onDelete]);
+  const handleDeactivate = useCallback((row: UserRow) => {
+    if (onDeactivate) onDeactivate(row);
+  }, [onDeactivate]);
 
   const minimal = opts?.minimal === true;
   const canEdit = opts?.canEdit ?? true;
@@ -217,14 +225,25 @@ export function useUserColumns(
               <Pencil className="h-4 w-4" />
             </Link>
           )}
-          {canDelete && Number(row.id) !== Number(currentUserId) && (
+          {canEdit && isInactiveUser(row) && (
             <button
               type="button"
-              onClick={() => handleDelete(row)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-[#DC2626]/10 text-[#DC2626] transition hover:bg-[#DC2626]/20"
-              title={`Delete ${row.name}`}
+              onClick={() => opts?.onActivate?.(row)}
+              disabled={Number(opts?.activatingId) === Number(row.id)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-600 transition hover:bg-emerald-100"
+              title={`Aktifkan ${row.name}`}
             >
-              <Trash2 className="h-4 w-4" />
+              <UserCheck className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && !isInactiveUser(row) && Number(row.id) !== Number(currentUserId) && (
+            <button
+              type="button"
+              onClick={() => handleDeactivate(row)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-amber-50 text-amber-600 transition hover:bg-amber-100"
+              title={`Nonaktifkan ${row.name}`}
+            >
+              <UserX className="h-4 w-4" />
             </button>
           )}
           {opts?.onDetail ? (

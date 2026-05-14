@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChevronsUpDown, Check } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import IdrCurrencyInput from "@/components/ui/IdrCurrencyInput";
+import TaskDependencyEditor from "@/components/tasks/TaskDependencyEditor";
 
 type TaskDetail = {
   id: number;
@@ -694,28 +695,13 @@ export default function EditTaskPage() {
         </div>
         <div>
           <label className="block text-sm mb-1">Dependencies (optional)</label>
-          {depsLoading ? (
-            <div className="text-xs text-neutral-500">Loading dependencies...</div>
-          ) : depOptions.length === 0 ? (
-            <div className="text-xs text-neutral-500">No dependency candidates</div>
-          ) : (
-            <select
-              multiple
-              className="w-full border rounded-md px-3 py-2 min-h-[120px]"
-              value={(form.dependencies?.map(d => d.depends_on_task_id) ?? []) as any}
-              onChange={(e) => {
-                const values = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
-                const unique = Array.from(new Set(values)).filter(v => v !== form.id);
-                const deps = unique.map(v => ({ depends_on_task_id: v, type: 'FS' as const, lag_days: 0 }));
-                setForm((s) => s ? ({ ...s, dependencies: deps }) : s);
-              }}
-            >
-              {depOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.title}</option>
-              ))}
-            </select>
-          )}
-          <p className="text-xs text-neutral-500 mt-1">Default type FS, lag 0. Hold Ctrl/Cmd to select multiple.</p>
+          <TaskDependencyEditor
+            value={form.dependencies || []}
+            options={depOptions}
+            loading={depsLoading}
+            emptyMessage="No dependency candidates"
+            onChange={(dependencies) => setForm((s) => s ? ({ ...s, dependencies }) : s)}
+          />
         </div>
         <div>
           <label className="block text-sm mb-1">Assigned Users</label>

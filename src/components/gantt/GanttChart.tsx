@@ -431,7 +431,7 @@ export default function GanttChart({
               ))}
             </div>
 
-            {/* Dependencies overlay (FS only for now) */}
+            {/* Dependencies overlay */}
             {showDeps && (
               <DependenciesOverlay model={model} gridDays={gridDays} pxPerDay={pxPerDay} headerOffset={HEADER_TOTAL_H} />
             )}
@@ -612,7 +612,7 @@ function colorForStatus(status: string | undefined) {
   };
 }
 
-// Draw FS dependencies between tasks
+// Draw dependencies between task anchors based on FS/SS/FF/SF relation type.
 function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { model: ReturnType<typeof buildModel>; gridDays: number; pxPerDay: number; headerOffset: number }) {
   // Compute layout positions for each task id
   let yAcc = 0;
@@ -630,25 +630,27 @@ function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { mode
     yAcc += rowHeights[rIdx];
   });
 
-  const paths: Array<{ d: string }> = [];
+  const paths: Array<{ d: string; type: string; labelX: number; labelY: number }> = [];
   model.rows.forEach((row) => {
     row.items.forEach((it) => {
       const deps = Array.isArray(it.deps) ? it.deps : [];
       deps.forEach((d: any) => {
-        const type = (d?.type || 'FS');
-        if (type !== 'FS') return; // implement FS first
+        const type = String(d?.type || 'FS').toUpperCase();
         const predId = Number(d?.depends_on?.id ?? d?.depends_on_task_id ?? d?.id);
         if (!predId) return;
         const pred = pos.get(predId);
         const succ = pos.get(it.id);
         if (!pred || !succ) return;
-        const x1 = pred.x + pred.w;
+        const startsFromStart = type === 'SS' || type === 'SF';
+        const endsAtFinish = type === 'FF' || type === 'SF';
+        const x1 = startsFromStart ? pred.x : pred.x + pred.w;
         const y1 = pred.cy;
-        const x2 = succ.x;
+        const x2 = endsAtFinish ? succ.x + succ.w : succ.x;
         const y2 = succ.cy;
-        const midX = x1 + 8; // small horizontal then vertical
+        const direction = x2 >= x1 ? 1 : -1;
+        const midX = x1 + direction * 8;
         const dAttr = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
-        paths.push({ d: dAttr });
+        paths.push({ d: dAttr, type, labelX: midX + direction * 2, labelY: (y1 + y2) / 2 - 2 });
       });
     });
   });
@@ -664,6 +666,11 @@ function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { mode
       <g strokeWidth={1.25} fill="none" strokeOpacity={0.7} color="var(--muted-foreground)" stroke="currentColor">
         {paths.map((p, i) => (
           <path key={i} d={p.d} markerEnd="url(#arrow-grey)" />
+        ))}
+      </g>
+      <g className="select-none" fill="var(--muted-foreground)" fontSize="9" fontWeight="600">
+        {paths.map((p, i) => (
+          <text key={`label-${i}`} x={p.labelX} y={p.labelY}>{p.type}</text>
         ))}
       </g>
     </svg>

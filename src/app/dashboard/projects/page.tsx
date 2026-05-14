@@ -9,7 +9,7 @@ import { useProjectColumns, type ProjectRow, type Column } from "./columns";
 import ProjectStatsRow from "@/components/dashboard/ProjectStatsRow";
 import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { Plus, SlidersHorizontal } from "lucide-react";
+import { Archive, Plus, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -69,18 +69,18 @@ function writeSessionCache<T>(key: string, value: T) {
 }
 
 export default function ProjectsPage() {
-  const { can } = useAuth();
+  const { can, hasRole } = useAuth();
   const canCreateProject = can("membuat project");
   const canUpdateProject = can("mengubah project");
-  const canDeleteProject = can("menghapus project");
+  const canDeleteProject = hasRole("Admin") && can("menghapus project");
 
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paginationMeta, setPaginationMeta] = useState<PaginationMeta | null>(null);
   const { showToast } = useToast();
-  const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<ProjectRow | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -260,15 +260,15 @@ export default function ProjectsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDelete = (row: ProjectRow) => {
-    setDeleteTarget(row);
+  const handleArchive = (row: ProjectRow) => {
+    setArchiveTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    setArchiveLoading(true);
     try {
-      await apiRequest("DELETE", `/api/projects/${deleteTarget.id}`);
+      await apiRequest("DELETE", `/api/projects/${archiveTarget.id}`);
       projectsListMemoryCache.clear();
       projectsStatsMemoryCache.clear();
       if (typeof window !== "undefined") {
@@ -284,27 +284,27 @@ export default function ProjectsPage() {
       await fetchProjectStats();
       showToast({
         variant: "success",
-        title: "Project dihapus",
-        description: `Project "${deleteTarget.name}" berhasil dihapus.`,
+        title: "Project di-archive",
+        description: `Project "${archiveTarget.name}" berhasil dipindahkan ke archive.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus project";
+        "Gagal archive project";
       showToast({
         variant: "error",
-        title: "Gagal menghapus project",
+        title: "Gagal archive project",
         description: msg,
       });
     } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setArchiveLoading(false);
+      setArchiveTarget(null);
     }
   };
 
-  const baseColumns = useProjectColumns(handleDelete, {
+  const baseColumns = useProjectColumns(handleArchive, {
     minimal: true,
     canEdit: canUpdateProject,
     canDelete: canDeleteProject,
@@ -503,6 +503,18 @@ export default function ProjectsPage() {
                 </div>
               )}
             </div>
+            {canDeleteProject && (
+              <Link
+                href="/dashboard/projects/archive"
+                className="group inline-flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
+              >
+                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-slate-50 text-slate-400 transition group-hover:bg-[#00674F]/10 group-hover:text-[#00674F]">
+                  <span className="absolute inset-0 rounded-lg border border-white/40" />
+                  <Archive className="h-[18px] w-[18px]" />
+                </span>
+                Archive
+              </Link>
+            )}
             {canCreateProject && (
               <Link
                 href="/dashboard/projects/create"
@@ -565,15 +577,15 @@ export default function ProjectsPage() {
       </div>
 
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Hapus project ini?"
-        description={deleteTarget ? `Project "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
-        confirmLabel="Hapus"
+        open={!!archiveTarget}
+        title="Archive project ini?"
+        description={archiveTarget ? `Project "${archiveTarget.name}" akan dipindahkan ke archive dan bisa di-restore nanti.` : ""}
+        confirmLabel="Archive"
         cancelLabel="Batal"
         variant="danger"
-        loading={deleteLoading}
-        onConfirm={confirmDelete}
-        onCancel={() => !deleteLoading && setDeleteTarget(null)}
+        loading={archiveLoading}
+        onConfirm={confirmArchive}
+        onCancel={() => !archiveLoading && setArchiveTarget(null)}
       />
     </div>
   );

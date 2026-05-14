@@ -24,7 +24,7 @@ export default function RolesPage() {
   const { loading: authLoading, allowed } = usePermissionGuard([
     "melihat roles",
   ]);
-  const { can } = useAuth();
+  const { can, state } = useAuth();
   const canCreateRoles = can("membuat roles");
   const canUpdateRoles = can("mengubah roles");
   const canDeleteRoles = can("menghapus roles");
@@ -37,8 +37,9 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
-  const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<RoleRow | null>(null);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+  const [activateLoadingId, setActivateLoadingId] = useState<number | null>(null);
 
   const fetchRoles = async () => {
     try {
@@ -127,35 +128,61 @@ export default function RolesPage() {
 
   useEffect(() => { fetchRoles(); }, []);
 
-  const handleDelete = (row: RoleRow) => {
-    setDeleteTarget(row);
+  const handleDeactivate = (row: RoleRow) => {
+    setDeactivateTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return;
+    setDeactivateLoading(true);
     try {
-      await apiRequest("DELETE", `/api/roles/${deleteTarget.id}`);
+      await apiRequest("DELETE", `/api/roles/${deactivateTarget.id}`);
       await fetchRoles();
       showToast({
         variant: "success",
-        title: "Role dihapus",
-        description: `Role ${deleteTarget.name} berhasil dihapus.`,
+        title: "Role dinonaktifkan",
+        description: `Role ${deactivateTarget.name} berhasil dinonaktifkan.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus role";
+        "Gagal menonaktifkan role";
       showToast({
         variant: "error",
-        title: "Gagal menghapus role",
+        title: "Gagal menonaktifkan role",
         description: msg,
       });
     } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setDeactivateLoading(false);
+      setDeactivateTarget(null);
+    }
+  };
+
+  const handleActivate = async (row: RoleRow) => {
+    setActivateLoadingId(Number(row.id));
+    try {
+      await apiRequest("PATCH", `/api/roles/${row.id}/activate`);
+      await fetchRoles();
+      showToast({
+        variant: "success",
+        title: "Role diaktifkan",
+        description: `Role ${row.name} berhasil diaktifkan kembali.`,
+      });
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal mengaktifkan role";
+      showToast({
+        variant: "error",
+        title: "Gagal mengaktifkan role",
+        description: msg,
+      });
+    } finally {
+      setActivateLoadingId(null);
     }
   };
 
@@ -217,8 +244,11 @@ export default function RolesPage() {
     }
   };
 
-  const columns = useRoleColumns(handleDelete, {
+  const columns = useRoleColumns(handleDeactivate, {
     onDetail: openDetail,
+    onActivate: handleActivate,
+    activatingId: activateLoadingId,
+    currentRoleNames: state.roles ?? [],
     canEdit: canUpdateRoles,
     canDelete: canDeleteRoles,
   }) as unknown as Column<RoleRow>[];
@@ -491,17 +521,17 @@ export default function RolesPage() {
         <DataTable columns={visibleColumns as Column<RoleRow>[]} data={paginatedRows} loading={loading} />
 
         <ConfirmDialog
-          open={!!deleteTarget}
-          title="Hapus role ini?"
-          description={deleteTarget ? `Role "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
-          confirmLabel="Hapus"
+          open={!!deactivateTarget}
+          title="Nonaktifkan role ini?"
+          description={deactivateTarget ? `Role "${deactivateTarget.name}" tidak akan memberi akses permission sampai diaktifkan kembali.` : ""}
+          confirmLabel="Nonaktifkan"
           cancelLabel="Batal"
           variant="danger"
-          loading={deleteLoading}
-          onConfirm={confirmDelete}
+          loading={deactivateLoading}
+          onConfirm={confirmDeactivate}
           onCancel={() => {
-            if (deleteLoading) return;
-            setDeleteTarget(null);
+            if (deactivateLoading) return;
+            setDeactivateTarget(null);
           }}
         />
 

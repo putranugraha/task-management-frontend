@@ -35,8 +35,9 @@ export default function DivisionsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
-  const [deleteTarget, setDeleteTarget] = useState<DivisionRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<DivisionRow | null>(null);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+  const [activateLoadingId, setActivateLoadingId] = useState<number | null>(null);
 
   const pickList = (res: any): any[] => {
     if (Array.isArray(res)) return res;
@@ -66,6 +67,7 @@ export default function DivisionsPage() {
           code: String(d.code ?? ''),
           name: d.name ?? d.division_name ?? d.title ?? d.label ?? String(d.code ?? ''),
           description: d.description ?? null,
+          status: d.status ?? 'Aktif',
           created_at: d.created_at ?? '',
           users,
           users_count: typeof d.users_count === 'number' ? d.users_count : (Array.isArray(users) ? users.length : undefined),
@@ -91,41 +93,69 @@ export default function DivisionsPage() {
 
   useEffect(() => { fetchDivisions(); }, []);
 
-  const handleDelete = (row: DivisionRow) => {
-    setDeleteTarget(row);
+  const handleDeactivate = (row: DivisionRow) => {
+    setDeactivateTarget(row);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return;
+    setDeactivateLoading(true);
     try {
-      await apiRequest("DELETE", `/api/divisions/${deleteTarget.id}`);
+      await apiRequest("DELETE", `/api/divisions/${deactivateTarget.id}`);
       await fetchDivisions();
       showToast({
         variant: "success",
-        title: "Division dihapus",
-        description: `Division ${deleteTarget.name} berhasil dihapus.`,
+        title: "Division dinonaktifkan",
+        description: `Division ${deactivateTarget.name} berhasil dinonaktifkan.`,
       });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
         e?.message ||
-        "Gagal menghapus division";
+        "Gagal menonaktifkan division";
       showToast({
         variant: "error",
-        title: "Gagal menghapus division",
+        title: "Gagal menonaktifkan division",
         description: msg,
       });
     } finally {
-      setDeleteLoading(false);
-      setDeleteTarget(null);
+      setDeactivateLoading(false);
+      setDeactivateTarget(null);
     }
   };
 
-  const baseColumns = useDivisionColumns(handleDelete, {
+  const handleActivate = async (row: DivisionRow) => {
+    setActivateLoadingId(Number(row.id));
+    try {
+      await apiRequest("PATCH", `/api/divisions/${row.id}/activate`);
+      await fetchDivisions();
+      showToast({
+        variant: "success",
+        title: "Division diaktifkan",
+        description: `Division ${row.name} berhasil diaktifkan kembali.`,
+      });
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal mengaktifkan division";
+      showToast({
+        variant: "error",
+        title: "Gagal mengaktifkan division",
+        description: msg,
+      });
+    } finally {
+      setActivateLoadingId(null);
+    }
+  };
+
+  const baseColumns = useDivisionColumns(handleDeactivate, {
     minimal: false,
     onDetail: openDetail,
+    onActivate: handleActivate,
+    activatingId: activateLoadingId,
     canEdit: canUpdateProject,
     canDelete: canDeleteProject,
   }) as unknown as Column<DivisionRow>[];
@@ -134,7 +164,7 @@ export default function DivisionsPage() {
   const togglableColumns = useMemo(() => baseColumns.filter((c) => c.key !== "actions"), [baseColumns]);
   const columnOrder = useMemo(() => togglableColumns.map((c) => String(c.key)), [togglableColumns]);
   const defaultVisibleKeys = useMemo(() => {
-    const preferred = new Set(["name", "users_count", "description"]);
+    const preferred = new Set(["name", "users_count", "status", "description"]);
     const picked = columnOrder.filter((k) => preferred.has(k));
     return picked.length ? picked : columnOrder;
   }, [columnOrder]);
@@ -181,7 +211,7 @@ export default function DivisionsPage() {
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((r) => [r.name, r.code, r.description]
+    return rows.filter((r) => [r.name, r.code, r.description, r.status]
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(term))
     );
@@ -224,6 +254,7 @@ export default function DivisionsPage() {
     code: string;
     name: string;
     description: string | null;
+    status?: string | null;
     users?: { id: number; name: string; email?: string }[];
     users_count?: number;
     created_at?: string;
@@ -250,6 +281,7 @@ export default function DivisionsPage() {
         code: String(d.code ?? ''),
         name: d.name ?? d.division_name ?? d.title ?? d.label ?? '',
         description: d.description ?? null,
+        status: d.status ?? 'Aktif',
         users,
         users_count: typeof d.users_count === 'number' ? d.users_count : (Array.isArray(users) ? users.length : undefined),
         created_at: d.created_at ?? '',
@@ -367,17 +399,17 @@ export default function DivisionsPage() {
       <DataTable columns={visibleColumns as any} data={paginatedRows} loading={loading} />
 
       <ConfirmDialog
-        open={!!deleteTarget}
-        title="Hapus division ini?"
-        description={deleteTarget ? `Division "${deleteTarget.name}" akan dihapus dari sistem.` : ""}
-        confirmLabel="Hapus"
+        open={!!deactivateTarget}
+        title="Nonaktifkan division ini?"
+        description={deactivateTarget ? `Division "${deactivateTarget.name}" tidak akan muncul di pilihan aktif sampai diaktifkan kembali.` : ""}
+        confirmLabel="Nonaktifkan"
         cancelLabel="Batal"
         variant="danger"
-        loading={deleteLoading}
-        onConfirm={confirmDelete}
+        loading={deactivateLoading}
+        onConfirm={confirmDeactivate}
         onCancel={() => {
-          if (deleteLoading) return;
-          setDeleteTarget(null);
+          if (deactivateLoading) return;
+          setDeactivateTarget(null);
         }}
       />
 
@@ -450,6 +482,7 @@ export default function DivisionsPage() {
                         <Row label="Name" value={detailData.name} />
                         <Row label="Code" value={detailData.code || '-'} />
                         <Row label="Description" value={detailData.description || '-'} />
+                        <Row label="Status" value={detailData.status ?? 'Aktif'} />
                         <Row label="Users" value={Array.isArray(detailData.users) && detailData.users.length ? detailData.users.map(u => u.name).join(', ') : '-'} />
                         <Row label="Total Users" value={String(detailData.users_count ?? (detailData.users?.length ?? 0))} />
                         <Row label="Created At" value={detailData.created_at ?? '-'} />

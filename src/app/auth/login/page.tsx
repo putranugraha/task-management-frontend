@@ -3,12 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import type { DashboardType } from "@/types/auth";
+import { useToast } from "@/components/ui/toast";
 
 function resolveHomePath(
   nextParam: string | null,
-  homePath: string | null,
-  dashboardType: DashboardType | null
+  homePath: string | null
 ): string {
   if (nextParam && nextParam.startsWith("/")) {
     return nextParam;
@@ -31,10 +30,35 @@ function resolveHomePath(
   return "/dashboard";
 }
 
+function getLoginErrorMessage(error: unknown): string {
+  if (error && typeof error === "object") {
+    const maybeAxiosError = error as {
+      response?: {
+        status?: number;
+        data?: { message?: string };
+      };
+      message?: string;
+    };
+
+    if ([401, 422].includes(Number(maybeAxiosError.response?.status))) {
+      return "Email atau password salah";
+    }
+
+    return (
+      maybeAxiosError.response?.data?.message ||
+      maybeAxiosError.message ||
+      "Email atau password salah"
+    );
+  }
+
+  return "Email atau password salah";
+}
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { state, login } = useAuth();
+  const { showToast } = useToast();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,8 +73,7 @@ function LoginPageContent() {
     const nextParam = searchParams?.get("next") ?? null;
     const dest = resolveHomePath(
       nextParam,
-      state.home_path,
-      state.dashboard_type
+      state.home_path
     );
     router.replace(dest);
   }, [
@@ -72,17 +95,18 @@ function LoginPageContent() {
       const nextParam = searchParams?.get("next") ?? null;
       const dest = resolveHomePath(
         nextParam,
-        (res && res.home_path) || null,
-        (res && res.dashboard_type) || null
+        (res && res.home_path) || null
       );
 
       router.replace(dest);
     } catch (e: unknown) {
-      const message =
-        e && typeof e === "object" && "message" in e
-          ? String((e as { message?: string }).message)
-          : "Login gagal";
+      const message = getLoginErrorMessage(e);
       setError(message);
+      showToast({
+        variant: "error",
+        title: "Login gagal",
+        description: message || "Email atau password salah",
+      });
     } finally {
       setLoading(false);
     }
@@ -295,6 +319,19 @@ function LoginPageContent() {
             >
               {loading ? "Masuk..." : "Masuk"}
             </button>
+            {error && (
+              <p
+                role="alert"
+                style={{
+                  marginTop: 4,
+                  color: "#E11D48",
+                  fontSize: 12,
+                  textAlign: "center",
+                }}
+              >
+                {error}
+              </p>
+            )}
           </form>
         </div>
       </div>

@@ -98,8 +98,14 @@ export default function ActivityLogPage() {
       try {
         const items = await listActivityLogs({ per_page: 200 });
         if (!cancelled) setLogs(items);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Gagal memuat activity log");
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const message =
+            e && typeof e === "object" && "message" in e
+              ? String((e as { message?: string }).message)
+              : "Gagal memuat activity log";
+          setError(message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

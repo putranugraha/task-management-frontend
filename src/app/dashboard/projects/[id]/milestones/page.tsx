@@ -13,8 +13,10 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
-export default function ProjectMilestonesPage() {
+function ProjectMilestonesPageContent() {
   const params = useParams();
   const projectId = params?.id as string;
   const { can } = useAuth();
@@ -399,4 +401,18 @@ export default function ProjectMilestonesPage() {
       />
     </div>
   );
+}
+
+export default function ProjectMilestonesPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <ProjectMilestonesPageContent />;
 }

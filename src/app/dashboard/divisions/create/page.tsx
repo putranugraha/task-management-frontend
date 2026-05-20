@@ -7,6 +7,8 @@ import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { useToast } from "@/components/ui/toast";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type FormState = {
   code: string;
@@ -14,7 +16,7 @@ type FormState = {
   description: string;
 };
 
-export default function CreateDivisionPage() {
+function CreateDivisionPageContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const [form, setForm] = useState<FormState>({ code: "", name: "", description: "" });
@@ -252,4 +254,18 @@ export default function CreateDivisionPage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function CreateDivisionPage() {
+  const { loading, allowed } = usePermissionGuard(["membuat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <CreateDivisionPageContent />;
 }

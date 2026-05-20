@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArchiveRestore, ChevronLeft, RotateCcw } from "lucide-react";
 import Forbidden from "@/components/auth/Forbidden";
-import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import DataTable from "../../users/data-table";
 import { listArchived, restore } from "@/lib/api/tasks";
@@ -26,10 +26,9 @@ function mapTask(item: Task): TaskRow {
 }
 
 function TaskArchiveContent() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "melihat tugas",
-    "menghapus tugas",
-  ]);
+  const { state, can } = useAuth();
+  const authLoading = !state.isInitialized || state.isLoading;
+  const canAccessArchive = can("melihat tugas") && can("menghapus tugas");
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project_id") || undefined;
   const milestoneId = searchParams?.get("milestone_id") || undefined;
@@ -78,11 +77,11 @@ function TaskArchiveContent() {
   }
 
   useEffect(() => {
-    if (!authLoading && allowed) {
+    if (!authLoading && canAccessArchive) {
       fetchArchived();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, allowed, projectId, milestoneId]);
+  }, [authLoading, canAccessArchive, projectId, milestoneId]);
 
   const columns = useMemo<Column<TaskRow>[]>(() => [
     {
@@ -118,7 +117,7 @@ function TaskArchiveContent() {
     },
   ], [restoreLoadingId]);
 
-  if (!authLoading && !allowed) {
+  if (!authLoading && !canAccessArchive) {
     return <Forbidden />;
   }
 

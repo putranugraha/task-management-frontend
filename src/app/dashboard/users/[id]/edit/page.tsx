@@ -11,6 +11,8 @@ import { ChevronLeft, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { useToast } from "@/components/ui/toast";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type FormState = {
   id: number;
@@ -24,7 +26,7 @@ type FormState = {
   role_name: string;
 };
 
-export default function EditUserPage() {
+function EditUserPageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -644,4 +646,18 @@ export default function EditUserPage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function EditUserPage() {
+  const { loading, allowed } = usePermissionGuard(["mengubah users"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <EditUserPageContent />;
 }

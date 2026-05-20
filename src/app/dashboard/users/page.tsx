@@ -23,19 +23,12 @@ import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
-export default function UsersPage() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "melihat users",
-  ]);
+function UsersPageContent() {
   const { can, state } = useAuth();
   const canCreateUsers = can("membuat users");
   const canUpdateUsers = can("mengubah users");
   const canDeleteUsers = can("menghapus users");
   const currentUserId = Number(state.user?.id ?? 0);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -655,4 +648,18 @@ function getInitials(name?: string | null, fallback?: string | null) {
   if (!source) return "?";
   const parts = source.split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0] ?? "").join("").toUpperCase();
+}
+
+export default function UsersPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat users"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <UsersPageContent />;
 }

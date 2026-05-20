@@ -22,10 +22,12 @@ import {
 } from "@/components/ui/breadcrumb";
 import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type TaskRow = Pick<Task, 'id' | 'title' | 'status' | 'start_planned' | 'end_planned' | 'percent_complete'>;
 
-export default function MilestoneDetailPage() {
+function MilestoneDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -513,6 +515,20 @@ export default function MilestoneDetailPage() {
         : null}
     </div>
   );
+}
+
+export default function MilestoneDetailPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <MilestoneDetailPageContent />;
 }
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {

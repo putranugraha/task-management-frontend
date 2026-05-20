@@ -18,6 +18,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 const GanttChart = dynamic(
   () => import("@/components/gantt/GanttChart"),
@@ -31,7 +33,7 @@ const GanttChart = dynamic(
   }
 );
 
-export default function ProjectGanttPage() {
+function ProjectGanttPageContent() {
   const params = useParams();
   const id = Number(params?.id);
 
@@ -139,4 +141,18 @@ export default function ProjectGanttPage() {
       </div>
     </div>
   );
+}
+
+export default function ProjectGanttPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <ProjectGanttPageContent />;
 }

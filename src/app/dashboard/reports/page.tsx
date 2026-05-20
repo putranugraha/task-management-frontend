@@ -12,6 +12,8 @@ import {
   groupKeyForPeriodDate,
   type PeriodGranularity,
 } from "@/lib/reporting/as-of-periods";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type TaskStats = {
   total: number;
@@ -60,7 +62,7 @@ function toISODate(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export default function ReportsPage() {
+function ReportsPageContent() {
   const { showToast } = useToast();
 
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -334,13 +336,21 @@ export default function ReportsPage() {
 
   const displayKpiSnapshots = useMemo(() => {
     if (!kpiSnapshots.length) return [];
-    if (kpiGranularity === "daily") return kpiSnapshots;
 
     const periodIdToDate = new Map<number, string>();
     for (const p of reportingPeriods) {
       if (Number.isFinite(p.id) && p.period_date) {
         periodIdToDate.set(Number(p.id), String(p.period_date).trim());
       }
+    }
+
+    if (kpiGranularity === "daily") {
+      return kpiSnapshots.slice().sort((a, b) => {
+        const ad = String(a.reporting_period?.period_date ?? periodIdToDate.get(Number(a.period_id ?? 0)) ?? "");
+        const bd = String(b.reporting_period?.period_date ?? periodIdToDate.get(Number(b.period_id ?? 0)) ?? "");
+        if (ad !== bd) return ad.localeCompare(bd);
+        return Number(a.id ?? 0) - Number(b.id ?? 0);
+      });
     }
 
     type Row = KpiSnapshotWithPeriod & { __date: string; __group: string };
@@ -750,6 +760,23 @@ export default function ReportsPage() {
       </div>
     </div>
   );
+}
+
+export default function ReportsPage() {
+  const { loading, allowed } = usePermissionGuard([
+    "melihat laporan pribadi",
+    "mencetak laporan",
+  ]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <ReportsPageContent />;
 }
 
 type SummaryTone = "neutral" | "success" | "info" | "danger";

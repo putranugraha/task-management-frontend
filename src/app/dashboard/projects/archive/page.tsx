@@ -6,7 +6,6 @@ import { ArchiveRestore, ChevronLeft, RotateCcw, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import Forbidden from "@/components/auth/Forbidden";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
-import { useAuth } from "@/contexts/auth-context";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import DataTable from "../../users/data-table";
 import type { Column, ProjectRow } from "../columns";
@@ -36,8 +35,6 @@ export default function ProjectArchivePage() {
     "melihat project",
     "menghapus project",
   ]);
-  const { hasRole } = useAuth();
-  const canAccessArchive = allowed && hasRole("Admin");
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoreLoadingId, setRestoreLoadingId] = useState<number | null>(null);
@@ -130,14 +127,14 @@ export default function ProjectArchivePage() {
   useEffect(() => {
     let mounted = true;
 
-    if (!authLoading && canAccessArchive) {
+    if (!authLoading && allowed) {
       loadArchivedProjects().finally(() => mounted && setLoading(false));
     }
 
     return () => {
       mounted = false;
     };
-  }, [authLoading, canAccessArchive]);
+  }, [authLoading, allowed]);
 
   const columns = useMemo<Column<ProjectRow>[]>(() => [
     {
@@ -183,7 +180,7 @@ export default function ProjectArchivePage() {
     },
   ], [restoreLoadingId, deleteLoading]);
 
-  if (!authLoading && !canAccessArchive) {
+  if (!authLoading && !allowed) {
     return <Forbidden />;
   }
 

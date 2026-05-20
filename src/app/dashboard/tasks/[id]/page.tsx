@@ -7,6 +7,8 @@ import { apiRequest } from "@/lib/api";
 import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import { listComments, createComment } from "@/lib/api/comments";
 import { useAuth } from "@/contexts/auth-context";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 import type { Comment } from "@/types/comment";
 import { DetailMainCard, DetailSectionCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import {
@@ -72,10 +74,10 @@ type Assignment = {
 };
 type Dependency = { type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number; depends_on?: { id: number; title: string } | null };
 
-export default function TaskDetailPage() {
+function TaskDetailPageContent() {
   const params = useParams();
   const id = Number(params?.id);
-  const { state, hasRole, can } = useAuth();
+  const { state, can } = useAuth();
   const currentUserId = useMemo(
     () => Number(state.user?.id ?? (state.user as any)?.user_id ?? 0),
     [state.user]
@@ -412,21 +414,8 @@ export default function TaskDetailPage() {
   const ass: Assignment[] = Array.isArray(data?.assignments) ? data.assignments : [];
   const deps: Dependency[] = Array.isArray(data?.dependencies) ? data.dependencies : [];
 
-  const canEditTask = useMemo(
-    () =>
-      hasRole("Admin") ||
-      hasRole("Manager") ||
-      can("mengubah tugas"),
-    [hasRole, can]
-  );
-
-  const canCreateTaskBaseline = useMemo(
-    () =>
-      hasRole("Admin") ||
-      hasRole("Manager") ||
-      can("membuat project"),
-    [hasRole, can]
-  );
+  const canEditTask = can("mengubah tugas");
+  const canCreateTaskBaseline = can("membuat project");
 
   return (
     <div className="w-full space-y-6">
@@ -871,4 +860,18 @@ function getInitials(name?: string | null, fallback?: string | null) {
   if (!source) return "?";
   const parts = source.split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0] ?? "").join("").toUpperCase();
+}
+
+export default function TaskDetailPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat tugas"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <TaskDetailPageContent />;
 }

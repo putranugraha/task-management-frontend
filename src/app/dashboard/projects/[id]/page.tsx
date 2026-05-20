@@ -24,6 +24,8 @@ import { useToast } from "@/components/ui/toast";
 import { DetailMainCard, DetailSectionCard } from "@/components/layout/DetailCards";
 import { useAuth } from "@/contexts/auth-context";
 import { sanitizeRichText } from "@/lib/sanitize";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 import {
   buildAsOfPeriodOptions,
   type PeriodGranularity,
@@ -92,7 +94,7 @@ type ProjectDetail = {
   updated_at?: string;
 };
 
-export default function ProjectDetailPage() {
+function ProjectDetailPageContent() {
   const params = useParams();
   const id = Number(params?.id);
   const { can } = useAuth();
@@ -1775,6 +1777,20 @@ function Row({ label, value, onShowMore, showMoreLabel, multiline }: RowProps) {
       )}
     </div>
   );
+}
+
+export default function ProjectDetailPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <ProjectDetailPageContent />;
 }
 
 type DetailTextModalProps = {

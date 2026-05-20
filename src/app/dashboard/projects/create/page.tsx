@@ -28,15 +28,7 @@ type FormState = {
 
 // Status default diset internal (hidden from UI)
 
-export default function CreateProjectPage() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "membuat project",
-  ]);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
-
+function CreateProjectPageContent() {
   const router = useRouter();
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -129,7 +121,7 @@ export default function CreateProjectPage() {
     return owners.find((o) => o.id === Number(form.division_owner_id)) ?? null;
   }, [owners, form.division_owner_id]);
 
-  if (authLoading || ownersLoading) {
+  if (ownersLoading) {
     return (
       <div className="space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -321,4 +313,18 @@ export default function CreateProjectPage() {
       </div>
     </div>
   );
+}
+
+export default function CreateProjectPage() {
+  const { loading, allowed } = usePermissionGuard(["membuat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <CreateProjectPageContent />;
 }

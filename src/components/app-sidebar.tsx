@@ -14,6 +14,7 @@ import {
   Bell,
   Building2,
   ListChecks,
+  type LucideIcon,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -32,28 +33,47 @@ import {
 } from "@/components/ui/sidebar";
 import { useNotifications } from "@/contexts/notification-context";
 
+type SidebarNavItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  isActive?: boolean;
+  badge?: number;
+};
+
+type StoredUser = {
+  name?: string;
+  username?: string;
+  full_name?: string;
+  email?: string;
+  avatar?: string;
+  avatar_url?: string;
+  image?: string;
+  photo?: string;
+};
+
+const ALL_NAV_ITEMS: SidebarNavItem[] = [
+  { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Projects", url: "/dashboard/projects", icon: FolderKanban },
+  { title: "Tasks", url: "/dashboard/tasks", icon: ListTodo },
+  { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
+  { title: "Milestones", url: "/dashboard/milestones", icon: Flag },
+  { title: "Divisions", url: "/dashboard/divisions", icon: Building2 },
+  { title: "Reports", url: "/dashboard/reports", icon: BarChart2 },
+  { title: "Users", url: "/dashboard/users", icon: UsersIconLucide },
+  { title: "Roles", url: "/dashboard/roles", icon: ShieldCheck },
+  { title: "Activity Log", url: "/dashboard/activity-log", icon: ListChecks },
+];
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
 
   const { state, hasRole, can } = useAuth();
   const { unreadCount } = useNotifications();
 
-  const allNavItems = [
-    { title: "Overview", url: "/dashboard", icon: LayoutDashboard },
-    { title: "Projects", url: "/dashboard/projects", icon: FolderKanban },
-    { title: "Tasks", url: "/dashboard/tasks", icon: ListTodo },
-    { title: "Notifications", url: "/dashboard/notifications", icon: Bell },
-    { title: "Milestones", url: "/dashboard/milestones", icon: Flag },
-    { title: "Divisions", url: "/dashboard/divisions", icon: Building2 },
-    { title: "Reports", url: "/dashboard/reports", icon: BarChart2 },
-    { title: "Users", url: "/dashboard/users", icon: UsersIconLucide },
-    { title: "Roles", url: "/dashboard/roles", icon: ShieldCheck },
-    { title: "Activity Log", url: "/dashboard/activity-log", icon: ListChecks },
-  ];
-
   const navItems = React.useMemo(
     () =>
-      allNavItems
+      ALL_NAV_ITEMS
         .filter((item) => {
           const config = MENU_ITEMS.find((m) => m.path === item.url);
 
@@ -112,7 +132,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       const raw =
         typeof window !== "undefined" ? localStorage.getItem("user") : null;
       if (raw) {
-        const u = JSON.parse(raw);
+        const u = JSON.parse(raw) as StoredUser;
         setUser({
           name: u?.name || u?.username || u?.full_name || "Admin",
           email: u?.email || "admin@example.com",
@@ -150,7 +170,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       {/* MAIN MENU */}
       <SidebarContent>
-        <NavMain items={navItems as any} />
+        <NavMain items={navItems} />
       </SidebarContent>
 
       {/* FOOTER */}

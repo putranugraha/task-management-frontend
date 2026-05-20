@@ -7,6 +7,8 @@ import { ChevronLeft, Loader2 } from "lucide-react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type DivisionDetail = {
   id: number;
@@ -15,7 +17,7 @@ type DivisionDetail = {
   description: string | null;
 };
 
-export default function EditDivisionPage() {
+function EditDivisionPageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -319,4 +321,18 @@ export default function EditDivisionPage() {
       </div>
     </div>
   );
+}
+
+export default function EditDivisionPage() {
+  const { loading, allowed } = usePermissionGuard(["mengubah project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <EditDivisionPageContent />;
 }

@@ -13,6 +13,8 @@ import { Archive, Plus, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -68,11 +70,11 @@ function writeSessionCache<T>(key: string, value: T) {
   } catch {}
 }
 
-export default function ProjectsPage() {
-  const { can, hasRole } = useAuth();
+function ProjectsPageContent() {
+  const { can } = useAuth();
   const canCreateProject = can("membuat project");
   const canUpdateProject = can("mengubah project");
-  const canDeleteProject = hasRole("Admin") && can("menghapus project");
+  const canDeleteProject = can("menghapus project");
 
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -589,4 +591,18 @@ export default function ProjectsPage() {
       />
     </div>
   );
+}
+
+export default function ProjectsPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <ProjectsPageContent />;
 }

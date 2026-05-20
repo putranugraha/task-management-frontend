@@ -18,6 +18,8 @@ import { Archive, SlidersHorizontal, AlertCircle, X } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 // Simple in-memory cache for task list to avoid refetching on every navigation.
 // This lives for the lifetime of the JS bundle (per tab) and is safe for dashboard use.
@@ -88,7 +90,7 @@ type MaybePaginated<T> = T[] | PaginatedResponse<T>;
 
 const DEFAULT_PER_PAGE = 10;
 
-export default function TasksPage() {
+function TasksPageContent() {
   const { can } = useAuth();
   const canCreateTasks = can("membuat tugas");
   const canUpdateTasks = can("mengubah tugas");
@@ -944,6 +946,20 @@ export default function TasksPage() {
       </div>
     </div>
   );
+}
+
+export default function TasksPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat tugas"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <TasksPageContent />;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

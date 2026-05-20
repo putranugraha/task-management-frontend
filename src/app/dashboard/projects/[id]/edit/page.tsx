@@ -29,15 +29,7 @@ type ProjectDetail = {
 
 const STATUS_OPTIONS = ["Planned", "In Progress", "Completed", "On Hold"] as const;
 
-export default function EditProjectPage() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengubah project",
-  ]);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
-
+function EditProjectPageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -178,7 +170,7 @@ export default function EditProjectPage() {
   if (loading) return <div>Memuat data…</div>;
   if (!form) return <div>Project tidak ditemukan</div>;
 
-  if (authLoading || loading || ownersLoading || !form) {
+  if (loading || ownersLoading || !form) {
     return (
       <div className="space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -411,4 +403,18 @@ export default function EditProjectPage() {
       </div>
     </div>
   );
+}
+
+export default function EditProjectPage() {
+  const { loading, allowed } = usePermissionGuard(["mengubah project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <EditProjectPageContent />;
 }

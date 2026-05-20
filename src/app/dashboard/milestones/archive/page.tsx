@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArchiveRestore, ChevronLeft, RotateCcw } from "lucide-react";
 import Forbidden from "@/components/auth/Forbidden";
-import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import DataTable from "../../users/data-table";
 import { listArchived, restore } from "@/lib/api/milestones";
@@ -24,10 +24,9 @@ function mapMilestone(item: Milestone): MilestoneRow {
 }
 
 function MilestoneArchiveContent() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "melihat project",
-    "menghapus project",
-  ]);
+  const { state, can } = useAuth();
+  const authLoading = !state.isInitialized || state.isLoading;
+  const canAccessArchive = can("melihat project") && can("menghapus project");
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project_id") || undefined;
   const [rows, setRows] = useState<MilestoneRow[]>([]);
@@ -75,11 +74,11 @@ function MilestoneArchiveContent() {
   }
 
   useEffect(() => {
-    if (!authLoading && allowed) {
+    if (!authLoading && canAccessArchive) {
       fetchArchived();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, allowed, projectId]);
+  }, [authLoading, canAccessArchive, projectId]);
 
   const columns = useMemo<Column<MilestoneRow>[]>(() => [
     {
@@ -114,7 +113,7 @@ function MilestoneArchiveContent() {
     },
   ], [restoreLoadingId]);
 
-  if (!authLoading && !allowed) {
+  if (!authLoading && !canAccessArchive) {
     return <Forbidden />;
   }
 

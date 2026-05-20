@@ -72,7 +72,7 @@ function formatRunningDuration(hours: number | string | null | undefined): strin
 }
 
 export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange }: Props) {
-  const { state, hasRole } = useAuth();
+  const { state, can } = useAuth();
   const currentUserId = useMemo(
     () => Number(state.user?.id ?? (state.user as any)?.user_id ?? 0),
     [state.user]
@@ -114,9 +114,9 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
     normalizedStatus.includes("selesai");
   const isCancelled = normalizedStatus.includes("cancel");
   const isClosed = isDoneLike || isCancelled;
-  const isAdminOrManager = hasRole("Admin") || hasRole("Manager");
-  const isBlockedByHold = isOnHold && !isAdminOrManager;
-  const isBlockedByClosed = isClosed && !isAdminOrManager;
+  const canOverrideClosedStatus = can("mengubah tugas");
+  const isBlockedByHold = isOnHold && !canOverrideClosedStatus;
+  const isBlockedByClosed = isClosed && !canOverrideClosedStatus;
   const isStartBlocked = isBlockedByHold || isBlockedByClosed;
 
   async function fetchAll() {
@@ -586,14 +586,14 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
       <ConfirmDialog
         open={startConfirmOpen}
         title={
-          isAdminOrManager && (isOnHold || isClosed)
+          canOverrideClosedStatus && (isOnHold || isClosed)
             ? isOnHold
               ? "Task sedang On Hold. Ubah ke In Progress dan mulai timer?"
               : "Task sudah selesai/dibatalkan. Ubah ke In Progress dan mulai timer lagi?"
             : "Mulai timer untuk task ini?"
         }
         description={
-          isAdminOrManager && (isOnHold || isClosed)
+          canOverrideClosedStatus && (isOnHold || isClosed)
             ? "Status task akan diubah ke In Progress lalu timer waktu akan mulai berjalan hingga kamu menekan Stop & Save."
             : "Timer waktu akan mulai berjalan dan dicatat hingga kamu menekan Stop & Save."
         }
@@ -603,7 +603,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
         loading={false}
         onConfirm={async () => {
           setStartConfirmOpen(false);
-          if (isAdminOrManager && (isOnHold || isClosed)) {
+          if (canOverrideClosedStatus && (isOnHold || isClosed)) {
             await ensureInProgress(true);
             await handleStart(true);
           } else {

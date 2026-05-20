@@ -15,6 +15,8 @@ import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
@@ -32,7 +34,7 @@ type PaginatedResponse<T> = {
   meta?: PaginationMeta;
 };
 
-export default function MilestonesPage() {
+function MilestonesPageContent() {
   const { can } = useAuth();
   const canCreateProject = can("membuat project");
   const canUpdateProject = can("mengubah project");
@@ -596,6 +598,20 @@ export default function MilestonesPage() {
       />
     </div>
   );
+}
+
+export default function MilestonesPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <MilestonesPageContent />;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

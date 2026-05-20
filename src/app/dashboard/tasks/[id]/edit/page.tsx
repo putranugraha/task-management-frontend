@@ -33,15 +33,7 @@ type TaskDetail = {
 const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
-export default function EditTaskPage() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "mengubah tugas",
-  ]);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
-
+function EditTaskPageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -785,4 +777,18 @@ function renderDueChip(endPlanned?: string | null) {
   else if (days === 0) text = 'Due today';
   else text = `Overdue ${Math.abs(days)}d`;
   return (<span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">{text}</span>);
+}
+
+export default function EditTaskPage() {
+  const { loading, allowed } = usePermissionGuard(["mengubah tugas"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <EditTaskPageContent />;
 }

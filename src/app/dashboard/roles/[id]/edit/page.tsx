@@ -11,6 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/contexts/auth-context";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type RoleDetail = {
   id: number;
@@ -19,7 +21,7 @@ type RoleDetail = {
   permissions: string[];
 };
 
-export default function EditRolePage() {
+function EditRolePageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -477,4 +479,18 @@ export default function EditRolePage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function EditRolePage() {
+  const { loading, allowed } = usePermissionGuard(["mengubah roles"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <EditRolePageContent />;
 }

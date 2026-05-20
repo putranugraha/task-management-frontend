@@ -39,15 +39,7 @@ type FormState = {
 
 type FieldErrors = Partial<Record<keyof CreateMilestoneDto, string>> & { [k: string]: string };
 
-export default function CreateProjectMilestonePage() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "membuat project",
-  ]);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
-
+function CreateProjectMilestonePageContent() {
   const router = useRouter();
   const params = useParams();
   const projectId = params?.id as string;
@@ -697,4 +689,18 @@ export default function CreateProjectMilestonePage() {
       </div>
     </div>
   );
+}
+
+export default function CreateProjectMilestonePage() {
+  const { loading, allowed } = usePermissionGuard(["membuat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <CreateProjectMilestonePageContent />;
 }

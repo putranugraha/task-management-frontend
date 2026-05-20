@@ -7,6 +7,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { ChevronLeft, Mail, ShieldCheck, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
+import { useAuth } from "@/contexts/auth-context";
 
 type UserDetail = {
   id: number;
@@ -42,10 +45,12 @@ const statusClasses = (value: string) => {
   return "bg-emerald-50 text-emerald-500 ring-1 ring-emerald-200";
 };
 
-export default function UserDetailPage() {
+function UserDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
+  const { can } = useAuth();
+  const canUpdateUsers = can("mengubah users");
 
   const [data, setData] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -195,12 +200,14 @@ export default function UserDetailPage() {
           <p className="max-w-xl text-sm text-slate-500">Profil dan informasi akun pengguna.</p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={`/dashboard/users/${data.id}/edit`}
-            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-          >
-            Edit User
-          </a>
+          {canUpdateUsers && (
+            <a
+              href={`/dashboard/users/${data.id}/edit`}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+            >
+              Edit User
+            </a>
+          )}
         </div>
       </div>
 
@@ -265,6 +272,20 @@ export default function UserDetailPage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function UserDetailPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat users"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <UserDetailPageContent />;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

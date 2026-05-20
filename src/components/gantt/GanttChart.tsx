@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
+import { listByBaseline as listTaskBaselinesByBaseline } from "@/lib/api/task-baselines";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
@@ -36,7 +36,33 @@ export default function GanttChart({
   const [taskBaselineMap, setTaskBaselineMap] = useState<Record<number, { start: Date; end: Date } | undefined>>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
-  const model = useMemo(() => buildModel(tasks, milestones), [tasks, milestones]);
+  const sortedBaselines = useMemo(() => {
+    const arr = Array.isArray(baselines) ? baselines.slice() : [];
+    return arr.sort((a: any, b: any) => {
+      const ta = a?.taken_at ? Date.parse(a.taken_at) : 0;
+      const tb = b?.taken_at ? Date.parse(b.taken_at) : 0;
+      if (tb !== ta) return tb - ta;
+      return (Number(b?.id ?? 0) - Number(a?.id ?? 0));
+    });
+  }, [baselines]);
+
+  // Pick the latest baseline with valid start/end (by taken_at desc, then id desc) if available
+  const baselineWindow = useMemo(() => {
+    for (const b of sortedBaselines) {
+      const s = b?.start_planned_base || null;
+      const e = b?.end_planned_base || null;
+      if (s && e) {
+        const sd = toDateOnly(s);
+        const ed = toDateOnly(e);
+        if (sd <= ed) {
+          return { start: sd, end: ed, meta: b } as { start: Date; end: Date; meta: ProjectBaseline };
+        }
+      }
+    }
+    return null as null | { start: Date; end: Date; meta: ProjectBaseline };
+  }, [sortedBaselines]);
+
+  const model = useMemo(() => buildModel(tasks, milestones, baselineWindow ? [baselineWindow.start, baselineWindow.end] : []), [tasks, milestones, baselineWindow]);
 
   const gridDays = Math.max(1, daysDiffInclusive(model.startDate, model.endDate));
   const HEADER_WEEK_H = 22;
@@ -53,29 +79,6 @@ export default function GanttChart({
     return Math.max(basePxPerDay, boosted);
   }, [viewportWidth, gridDays, basePxPerDay]);
   const totalWidth = gridDays * pxPerDay;
-
-  // Pick the latest baseline with valid start/end (by taken_at desc, then id desc) if available
-  const baselineWindow = useMemo(() => {
-    const arr = Array.isArray(baselines) ? baselines.slice() : [];
-    arr.sort((a: any, b: any) => {
-      const ta = a?.taken_at ? Date.parse(a.taken_at) : 0;
-      const tb = b?.taken_at ? Date.parse(b.taken_at) : 0;
-      if (tb !== ta) return tb - ta;
-      return (Number(b?.id ?? 0) - Number(a?.id ?? 0));
-    });
-    for (const b of arr) {
-      const s = b?.start_planned_base || null;
-      const e = b?.end_planned_base || null;
-      if (s && e) {
-        const sd = toDateOnly(s);
-        const ed = toDateOnly(e);
-        if (sd <= ed) {
-          return { start: sd, end: ed, meta: b } as { start: Date; end: Date; meta: ProjectBaseline };
-        }
-      }
-    }
-    return null as null | { start: Date; end: Date; meta: ProjectBaseline };
-  }, [baselines]);
 
   const todayX = (() => {
     const t = toDateOnly(new Date());
@@ -108,34 +111,33 @@ export default function GanttChart({
     let cancelled = false;
     async function run() {
       if (!showTaskBaselines) return;
-      const latestBaselineId = Array.isArray(baselines) && baselines.length ? Number(baselines[0].id) : undefined;
+      const latestBaselineId = baselineWindow?.meta?.id ? Number(baselineWindow.meta.id) : undefined;
+      if (!latestBaselineId) {
+        setTaskBaselineMap({});
+        return;
+      }
+
       const map: Record<number, { start: Date; end: Date } | undefined> = {};
-      for (const t of tasks) {
-        const id = Number((t as any)?.id);
-        if (!Number.isFinite(id)) continue;
-        try {
-          const list = await listTaskBaselines(id);
-          let chosen: any = undefined;
-          if (latestBaselineId) {
-            chosen = (list || []).find((b: any) => Number(b?.baseline_id) === latestBaselineId);
-          }
-          if (!chosen) {
-            chosen = (list || []).slice().sort((a: any, b: any) => (Date.parse(b?.created_at || b?.taken_at || '') || 0) - (Date.parse(a?.created_at || a?.taken_at || '') || 0) || (Number(b?.id || 0) - Number(a?.id || 0)))[0];
-          }
+      try {
+        const list = await listTaskBaselinesByBaseline(latestBaselineId);
+        for (const chosen of list || []) {
+          const id = Number(chosen?.task_id ?? chosen?.task?.id);
+          if (!Number.isFinite(id)) continue;
           if (chosen?.start_planned_base && chosen?.end_planned_base) {
-            map[id] = { start: toDateOnly(chosen.start_planned_base), end: toDateOnly(chosen.end_planned_base) };
-          } else {
-            map[id] = undefined;
+            map[id] = {
+              start: toDateOnly(chosen.start_planned_base),
+              end: toDateOnly(chosen.end_planned_base),
+            };
           }
-        } catch {
-          map[id] = undefined;
         }
+      } catch {
+        // Keep the current chart usable even when the optional baseline overlay cannot load.
       }
       if (!cancelled) setTaskBaselineMap(map);
     }
     run();
     return () => { cancelled = true; };
-  }, [showTaskBaselines, tasks, baselines]);
+  }, [showTaskBaselines, baselineWindow]);
 
   return (
     <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
@@ -513,9 +515,9 @@ function inRange(d: Date, start: Date | null, end: Date | null) {
   return t >= toDateOnly(start).getTime() && t <= toDateOnly(end).getTime();
 }
 
-function buildModel(tasks: Task[], milestones: Milestone[]) {
+function buildModel(tasks: Task[], milestones: Milestone[], extraDates: Date[] = []) {
   const items = (tasks || []).filter(t => t.start_planned && t.end_planned);
-  const dates: Date[] = [];
+  const dates: Date[] = [...extraDates];
   for (const t of items) {
     dates.push(toDateOnly(t.start_planned!));
     dates.push(toDateOnly(t.end_planned!));

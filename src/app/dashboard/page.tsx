@@ -9,12 +9,15 @@ import ProjectStatsRow from "@/components/dashboard/ProjectStatsRow";
 import TaskStatsRow from "@/components/dashboard/TaskStatsRow";
 import MilestoneStatsRow from "@/components/dashboard/MilestoneStatsRow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/contexts/auth-context";
 
 const RECENT_ACTIVITY_ROWS = 5;
 const DASHBOARD_STATS_CACHE_KEY = "dashboard:overview:stats";
 const DASHBOARD_ACTIVITY_CACHE_KEY = "dashboard:overview:activity";
 
 export default function DashboardPage() {
+  const { hasRole } = useAuth();
+  const canViewActivityLog = hasRole("Admin");
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -150,9 +153,13 @@ export default function DashboardPage() {
           );
         }
 
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!cancelled) {
-          setError(e?.message ?? "Gagal memuat data dashboard");
+          const message =
+            e && typeof e === "object" && "message" in e
+              ? String((e as { message?: string }).message)
+              : "Gagal memuat data dashboard";
+          setError(message);
         }
       } finally {
         if (!cancelled) setStatsLoading(false);
@@ -165,6 +172,12 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (!canViewActivityLog) {
+      setActivityLogs([]);
+      setActivityLoading(false);
+      return;
+    }
+
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -202,7 +215,7 @@ export default function DashboardPage() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, []);
+  }, [canViewActivityLog]);
 
   const projectStats = {
     total: projectStatsApi?.total ?? 0,
@@ -270,12 +283,14 @@ export default function DashboardPage() {
                 Beberapa aktivitas terakhir dari Activity Log.
               </p>
             </div>
-            <Link
-              href="/dashboard/activity-log"
-              className="inline-flex items-center rounded-full bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
-            >
-              Lihat semua
-            </Link>
+            {canViewActivityLog && (
+              <Link
+                href="/dashboard/activity-log"
+                className="inline-flex items-center rounded-full bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-md transition hover:bg-[#008061]"
+              >
+                Lihat semua
+              </Link>
+            )}
           </div>
           <div className="px-6 py-4">
             {activityLoading ? (
@@ -293,6 +308,10 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
+            ) : !canViewActivityLog ? (
+              <p className="text-xs text-slate-400">
+                Aktivitas terbaru hanya tersedia untuk Admin.
+              </p>
             ) : activityLogs.length === 0 ? (
               <p className="text-xs text-slate-400">
                 Belum ada aktivitas yang tercatat.

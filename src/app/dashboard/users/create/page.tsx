@@ -11,6 +11,8 @@ import { ChevronLeft, Loader2, Sparkles, ChevronsUpDown, Check } from "lucide-re
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { useToast } from "@/components/ui/toast";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type FormState = {
   name: string;
@@ -27,7 +29,7 @@ type FormState = {
 
 const STATUS_OPTIONS = ["Aktif", "Non Aktif"] as const;
 
-export default function CreateUserPage() {
+function CreateUserPageContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const [form, setForm] = useState<FormState>({
@@ -464,4 +466,18 @@ export default function CreateUserPage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function CreateUserPage() {
+  const { loading, allowed } = usePermissionGuard(["membuat users"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <CreateUserPageContent />;
 }

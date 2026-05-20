@@ -7,6 +7,9 @@ import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import { listByTask as listTaskBaselines, listByBaseline as listTaskBaselinesByBaseline, create as createTaskBaseline } from "@/lib/api/task-baselines";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
+import { useAuth } from "@/contexts/auth-context";
 
 type ProjectBaseline = {
   id: number;
@@ -17,9 +20,11 @@ type ProjectBaseline = {
   note?: string | null;
 };
 
-export default function ProjectBaselinesPage() {
+function ProjectBaselinesPageContent() {
   const params = useParams();
   const projectId = params?.id as string;
+  const { can } = useAuth();
+  const canCreateTaskBaselines = can("membuat project");
   const [rows, setRows] = useState<ProjectBaseline[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -185,11 +190,13 @@ export default function ProjectBaselinesPage() {
                     <td className="px-3 py-2 border-t">{(r as any).end_planned_base || '-'}</td>
                     <td className="px-3 py-2 border-t">{r.note || '-'}</td>
                     <td className="px-3 py-2 border-t">
-                      <button
-                        className="px-2 py-1 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={busyRow === r.id}
-                        onClick={() => setMassCreateTarget(r)}
-                      >Create Task Baselines</button>
+                      {canCreateTaskBaselines && (
+                        <button
+                          className="px-2 py-1 rounded-md border text-sm hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={busyRow === r.id}
+                          onClick={() => setMassCreateTarget(r)}
+                        >Create Task Baselines</button>
+                      )}
                     </td>
                   </tr>
                   {openRow[r.id] && (
@@ -256,4 +263,18 @@ export default function ProjectBaselinesPage() {
       />
     </div>
   );
+}
+
+export default function ProjectBaselinesPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <ProjectBaselinesPageContent />;
 }

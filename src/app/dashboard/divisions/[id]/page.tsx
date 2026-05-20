@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
+import { useAuth } from "@/contexts/auth-context";
 
 type DivisionDetail = {
   id: number;
@@ -16,9 +19,11 @@ type DivisionDetail = {
   updated_at?: string;
 };
 
-export default function DivisionDetailPage() {
+function DivisionDetailPageContent() {
   const params = useParams();
   const id = Number(params?.id);
+  const { can } = useAuth();
+  const canUpdateProject = can("mengubah project");
 
   const [data, setData] = useState<DivisionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,12 +84,14 @@ export default function DivisionDetailPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <a
-            href={`/dashboard/divisions/${data.id}/edit`}
-            className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
-          >
-            Edit Division
-          </a>
+          {canUpdateProject && (
+            <a
+              href={`/dashboard/divisions/${data.id}/edit`}
+              className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
+            >
+              Edit Division
+            </a>
+          )}
           <button
             type="button"
             onClick={() => history.back()}
@@ -160,6 +167,20 @@ export default function DivisionDetailPage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function DivisionDetailPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <DivisionDetailPageContent />;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

@@ -10,7 +10,6 @@ import {
 } from "@/lib/api/task-attachments";
 import { saveProgress, complete, completeWithDate } from "@/lib/api/tasks";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
-import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,7 +28,6 @@ export default function TaskAttachmentsSection({
   onPercentChange,
   onStatusChange,
 }: Props) {
-  const { hasRole } = useAuth();
   const [items, setItems] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,8 +40,7 @@ export default function TaskAttachmentsSection({
     "mengubah lampiran",
   ]);
   const canUpload = uploadAllowed && !uploadPermLoading;
-  const canModerate =
-    !moderatePermLoading && moderateAllowed && (hasRole("Admin") || hasRole("Manager"));
+  const canModerate = !moderatePermLoading && moderateAllowed;
   const { showToast } = useToast();
   const [moderateTarget, setModerateTarget] = useState<{
     id: number;

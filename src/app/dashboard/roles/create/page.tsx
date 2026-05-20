@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { DetailMainCard, DetailTwoColumnGrid } from "@/components/layout/DetailCards";
 import { useToast } from "@/components/ui/toast";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type FormState = {
   name: string;
@@ -17,7 +19,7 @@ type FormState = {
   permissions: string[]; // store permission names for compatibility
 };
 
-export default function CreateRolePage() {
+function CreateRolePageContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const [form, setForm] = useState<FormState>({
@@ -287,4 +289,18 @@ export default function CreateRolePage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function CreateRolePage() {
+  const { loading, allowed } = usePermissionGuard(["membuat roles"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <CreateRolePageContent />;
 }

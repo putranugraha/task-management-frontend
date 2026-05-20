@@ -17,6 +17,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
+import Forbidden from "@/components/auth/Forbidden";
 
 type MilestoneDetail = {
   id: number;
@@ -27,7 +29,7 @@ type MilestoneDetail = {
   status: string;
 };
 
-export default function EditMilestonePage() {
+function EditMilestonePageContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params?.id);
@@ -416,4 +418,18 @@ export default function EditMilestonePage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function EditMilestonePage() {
+  const { loading, allowed } = usePermissionGuard(["mengubah project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <EditMilestonePageContent />;
 }

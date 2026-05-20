@@ -20,18 +20,11 @@ import { useAuth } from "@/contexts/auth-context";
 
 type MaybePaginated<T> = T[] | { data: T[] } | { data: T[]; meta?: unknown };
 
-export default function RolesPage() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "melihat roles",
-  ]);
+function RolesPageContent() {
   const { can, state } = useAuth();
   const canCreateRoles = can("membuat roles");
   const canUpdateRoles = can("mengubah roles");
   const canDeleteRoles = can("menghapus roles");
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
 
   const [rows, setRows] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -668,4 +661,18 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+export default function RolesPage() {
+  const { loading, allowed } = usePermissionGuard(["melihat roles"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <RolesPageContent />;
 }

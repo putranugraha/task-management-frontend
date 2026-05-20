@@ -20,13 +20,7 @@ type FormState = {
   due_planned: string;
 };
 
-export default function CreateMilestonePage() {
-  const { loading: authLoading, allowed } = usePermissionGuard(["membuat project"]);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
-
+function CreateMilestonePageContent() {
   const router = useRouter();
   const todayLocal = (() => {
     const now = new Date();
@@ -350,4 +344,18 @@ export default function CreateMilestonePage() {
       </DetailMainCard>
     </div>
   );
+}
+
+export default function CreateMilestonePage() {
+  const { loading, allowed } = usePermissionGuard(["membuat project"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  return <CreateMilestonePageContent />;
 }

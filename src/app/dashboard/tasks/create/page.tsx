@@ -34,14 +34,6 @@ const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
 function CreateTaskPageContent() {
-  const { loading: authLoading, allowed } = usePermissionGuard([
-    "membuat tugas",
-  ]);
-
-  if (!authLoading && !allowed) {
-    return <Forbidden />;
-  }
-
   const router = useRouter();
   const search = useSearchParams();
   const initialProjectId = search?.get('project_id');
@@ -618,6 +610,16 @@ function CreateTaskPageContent() {
 }
 
 export default function CreateTaskPage() {
+  const { loading, allowed } = usePermissionGuard(["membuat tugas"]);
+
+  if (!loading && !allowed) {
+    return <Forbidden />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
   return (
     <Suspense fallback={<div className="p-4 text-sm text-slate-500">Loading…</div>}>
       <CreateTaskPageContent />

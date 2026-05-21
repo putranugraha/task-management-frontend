@@ -60,15 +60,39 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
 
   // Load baselines to allow auto-select newest and show window hints
   const { baselines, isLoading: blLoading } = useBaselines(projectId);
+  const projectBaselines = React.useMemo(
+    () => (Array.isArray(baselines)
+      ? baselines.filter((baseline: any) => String(baseline?.project_id ?? "") === String(projectId))
+      : []),
+    [baselines, projectId]
+  );
+  const validBaselineId = React.useMemo(() => {
+    if (activeBaselineId == null) return null;
+    return projectBaselines.some((baseline) => Number(baseline.id) === Number(activeBaselineId))
+      ? activeBaselineId
+      : null;
+  }, [activeBaselineId, projectBaselines]);
+
+  React.useEffect(() => {
+    setData(null);
+    setError(null);
+    setActualHours(0);
+    setTopTasks([]);
+    setHoursError(null);
+    if (!isControlled) {
+      setInternalBaselineId(null);
+    }
+    setWhen(date || todayISO());
+  }, [projectId, date, isControlled]);
 
   // Auto-select latest baseline if none selected (uncontrolled only)
   React.useEffect(() => {
     if (isControlled) return;
     if (internalBaselineId != null) return;
-    if (Array.isArray(baselines) && baselines.length > 0) {
-      setInternalBaselineId(Number(baselines[0].id));
+    if (projectBaselines.length > 0) {
+      setInternalBaselineId(Number(projectBaselines[0].id));
     }
-  }, [isControlled, internalBaselineId, baselines]);
+  }, [isControlled, internalBaselineId, projectBaselines]);
 
   const loadScheduleMetrics = React.useCallback(async () => {
     if (!projectId) return;
@@ -76,7 +100,7 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
     setError(null);
     try {
       const params: Record<string, any> = { date: when };
-      if (activeBaselineId != null) params.baseline_id = activeBaselineId;
+      if (validBaselineId != null) params.baseline_id = validBaselineId;
       const res = await apiRequest<any>("GET", `/api/projects/${encodeURIComponent(String(projectId))}/evm`, undefined, { params });
       const base = (res && typeof res === "object" && "data" in res) ? (res as any).data : res;
       const payload = normalizeEvmPayload(base);
@@ -86,7 +110,7 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
     } finally {
       setLoading(false);
     }
-  }, [projectId, when, activeBaselineId, reloadKey]);
+  }, [projectId, when, validBaselineId, reloadKey]);
 
   React.useEffect(() => {
     loadScheduleMetrics();
@@ -170,7 +194,7 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
           {showBaselineSelect && (
             <BaselineSelect
               projectId={projectId}
-              value={activeBaselineId}
+              value={validBaselineId}
               onChange={handleBaselineChange}
               includeNoneOption
             />
@@ -260,7 +284,7 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
             </div>
             <DebugHint
               date={when}
-              baseline={Array.isArray(baselines) ? baselines.find((b) => Number(b.id) === Number(activeBaselineId)) : undefined}
+              baseline={projectBaselines.find((b) => Number(b.id) === Number(validBaselineId))}
               meta={data?.meta}
               baselineId={(data as any)?.baseline_id ?? null}
               evmDate={(data as any)?.date ?? when}

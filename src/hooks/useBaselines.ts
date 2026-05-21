@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import type { ProjectBaseline } from "@/types/project-baseline";
 
@@ -21,9 +21,16 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
   const [baselines, setBaselines] = useState<ProjectBaseline[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSeq = useRef(0);
 
-  const fetcher = async () => {
-    if (!pid) return;
+  const fetcher = useCallback(async () => {
+    const requestId = ++requestSeq.current;
+    if (!pid) {
+      setBaselines([]);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -54,6 +61,9 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
           throw e;
         }
       }
+      list = list.filter((baseline: any) => String(baseline?.project_id ?? "") === pid);
+      if (requestId !== requestSeq.current) return;
+
       // Sort: taken_at desc, then id desc
       list.sort((a: any, b: any) => {
         const ta = a?.taken_at ? Date.parse(a.taken_at) : 0;
@@ -63,16 +73,20 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
       });
       setBaselines(list);
     } catch (e: any) {
+      if (requestId !== requestSeq.current) return;
       setError(e?.message ?? "Failed to load baselines");
     } finally {
+      if (requestId !== requestSeq.current) return;
       setIsLoading(false);
     }
-  };
+  }, [pid]);
 
   useEffect(() => {
+    requestSeq.current += 1;
+    setBaselines([]);
+    setError(null);
     fetcher();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid]);
+  }, [fetcher]);
 
   return { baselines, isLoading, error, refetch: fetcher };
 }

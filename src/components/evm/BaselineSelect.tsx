@@ -19,6 +19,12 @@ export type BaselineSelectProps = {
  */
 export function BaselineSelect({ projectId, value, onChange, includeNoneOption = true, className }: BaselineSelectProps) {
   const { baselines, isLoading, error } = useBaselines(projectId);
+  const projectBaselines = React.useMemo(
+    () => (Array.isArray(baselines)
+      ? baselines.filter((baseline: any) => String(baseline?.project_id ?? "") === String(projectId))
+      : []),
+    [baselines, projectId]
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const v = e.target.value;
@@ -27,7 +33,9 @@ export function BaselineSelect({ projectId, value, onChange, includeNoneOption =
     onChange(Number.isFinite(id) ? id : null);
   };
 
-  const selected = value == null ? "__none__" : String(value);
+  const selected = value != null && projectBaselines.some((baseline) => Number(baseline.id) === Number(value))
+    ? String(value)
+    : "__none__";
 
   return (
     <div className={className}>
@@ -44,8 +52,8 @@ export function BaselineSelect({ projectId, value, onChange, includeNoneOption =
         )}
         {isLoading && <option value="" disabled>Loading baselines…</option>}
         {(!isLoading && error) && <option value="" disabled>Error loading baselines</option>}
-        {(!isLoading && !error && baselines.length === 0) && <option value="" disabled>No baselines</option>}
-        {baselines.map((b: ProjectBaseline) => (
+        {(!isLoading && !error && projectBaselines.length === 0) && <option value="" disabled>No baselines</option>}
+        {projectBaselines.map((b: ProjectBaseline) => (
           <option key={b.id} value={String(b.id)}>
             {b.baseline_name} {b.taken_at ? `• ${b.taken_at}` : ""}
           </option>
@@ -56,4 +64,3 @@ export function BaselineSelect({ projectId, value, onChange, includeNoneOption =
 }
 
 export default BaselineSelect;
-

@@ -5,9 +5,8 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
-import { create as createTaskBaseline, listByTask as listTaskBaselines } from "@/lib/api/task-baselines";
 import { listByProject } from "@/lib/api/milestones";
-import { listByProject as listTasksByProject, updateStatus as updateTaskStatus } from "@/lib/api/tasks";
+import { listByProject as listTasksByProject } from "@/lib/api/tasks";
 import type { Task } from "@/types/task";
 import type { Milestone } from "@/types/milestone";
 import type { ProjectBaseline } from "@/types/project-baseline";
@@ -55,29 +54,6 @@ const EvmCostWidget = dynamic(
   }
 );
 
-const TaskProgressEditor = dynamic(
-  () => import("@/components/tasks/TaskProgressEditor"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="text-[11px] text-neutral-500">
-        Loading progress editor…
-      </div>
-    ),
-  }
-);
-
-const TimeEntryForm = dynamic(
-  () => import("@/components/time/TimeEntryForm"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="text-[11px] text-neutral-500">
-        Loading time entry…
-      </div>
-    ),
-  }
-);
 
 type ProjectDetail = {
   id: number;
@@ -118,10 +94,6 @@ function ProjectDetailPageContent() {
   const [baselineSaving, setBaselineSaving] = useState(false);
   const [baselineForm, setBaselineForm] = useState<{ baseline_name: string; note: string }>(() => ({ baseline_name: "", note: "" }));
   const [baselineFormErr, setBaselineFormErr] = useState<string | null>(null);
-  // Task baseline per-row loading state
-  const [taskBaselineLoading, setTaskBaselineLoading] = useState<Record<number, boolean>>({});
-  // EVM reload signal after saving progress/time
-  const [evmReloadKey, setEvmReloadKey] = useState(0);
   // Total hours per task (loaded lazily when details open or after saving time)
   const [taskTotalHours, setTaskTotalHours] = useState<Record<number, number>>({});
   const [taskTotalHoursLoading, setTaskTotalHoursLoading] = useState<Record<number, boolean>>({});
@@ -137,11 +109,6 @@ function ProjectDetailPageContent() {
   const [avgCycleTime, setAvgCycleTime] = useState<number | null>(null);
   const [reportingGranularity, setReportingGranularity] =
     useState<PeriodGranularity>("daily");
-  const [generateDate, setGenerateDate] = useState<string>(() => {
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  });
   const [generateNote, setGenerateNote] = useState<string>("");
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -151,11 +118,6 @@ function ProjectDetailPageContent() {
   >("overview");
   // Detail text modal for long fields like scope/objective
   const [detailModal, setDetailModal] = useState<{ label: string; text: string } | null>(null);
-  // Current user id for time entries (from localStorage user object)
-  const currentUser = (typeof window !== 'undefined') ? (() => {
-    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
-  })() : null;
-  const currentUserId = Number((currentUser?.id ?? currentUser?.user_id) ?? 0);
   const { showToast } = useToast();
   const canCreateProject = can("membuat project");
   const canUpdateProject = can("mengubah project");
@@ -832,13 +794,13 @@ function ProjectDetailPageContent() {
 
       {activeTab === "evm" && data && (
         <DetailSectionCard className="w-full">
-          <EvmWidget projectId={data.id} reloadKey={evmReloadKey} />
+          <EvmWidget projectId={data.id} />
         </DetailSectionCard>
       )}
 
       {activeTab === "evm_cost" && data && (
         <DetailSectionCard className="w-full">
-          <EvmCostWidget projectId={data.id} reloadKey={evmReloadKey} />
+          <EvmCostWidget projectId={data.id} />
         </DetailSectionCard>
       )}
 
@@ -863,8 +825,11 @@ function ProjectDetailPageContent() {
                   setGenerateLoading(true);
                   setGenerateError(null);
                   try {
+                    const today = new Date();
+                    const pad = (n: number) => String(n).padStart(2, "0");
+                    const generatedPeriodDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
                     const snap = await generateKpiForProject(id, {
-                      period_date: generateDate,
+                      period_date: generatedPeriodDate,
                       note: generateNote || undefined,
                     });
                     let nextPeriodId: number | null = selectedPeriodId ?? null;
@@ -875,7 +840,7 @@ function ProjectDetailPageContent() {
                         null;
                       const periodDate =
                         (snap as any).reporting_period?.period_date ??
-                        generateDate;
+                        generatedPeriodDate;
                       if (periodId != null) {
                         const pid = Number(periodId);
                         nextPeriodId = pid;
@@ -925,16 +890,6 @@ function ProjectDetailPageContent() {
                   }
                 }}
               >
-                <label className="flex items-center gap-2">
-                  <span className="text-neutral-600">Tanggal periode:</span>
-                  <input
-                    type="date"
-                    className="rounded-md border border-slate-200 px-2 py-1"
-                    value={generateDate}
-                    onChange={(e) => setGenerateDate(e.target.value)}
-                    required
-                  />
-                </label>
                 <label className="flex min-w-[220px] flex-1 items-center gap-2">
                   <span className="text-neutral-600">Catatan (opsional):</span>
                   <input
@@ -1484,88 +1439,6 @@ function ProjectDetailPageContent() {
                                   >
                                     {open ? "Hide" : "Details"}
                                   </button>
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center rounded-full border border-[#00674F] bg-[#00674F]/5 px-3 py-1 text-xs font-semibold text-[#00674F] shadow-sm transition hover:bg-[#008061]/15 disabled:opacity-50 disabled:cursor-not-allowed"
-                                      disabled={taskBaselineLoading[t.id] || !t.start_planned || !t.end_planned}
-                                      onClick={async () => {
-                                        if (!t.start_planned || !t.end_planned) {
-                                          showToast({
-                                            variant: "warning",
-                                            title: "Tidak dapat membuat task baseline",
-                                            description: "Task ini belum memiliki Start/End Planned.",
-                                          });
-                                          return;
-                                        }
-                                        setTaskBaselineLoading((s) => ({ ...s, [t.id]: true }));
-                                        try {
-                                          let baselineId: number | undefined = undefined;
-                                          if (Array.isArray(baselines) && baselines.length > 0) {
-                                            baselineId = Number(baselines[0].id);
-                                          }
-                                          if (baselineId) {
-                                            try {
-                                              const existing = await listTaskBaselines(t.id);
-                                              const found = (existing || []).some((b: any) => Number(b?.baseline_id) === baselineId);
-                                              if (found) {
-                                                showToast({
-                                                  variant: "info",
-                                                  title: "Task baseline sudah ada",
-                                                  description: "Task baseline untuk baseline project terbaru sudah tersedia.",
-                                                });
-                                                return;
-                                              }
-                                            } catch {}
-                                          }
-                                          const startBase: string = t.start_planned as any;
-                                          const endBase: string = t.end_planned as any;
-                                          const duration =
-                                            Number.isFinite(Date.parse(endBase)) &&
-                                            Number.isFinite(Date.parse(startBase))
-                                              ? Math.max(
-                                                  0,
-                                                  Math.round(
-                                                    (Date.parse(endBase) - Date.parse(startBase)) /
-                                                      (24 * 60 * 60 * 1000)
-                                                  )
-                                                ) + 1
-                                              : null;
-                                          const hoursPerDay = 8;
-                                          const plannedHours = duration != null ? duration * hoursPerDay : null;
-                                          await createTaskBaseline(t.id, {
-                                            start_planned_base: startBase,
-                                            end_planned_base: endBase,
-                                            duration_planned_base: duration as any,
-                                            weight: 1 as any,
-                                            planned_effort_hours: plannedHours as any,
-                                            planned_hours: plannedHours as any,
-                                            effort_hours: plannedHours as any,
-                                            planned_effort: plannedHours as any,
-                                            effort_planned: plannedHours as any,
-                                            baseline_id: baselineId as any,
-                                          } as any);
-                                          showToast({
-                                            variant: "success",
-                                            title: "Task baseline dibuat",
-                                            description: "Task baseline berhasil dibuat untuk task ini.",
-                                          });
-                                        } catch (e: any) {
-                                          const msg =
-                                            e?.response?.data?.message ||
-                                            e?.message ||
-                                            "Gagal membuat task baseline";
-                                          showToast({
-                                            variant: "error",
-                                            title: "Gagal membuat task baseline",
-                                            description: msg,
-                                          });
-                                        } finally {
-                                          setTaskBaselineLoading((s) => ({ ...s, [t.id]: false }));
-                                        }
-                                      }}
-                                    >
-                                      Create Baseline
-                                    </button>
                                   <a
                                     className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:bg-[#00674F]/5 hover:text-[#00674F]"
                                     href={`/dashboard/tasks/${t.id}/edit`}
@@ -1619,84 +1492,31 @@ function ProjectDetailPageContent() {
                                       </div>
                                       <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm">
                                         <div className="text-neutral-900 font-medium mb-2">
-                                          Update & Log
+                                          Task Summary
                                         </div>
                                         <div className="space-y-3">
-                                          <TaskProgressEditor
-                                            taskId={t.id}
-                                            initialPercent={t.percent_complete ?? 0}
-                                            onSaved={() => setEvmReloadKey((k) => k + 1)}
-                                            className="text-xs"
-                                          />
-                                          {currentUserId > 0 ? (
-                                            <TimeEntryForm
-                                              taskId={t.id}
-                                              userId={currentUserId}
-                                              className="text-xs"
-                                              onSaved={async () => {
-                                                setEvmReloadKey((k) => k + 1);
-                                                const tid = Number(t.id);
-                                                if (Number.isFinite(tid)) {
-                                                  setTaskTotalHoursLoading((s) => ({
-                                                    ...s,
-                                                    [tid]: true,
-                                                  }));
-                                                  try {
-                                                    const total = await totalHoursByTask(tid);
-                                                    const value =
-                                                      typeof total === "number"
-                                                        ? total
-                                                        : Number((total as any)?.total ?? 0);
-                                                    setTaskTotalHours((s) => ({
-                                                      ...s,
-                                                      [tid]: Number.isFinite(value) ? value : 0,
-                                                    }));
-                                                    // Auto-update status to In Progress when logging time
-                                                    const currentStatus = String(
-                                                      (t.status ?? "") as string
-                                                    ).toLowerCase();
-                                                    const isOngoing =
-                                                      currentStatus.includes("progress") ||
-                                                      currentStatus.includes("done") ||
-                                                      currentStatus.includes("complete") ||
-                                                      currentStatus.includes("selesai") ||
-                                                      currentStatus.includes("cancel") ||
-                                                      currentStatus.includes("hold");
-                                                    if (!isOngoing) {
-                                                      try {
-                                                        await updateTaskStatus(tid, "In Progress");
-                                                      } catch (e: any) {
-                                                        const msg =
-                                                          e?.response?.data?.message ||
-                                                          e?.message ||
-                                                          "Gagal mengubah status task";
-                                                        showToast({
-                                                          variant: "error",
-                                                          title: "Status task tidak terbarui",
-                                                          description: msg,
-                                                        });
-                                                      }
-                                                    }
-                                                  } catch (e: any) {
-                                                    setTaskTotalHoursError((s) => ({
-                                                      ...s,
-                                                      [tid]:
-                                                        e?.message ?? "Gagal memuat total jam",
-                                                    }));
-                                                  } finally {
-                                                    setTaskTotalHoursLoading((s) => ({
-                                                      ...s,
-                                                      [tid]: false,
-                                                    }));
-                                                  }
-                                                }
-                                              }}
-                                            />
-                                          ) : (
-                                            <div className="text-[11px] text-neutral-500">
-                                              Login required to log time.
+                                          <div className="grid gap-2 sm:grid-cols-2">
+                                            <div>
+                                              <span className="text-neutral-500">Planned Duration:</span>{" "}
+                                              <span className="text-neutral-900">{raw.duration_planned ?? "-"}</span>
                                             </div>
-                                          )}
+                                            <div>
+                                              <span className="text-neutral-500">Actual Duration:</span>{" "}
+                                              <span className="text-neutral-900">{raw.duration_actual ?? "-"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-neutral-500">Actual Start:</span>{" "}
+                                              <span className="text-neutral-900">{raw.start_actual ?? "-"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-neutral-500">Actual End:</span>{" "}
+                                              <span className="text-neutral-900">{raw.end_actual ?? "-"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-neutral-500">Budget:</span>{" "}
+                                              <span className="text-neutral-900">{raw.budget_cost ?? "-"}</span>
+                                            </div>
+                                          </div>
                                           <div className="text-[11px] text-neutral-700">
                                             {taskTotalHoursLoading[Number(t.id)] ? (
                                               <span className="inline-block px-2 py-0.5 rounded-full border bg-neutral-50">

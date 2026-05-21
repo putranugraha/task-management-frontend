@@ -752,8 +752,8 @@ function ReportsPageContent() {
             </div>
           ) : (
             <div className="space-y-6">
-              <EvmWidget projectId={selectedProject.id} />
-              <EvmCostWidget projectId={selectedProject.id} />
+              <EvmWidget key={`evm-${selectedProject.id}`} projectId={selectedProject.id} />
+              <EvmCostWidget key={`evm-cost-${selectedProject.id}`} projectId={selectedProject.id} />
             </div>
           )}
         </div>

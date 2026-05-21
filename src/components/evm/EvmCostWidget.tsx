@@ -129,14 +129,35 @@ export default function EvmCostWidget({
   const [error, setError] = React.useState<string | null>(null);
 
   const { baselines } = useBaselines(projectId);
+  const projectBaselines = React.useMemo(
+    () => (Array.isArray(baselines)
+      ? baselines.filter((baseline: any) => String(baseline?.project_id ?? "") === String(projectId))
+      : []),
+    [baselines, projectId]
+  );
+  const validBaselineId = React.useMemo(() => {
+    if (activeBaselineId == null) return null;
+    return projectBaselines.some((baseline) => Number(baseline.id) === Number(activeBaselineId))
+      ? activeBaselineId
+      : null;
+  }, [activeBaselineId, projectBaselines]);
+
+  React.useEffect(() => {
+    setData(null);
+    setError(null);
+    if (!isControlled) {
+      setInternalBaselineId(null);
+    }
+    setWhen(date || todayISO());
+  }, [projectId, date, isControlled]);
 
   React.useEffect(() => {
     if (isControlled) return;
     if (internalBaselineId != null) return;
-    if (Array.isArray(baselines) && baselines.length > 0) {
-      setInternalBaselineId(Number(baselines[0].id));
+    if (projectBaselines.length > 0) {
+      setInternalBaselineId(Number(projectBaselines[0].id));
     }
-  }, [isControlled, internalBaselineId, baselines]);
+  }, [isControlled, internalBaselineId, projectBaselines]);
 
   const load = React.useCallback(async () => {
     if (!projectId) return;
@@ -144,7 +165,7 @@ export default function EvmCostWidget({
     setError(null);
     try {
       const params: Record<string, any> = { as_of: when };
-      if (activeBaselineId != null) params.baseline_id = activeBaselineId;
+      if (validBaselineId != null) params.baseline_id = validBaselineId;
       const res = await apiRequest<any>(
         "GET",
         `/api/projects/${encodeURIComponent(String(projectId))}/evm-cost`,
@@ -160,7 +181,7 @@ export default function EvmCostWidget({
     } finally {
       setLoading(false);
     }
-  }, [projectId, when, activeBaselineId, reloadKey]);
+  }, [projectId, when, validBaselineId, reloadKey]);
 
   React.useEffect(() => {
     load();
@@ -207,7 +228,7 @@ export default function EvmCostWidget({
           {showBaselineSelect && (
             <BaselineSelect
               projectId={projectId}
-              value={activeBaselineId}
+              value={validBaselineId}
               onChange={handleBaselineChange}
               includeNoneOption
             />

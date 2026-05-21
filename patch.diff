@@ -1,0 +1,8 @@
+*** Begin Patch
+*** Update File: src/app/dashboard/projects/[id]/page.tsx
+@@
+-                const list = map[m.id] || [];
+-                const topTasks = list.slice(0, 3);
++                const list = map[m.id] || [];
++                const topTasks = list; // show all tasks for the milestone (was limited to 3)
+*** End Patch

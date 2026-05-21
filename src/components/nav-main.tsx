@@ -1,0 +1,95 @@
+"use client"
+
+import Link from "next/link"
+import { ChevronRight, type LucideIcon } from "lucide-react"
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "@/components/ui/sidebar"
+
+export function NavMain({
+  items,
+}: {
+  items: {
+    title: string
+    url: string
+    icon: LucideIcon
+    isActive?: boolean
+    badge?: number
+    items?: {
+      title: string
+      url: string
+    }[]
+  }[]
+}) {
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarMenu>
+        {items.map((item) => (
+          <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={item.isActive}
+                tooltip={item.title}
+                className={
+                  item.isActive
+                    ? "relative bg-[#E5F4EF] pl-3 font-semibold text-[#00674F] shadow-sm hover:bg-[#D9EFE8] hover:text-[#00674F] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-1 before:rounded-r-full before:bg-[#00674F] [&>svg]:text-[#00674F]"
+                    : "text-slate-600 hover:bg-[#EAF4F1] hover:text-[#00674F] [&>svg]:text-slate-500 [&>svg]:transition-colors hover:[&>svg]:text-[#00674F]"
+                }
+              >
+                <Link href={item.url}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </Link>
+              </SidebarMenuButton>
+              {typeof item.badge === "number" && item.badge > 0 && (
+                <SidebarMenuBadge className="bg-red-500 text-white">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </SidebarMenuBadge>
+              )}
+              {item.items?.length ? (
+                <>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuAction className="data-[state=open]:rotate-90">
+                      <ChevronRight />
+                      <span className="sr-only">Toggle</span>
+                    </SidebarMenuAction>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {item.items?.map((subItem) => (
+                        <SidebarMenuSubItem key={subItem.title}>
+                          <SidebarMenuSubButton asChild>
+                            <Link href={subItem.url}>
+                              <span>{subItem.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </>
+              ) : null}
+            </SidebarMenuItem>
+          </Collapsible>
+        ))}
+      </SidebarMenu>
+    </SidebarGroup>
+  )
+}

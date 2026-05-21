@@ -1,0 +1,12 @@
+    );
+  }
+
+  const isLoading = loading && !error;
+  const title = data?.title ?? `Task #${id}`;
+  const projectName = data?.project?.name ?? data?.project_id ?? (isLoading ? "Loading project…" : "Task detail overview");
+  const status = data?.status ?? (isLoading ? "Loading…" : "To Do");
+  const priority = data?.priority ?? (isLoading ? "Loading…" : "Medium");
+  const percentComplete = Number(data?.percent_complete ?? 0);
+
+  const ass: Assignment[] = Array.isArray(data?.assignments) ? data.assignments : [];
+  const deps: Dependency[] = Array.isArray(data?.dependencies) ? data.dependencies : [];

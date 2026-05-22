@@ -1,40 +1,56 @@
 # syntax=docker/dockerfile:1
-FROM node:20-alpine AS base
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
-ENV NODE_ENV=development \
-    NEXT_TELEMETRY_DISABLED=1 \
-    HOSTNAME=0.0.0.0
-
 RUN apk add --no-cache libc6-compat
 
-# Optional: allow skipping install at build (useful when mounting source with HMR)
-ARG SKIP_INSTALL=false
-
 COPY package*.json ./
+RUN npm ci
 
-# Tweak npm to be more resilient in CI/build environments
-RUN npm config set fetch-retries 5 \
- && npm config set fetch-retry-factor 2 \
- && npm config set fetch-retry-mintimeout 20000 \
- && npm config set fetch-retry-maxtimeout 120000 \
- && npm config set fund false \
- && npm config set audit false \
- && npm config set progress false \
- && npm config set prefer-offline true
+FROM node:20-alpine AS builder
 
-RUN if [ "$SKIP_INSTALL" = "true" ]; then \
-      echo "Skipping npm install at build time"; \
-    else \
-      npm install; \
-    fi
+WORKDIR /app
 
+ENV NEXT_TELEMETRY_DISABLED=1
+
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_USE_SANCTUM=0
+ARG NEXT_PUBLIC_PROXY_API=0
+ARG NEXT_PUBLIC_USE_SERVER_AUTH=0
+ARG NEXT_PUBLIC_AUTO_LOGIN=false
+
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_USE_SANCTUM=$NEXT_PUBLIC_USE_SANCTUM \
+    NEXT_PUBLIC_PROXY_API=$NEXT_PUBLIC_PROXY_API \
+    NEXT_PUBLIC_USE_SERVER_AUTH=$NEXT_PUBLIC_USE_SERVER_AUTH \
+    NEXT_PUBLIC_AUTO_LOGIN=$NEXT_PUBLIC_AUTO_LOGIN
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN chown -R node:node /app
 
-USER node
+RUN npm run build
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
+
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["node", "server.js"]

@@ -1,0 +1,20 @@
+services:
+  frontend-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_USE_SANCTUM: ${NEXT_PUBLIC_USE_SANCTUM:-0}
+        NEXT_PUBLIC_PROXY_API: ${NEXT_PUBLIC_PROXY_API:-0}
+        NEXT_PUBLIC_USE_SERVER_AUTH: ${NEXT_PUBLIC_USE_SERVER_AUTH:-0}
+        NEXT_PUBLIC_AUTO_LOGIN: ${NEXT_PUBLIC_AUTO_LOGIN:-false}
+    container_name: frontend-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "3000:3000"

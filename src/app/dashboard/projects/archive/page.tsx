@@ -10,8 +10,9 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import DataTable from "../../users/data-table";
 import type { Column, ProjectRow } from "../columns";
 import { useToast } from "@/components/ui/toast";
+import { ArchivePagination, type ArchivePaginationMeta } from "@/components/dashboard/ArchivePagination";
 
-type MaybePaginated<T> = T[] | { data?: T[] };
+type MaybePaginated<T> = T[] | { data?: T[]; meta?: ArchivePaginationMeta };
 
 function mapProject(row: any): ProjectRow {
   const owner = row?.division_owner || row?.owner || row?.project_owner || null;
@@ -27,7 +28,15 @@ function mapProject(row: any): ProjectRow {
     start_planned: row?.start_planned ?? null,
     end_planned: row?.end_planned ?? null,
     created_at: row?.created_at,
+    deleted_at: row?.deleted_at ?? null,
   };
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
 export default function ProjectArchivePage() {
@@ -37,21 +46,23 @@ export default function ProjectArchivePage() {
   ]);
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [paginationMeta, setPaginationMeta] = useState<ArchivePaginationMeta | null>(null);
   const [restoreLoadingId, setRestoreLoadingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProjectRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  async function loadArchivedProjects() {
+  async function loadArchivedProjects(opts?: { page?: number; perPage?: number }) {
     setLoading(true);
     setError(null);
+    const pageParam = opts?.page ?? page;
+    const perPageParam = opts?.perPage ?? rowsPerPage;
 
     const endpoints = [
-      "/api/projects/archived",
-      "/api/projects/archive",
-      "/api/projects?archived=1",
-      "/api/projects?only_trashed=1",
+      `/api/projects/archived?page=${pageParam}&per_page=${perPageParam}`,
     ];
 
     let lastMessage = "Belum ada endpoint archive project di backend.";
@@ -60,7 +71,16 @@ export default function ProjectArchivePage() {
         const res = await apiRequest<MaybePaginated<any>>("GET", endpoint);
         const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
         setRows(list.map(mapProject).filter((item) => Number.isFinite(item.id)));
+        setPaginationMeta(Array.isArray(res) ? {
+          current_page: 1,
+          last_page: 1,
+          per_page: list.length || perPageParam,
+          total: list.length,
+          from: list.length ? 1 : 0,
+          to: list.length,
+        } : (res.meta ?? null));
         setError(null);
+        setLoading(false);
         return;
       } catch (e: any) {
         const status = e?.response?.status;
@@ -72,7 +92,9 @@ export default function ProjectArchivePage() {
     }
 
     setRows([]);
+    setPaginationMeta(null);
     setError(lastMessage);
+    setLoading(false);
   }
 
   async function restoreProject(row: ProjectRow) {
@@ -84,7 +106,7 @@ export default function ProjectArchivePage() {
         title: "Project restored",
         description: `Project "${row.name}" dikembalikan ke daftar aktif.`,
       });
-      await loadArchivedProjects();
+      await loadArchivedProjects({ page, perPage: rowsPerPage });
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Gagal restore project";
       setError(msg);
@@ -110,7 +132,7 @@ export default function ProjectArchivePage() {
         description: `Project "${deleteTarget.name}" beserta milestone, task, progress, biaya, baseline, komentar, dan attachment terkait sudah dihapus.`,
       });
       setDeleteTarget(null);
-      await loadArchivedProjects();
+      await loadArchivedProjects({ page, perPage: rowsPerPage });
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Gagal menghapus project permanen";
       setError(msg);
@@ -128,13 +150,18 @@ export default function ProjectArchivePage() {
     let mounted = true;
 
     if (!authLoading && allowed) {
-      loadArchivedProjects().finally(() => mounted && setLoading(false));
+      loadArchivedProjects({ page, perPage: rowsPerPage }).finally(() => mounted && setLoading(false));
     }
 
     return () => {
       mounted = false;
     };
-  }, [authLoading, allowed]);
+  }, [authLoading, allowed, page, rowsPerPage]);
+
+  function handleRowsPerPageChange(next: number) {
+    setRowsPerPage(next);
+    setPage(1);
+  }
 
   const columns = useMemo<Column<ProjectRow>[]>(() => [
     {
@@ -151,6 +178,7 @@ export default function ProjectArchivePage() {
     { key: "status", header: "Status", className: "min-w-[120px]" },
     { key: "start_planned", header: "Start", render: (row) => row.start_planned ?? "-" },
     { key: "end_planned", header: "End", render: (row) => row.end_planned ?? "-" },
+    { key: "deleted_at", header: "Archived At", className: "min-w-[170px]", render: (row) => formatDateTime(row.deleted_at) },
     {
       key: "actions",
       header: "Actions",
@@ -215,6 +243,15 @@ export default function ProjectArchivePage() {
         loading={loading || authLoading}
         emptyText="Belum ada project archive."
       />
+
+      {paginationMeta && (
+        <ArchivePagination
+          meta={paginationMeta}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          onPageChange={setPage}
+        />
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}

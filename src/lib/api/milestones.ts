@@ -14,6 +14,18 @@ export type UpdateMilestoneDto = Partial<CreateMilestoneDto> & {
   status?: MilestoneStatus;
 };
 
+export type ArchivedMilestonePage = {
+  data: Milestone[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from?: number | null;
+    to?: number | null;
+  };
+};
+
 export async function listByProject(projectId: number | string): Promise<Milestone[]> {
   const endpoints = [
     `/api/projects/${projectId}/milestones`,
@@ -72,13 +84,18 @@ export async function remove(id: number | string): Promise<void> {
     await apiRequest('DELETE', `/api/milestones/${id}`);
 }
 
-export async function listArchived(params?: { project_id?: number | string; search?: string }): Promise<Milestone[]> {
+export async function listArchived(params?: { project_id?: number | string; search?: string; page?: number; per_page?: number }): Promise<ArchivedMilestonePage> {
   const query = new URLSearchParams();
   if (params?.project_id) query.set('project_id', String(params.project_id));
   if (params?.search?.trim()) query.set('search', params.search.trim());
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.per_page) query.set('per_page', String(params.per_page));
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  const res = await apiRequest<Milestone[] | { data: Milestone[] }>('GET', `/api/milestones/archived${suffix}`);
-  return Array.isArray(res) ? res : (res as any).data ?? [];
+  const res = await apiRequest<Milestone[] | ArchivedMilestonePage>('GET', `/api/milestones/archived${suffix}`);
+  if (Array.isArray(res)) {
+    return { data: res, meta: { current_page: 1, last_page: 1, per_page: res.length || 10, total: res.length } };
+  }
+  return res as ArchivedMilestonePage;
 }
 
 export async function restore(id: number | string): Promise<Milestone> {

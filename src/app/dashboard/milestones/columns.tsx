@@ -10,6 +10,7 @@ export type MilestoneRow = {
   due_planned?: string | null;
   due_actual?: string | null;
   status: string;
+  deleted_at?: string | null;
 };
 
 export type Column<T> = {

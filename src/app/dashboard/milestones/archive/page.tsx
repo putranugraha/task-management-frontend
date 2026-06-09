@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import DataTable from "../../users/data-table";
 import { listArchived, restore } from "@/lib/api/milestones";
+import { ArchivePagination, type ArchivePaginationMeta } from "@/components/dashboard/ArchivePagination";
 import type { Milestone } from "@/types/milestone";
 import type { Column, MilestoneRow } from "../columns";
 
@@ -20,7 +21,15 @@ function mapMilestone(item: Milestone): MilestoneRow {
     due_planned: item.due_planned ?? null,
     due_actual: item.due_actual ?? null,
     status: item.status ?? "Planned",
+    deleted_at: item.deleted_at ?? null,
   };
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function MilestoneArchiveContent() {
@@ -31,6 +40,9 @@ function MilestoneArchiveContent() {
   const projectId = searchParams?.get("project_id") || undefined;
   const [rows, setRows] = useState<MilestoneRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [paginationMeta, setPaginationMeta] = useState<ArchivePaginationMeta | null>(null);
   const [restoreLoadingId, setRestoreLoadingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -39,11 +51,13 @@ function MilestoneArchiveContent() {
     setLoading(true);
     setError(null);
     try {
-      const list = await listArchived({ project_id: projectId });
-      setRows(list.map(mapMilestone));
+      const pageResult = await listArchived({ project_id: projectId, page, per_page: rowsPerPage });
+      setRows(pageResult.data.map(mapMilestone));
+      setPaginationMeta(pageResult.meta);
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Gagal memuat milestone archive";
       setRows([]);
+      setPaginationMeta(null);
       setError(msg);
     } finally {
       setLoading(false);
@@ -78,7 +92,12 @@ function MilestoneArchiveContent() {
       fetchArchived();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, canAccessArchive, projectId]);
+  }, [authLoading, canAccessArchive, projectId, page, rowsPerPage]);
+
+  function handleRowsPerPageChange(next: number) {
+    setRowsPerPage(next);
+    setPage(1);
+  }
 
   const columns = useMemo<Column<MilestoneRow>[]>(() => [
     {
@@ -95,6 +114,7 @@ function MilestoneArchiveContent() {
     { key: "status", header: "Status", align: "center" },
     { key: "due_planned", header: "Due Planned", render: (row) => row.due_planned ?? "-" },
     { key: "due_actual", header: "Due Actual", render: (row) => row.due_actual ?? "-" },
+    { key: "deleted_at", header: "Archived At", className: "min-w-[170px]", render: (row) => formatDateTime(row.deleted_at) },
     {
       key: "actions",
       header: "Actions",
@@ -150,6 +170,15 @@ function MilestoneArchiveContent() {
         loading={loading || authLoading}
         emptyText="Belum ada milestone archive."
       />
+
+      {paginationMeta && (
+        <ArchivePagination
+          meta={paginationMeta}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          onPageChange={setPage}
+        />
+      )}
     </div>
   );
 }

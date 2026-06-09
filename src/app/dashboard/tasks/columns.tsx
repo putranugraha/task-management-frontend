@@ -12,6 +12,7 @@ export type TaskRow = {
   start_planned?: string | null;
   end_planned?: string | null;
   percent_complete: number;
+  deleted_at?: string | null;
 };
 
 export type Column<T> = {

@@ -13,6 +13,7 @@ export type ProjectRow = {
   start_planned?: string | null;
   end_planned?: string | null;
   created_at?: string;
+  deleted_at?: string | null;
 };
 
 export type Column<T> = {

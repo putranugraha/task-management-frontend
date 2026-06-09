@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/components/ui/toast";
 import DataTable from "../../users/data-table";
 import { listArchived, restore } from "@/lib/api/tasks";
+import { ArchivePagination, type ArchivePaginationMeta } from "@/components/dashboard/ArchivePagination";
 import type { Task } from "@/types/task";
 import type { Column, TaskRow } from "../columns";
 
@@ -22,7 +23,15 @@ function mapTask(item: Task): TaskRow {
     start_planned: item.start_planned ?? null,
     end_planned: item.end_planned ?? null,
     percent_complete: Number(item.percent_complete ?? 0),
+    deleted_at: item.deleted_at ?? null,
   };
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function TaskArchiveContent() {
@@ -34,6 +43,9 @@ function TaskArchiveContent() {
   const milestoneId = searchParams?.get("milestone_id") || undefined;
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [paginationMeta, setPaginationMeta] = useState<ArchivePaginationMeta | null>(null);
   const [restoreLoadingId, setRestoreLoadingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -42,11 +54,13 @@ function TaskArchiveContent() {
     setLoading(true);
     setError(null);
     try {
-      const list = await listArchived({ project_id: projectId, milestone_id: milestoneId });
-      setRows(list.map(mapTask));
+      const pageResult = await listArchived({ project_id: projectId, milestone_id: milestoneId, page, per_page: rowsPerPage });
+      setRows(pageResult.data.map(mapTask));
+      setPaginationMeta(pageResult.meta);
     } catch (e: any) {
       const msg = e?.response?.data?.message || e?.message || "Gagal memuat task archive";
       setRows([]);
+      setPaginationMeta(null);
       setError(msg);
     } finally {
       setLoading(false);
@@ -81,7 +95,12 @@ function TaskArchiveContent() {
       fetchArchived();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, canAccessArchive, projectId, milestoneId]);
+  }, [authLoading, canAccessArchive, projectId, milestoneId, page, rowsPerPage]);
+
+  function handleRowsPerPageChange(next: number) {
+    setRowsPerPage(next);
+    setPage(1);
+  }
 
   const columns = useMemo<Column<TaskRow>[]>(() => [
     {
@@ -99,6 +118,7 @@ function TaskArchiveContent() {
     { key: "status", header: "Status" },
     { key: "start_planned", header: "Start", render: (row) => row.start_planned ?? "-" },
     { key: "end_planned", header: "End", render: (row) => row.end_planned ?? "-" },
+    { key: "deleted_at", header: "Archived At", className: "min-w-[170px]", render: (row) => formatDateTime(row.deleted_at) },
     {
       key: "actions",
       header: "Actions",
@@ -154,6 +174,15 @@ function TaskArchiveContent() {
         loading={loading || authLoading}
         emptyText="Belum ada task archive."
       />
+
+      {paginationMeta && (
+        <ArchivePagination
+          meta={paginationMeta}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          onPageChange={setPage}
+        />
+      )}
     </div>
   );
 }

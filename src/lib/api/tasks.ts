@@ -17,6 +17,18 @@ export type CreateTaskDto = {
 
 export type UpdateTaskDto = Partial<CreateTaskDto>;
 
+export type ArchivedTaskPage = {
+  data: Task[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from?: number | null;
+    to?: number | null;
+  };
+};
+
 export async function listByProject(projectId: number | string): Promise<Task[]> {
   const id = encodeURIComponent(String(projectId));
   // Try to include assignees eagerly when backend supports it.
@@ -82,14 +94,19 @@ export async function remove(id: number | string): Promise<void> {
   await apiRequest('DELETE', `/api/tasks/${id}`);
 }
 
-export async function listArchived(params?: { project_id?: number | string; milestone_id?: number | string; search?: string }): Promise<Task[]> {
+export async function listArchived(params?: { project_id?: number | string; milestone_id?: number | string; search?: string; page?: number; per_page?: number }): Promise<ArchivedTaskPage> {
   const query = new URLSearchParams();
   if (params?.project_id) query.set('project_id', String(params.project_id));
   if (params?.milestone_id) query.set('milestone_id', String(params.milestone_id));
   if (params?.search?.trim()) query.set('search', params.search.trim());
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.per_page) query.set('per_page', String(params.per_page));
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  const res = await apiRequest<Task[] | { data: Task[] }>('GET', `/api/tasks/archived${suffix}`);
-  return Array.isArray(res) ? res : (res as any).data ?? [];
+  const res = await apiRequest<Task[] | ArchivedTaskPage>('GET', `/api/tasks/archived${suffix}`);
+  if (Array.isArray(res)) {
+    return { data: res, meta: { current_page: 1, last_page: 1, per_page: res.length || 10, total: res.length } };
+  }
+  return res as ArchivedTaskPage;
 }
 
 export async function restore(id: number | string): Promise<Task> {

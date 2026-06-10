@@ -20,6 +20,11 @@ export const metadata: Metadata = {
     template: "%s | Central Saga",
   },
   description: "Sistem manajemen dan monitoring project Central Saga",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

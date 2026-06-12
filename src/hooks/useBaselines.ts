@@ -7,6 +7,7 @@ import type { ProjectBaseline } from "@/types/project-baseline";
 export type UseBaselinesResult = {
   baselines: ProjectBaseline[];
   isLoading: boolean;
+  hasLoaded: boolean;
   error: string | null;
   refetch: () => Promise<void>;
 };
@@ -20,6 +21,7 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
   const pid = useMemo(() => (projectId != null ? String(projectId) : null), [projectId]);
   const [baselines, setBaselines] = useState<ProjectBaseline[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
 
@@ -29,9 +31,11 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
       setBaselines([]);
       setError(null);
       setIsLoading(false);
+      setHasLoaded(true);
       return;
     }
     setIsLoading(true);
+    setHasLoaded(false);
     setError(null);
     try {
       const endpoints = [
@@ -72,9 +76,11 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
         return (Number(b?.id) || 0) - (Number(a?.id) || 0);
       });
       setBaselines(list);
+      setHasLoaded(true);
     } catch (e: any) {
       if (requestId !== requestSeq.current) return;
       setError(e?.message ?? "Failed to load baselines");
+      setHasLoaded(true);
     } finally {
       if (requestId !== requestSeq.current) return;
       setIsLoading(false);
@@ -85,8 +91,9 @@ export function useBaselines(projectId?: number | string | null): UseBaselinesRe
     requestSeq.current += 1;
     setBaselines([]);
     setError(null);
+    setHasLoaded(false);
     fetcher();
   }, [fetcher]);
 
-  return { baselines, isLoading, error, refetch: fetcher };
+  return { baselines, isLoading, hasLoaded, error, refetch: fetcher };
 }

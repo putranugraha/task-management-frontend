@@ -128,7 +128,7 @@ export default function EvmCostWidget({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const { baselines } = useBaselines(projectId);
+  const { baselines, hasLoaded: baselinesLoaded } = useBaselines(projectId);
   const projectBaselines = React.useMemo(
     () => (Array.isArray(baselines)
       ? baselines.filter((baseline: any) => String(baseline?.project_id ?? "") === String(projectId))
@@ -153,11 +153,12 @@ export default function EvmCostWidget({
 
   React.useEffect(() => {
     if (isControlled) return;
+    if (!baselinesLoaded) return;
     if (internalBaselineId != null) return;
     if (projectBaselines.length > 0) {
       setInternalBaselineId(Number(projectBaselines[0].id));
     }
-  }, [isControlled, internalBaselineId, projectBaselines]);
+  }, [isControlled, baselinesLoaded, internalBaselineId, projectBaselines]);
 
   const load = React.useCallback(async () => {
     if (!projectId) return;
@@ -183,9 +184,22 @@ export default function EvmCostWidget({
     }
   }, [projectId, when, validBaselineId, reloadKey]);
 
+  const waitingForAutoBaseline =
+    showBaselineSelect &&
+    !isControlled &&
+    baselinesLoaded &&
+    internalBaselineId == null &&
+    projectBaselines.length > 0;
+
+  const canLoadCostEvm =
+    !showBaselineSelect ||
+    isControlled ||
+    (baselinesLoaded && !waitingForAutoBaseline);
+
   React.useEffect(() => {
+    if (!canLoadCostEvm) return;
     load();
-  }, [load]);
+  }, [load, canLoadCostEvm]);
 
   const handleBaselineChange = (id: number | null) => {
     if (isControlled) onBaselineChange?.(id);
@@ -244,7 +258,7 @@ export default function EvmCostWidget({
       </div>
 
       <div className="border rounded-lg p-4">
-        {loading ? (
+        {loading || !canLoadCostEvm ? (
           <div className="text-sm text-neutral-500">Loading EVM cost (IDR)...</div>
         ) : error ? (
           <div className="text-sm text-red-600">{error}</div>

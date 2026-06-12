@@ -8,6 +8,28 @@ export interface TaskDependencyLink {
   task?: { id: number | null; title: string | null } | null;
 }
 
+export interface TaskProgressEntry {
+  id: number;
+  task_id: number;
+  progress_date: string | null;
+  percent_complete: number;
+  changed_by?: number | null;
+  changer?: { id: number | null; name: string | null } | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface TaskCostEntry {
+  id: number;
+  task_id: number;
+  incurred_on: string | null;
+  amount: number | string;
+  category?: string | null;
+  note?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface Task {
   id: number;
   project_id: number;
@@ -28,6 +50,8 @@ export interface Task {
   milestone?: { id: number; name: string } | null;
   dependencies?: TaskDependencyLink[];
   dependents?: TaskDependencyLink[];
+  progress_entries?: TaskProgressEntry[];
+  cost_entries?: TaskCostEntry[];
   created_at: string; // ISO
   updated_at: string; // ISO
   deleted_at?: string | null; // ISO

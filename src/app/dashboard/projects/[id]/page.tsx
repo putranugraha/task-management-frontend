@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "next/navigation";
@@ -70,6 +70,68 @@ type ProjectDetail = {
   updated_at?: string;
 };
 
+function getTaskProgressEntries(task: Task) {
+  const raw = Array.isArray(task.progress_entries) ? task.progress_entries : [];
+
+  return [...raw].sort((a, b) => {
+    const da = a.progress_date ? Date.parse(a.progress_date) : 0;
+    const db = b.progress_date ? Date.parse(b.progress_date) : 0;
+    if (da !== db) return da - db;
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  });
+}
+
+function getTaskCostEntries(task: Task) {
+  const raw = Array.isArray(task.cost_entries) ? task.cost_entries : [];
+
+  return [...raw].sort((a, b) => {
+    const da = a.incurred_on ? Date.parse(a.incurred_on) : 0;
+    const db = b.incurred_on ? Date.parse(b.incurred_on) : 0;
+    if (da !== db) return da - db;
+    return Number(a.id ?? 0) - Number(b.id ?? 0);
+  });
+}
+
+function getLatestTaskProgressAsOf(task: Task, asOfDate: string) {
+  if (!asOfDate) return null;
+  const asOf = Date.parse(asOfDate);
+  if (!Number.isFinite(asOf)) return null;
+
+  return getTaskProgressEntries(task)
+    .filter((entry) => {
+      const progressDate = entry.progress_date ? Date.parse(entry.progress_date) : NaN;
+      return Number.isFinite(progressDate) && progressDate <= asOf;
+    })
+    .at(-1) ?? null;
+}
+
+function getTaskPercentAsOf(task: Task, asOfDate: string): number {
+  const entry = getLatestTaskProgressAsOf(task, asOfDate);
+  return entry ? Number(entry.percent_complete ?? 0) : 0;
+}
+
+function getTaskActualCost(task: Task, asOfDate?: string): number {
+  const asOf = asOfDate ? Date.parse(asOfDate) : null;
+
+  return getTaskCostEntries(task).reduce((sum, entry) => {
+    const incurred = entry.incurred_on ? Date.parse(entry.incurred_on) : NaN;
+    if (asOf !== null && (!Number.isFinite(incurred) || incurred > asOf)) {
+      return sum;
+    }
+
+    const amount = Number(entry.amount ?? 0);
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+}
+
+function formatIDR(value: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
 function ProjectDetailPageContent() {
   const params = useParams();
   const id = Number(params?.id);
@@ -86,6 +148,7 @@ function ProjectDetailPageContent() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
   const [openTaskIds, setOpenTaskIds] = useState<Record<number, boolean>>({});
+  const [taskAsOfDate, setTaskAsOfDate] = useState<string>("");
   // Baselines state
   const [baselines, setBaselines] = useState<ProjectBaseline[]>([]);
   const [baselinesLoading, setBaselinesLoading] = useState(false);
@@ -1320,14 +1383,41 @@ function ProjectDetailPageContent() {
 
       {activeTab === "tasks" && (
       <DetailSectionCard className="w-full mt-2">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-700">Milestone Tasks</h3>
-          <a
-            href={data ? `/dashboard/projects/${data.id}/milestones` : "#"}
-            className="text-sm px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-neutral-50"
-          >
-            View All
-          </a>
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700">Milestone Tasks</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {taskAsOfDate
+                ? `Progress task ditampilkan berdasarkan histori sampai ${taskAsOfDate}.`
+                : "Progress task menampilkan kondisi terbaru."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Task View As Of</label>
+              <input
+                type="date"
+                value={taskAsOfDate}
+                onChange={(e) => setTaskAsOfDate(e.target.value)}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm"
+              />
+            </div>
+            {taskAsOfDate && (
+              <button
+                type="button"
+                onClick={() => setTaskAsOfDate("")}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-600 hover:bg-neutral-50"
+              >
+                Current
+              </button>
+            )}
+            <a
+              href={data ? `/dashboard/projects/${data.id}/milestones` : "#"}
+              className="inline-flex h-9 items-center rounded-lg border border-slate-200 px-3 text-sm text-slate-600 hover:bg-neutral-50"
+            >
+              View All
+            </a>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1379,6 +1469,12 @@ function ProjectDetailPageContent() {
                       <tbody>
                         {topTasks.map((t) => {
                           const open = !!openTaskIds[(t.id as number)];
+                          const progressEntries = getTaskProgressEntries(t);
+                          const costEntries = getTaskCostEntries(t);
+                          const progressAsOf = taskAsOfDate ? getTaskPercentAsOf(t, taskAsOfDate) : null;
+                          const displayPercent = progressAsOf ?? Number(t.percent_complete ?? 0);
+                          const latestProgress = taskAsOfDate ? getLatestTaskProgressAsOf(t, taskAsOfDate) : null;
+                          const actualCost = getTaskActualCost(t, taskAsOfDate || undefined);
                           const toggle = async () => {
                             setOpenTaskIds(s => ({ ...s, [t.id]: !s[t.id as number] }));
                             const willOpen = !open;
@@ -1426,11 +1522,22 @@ function ProjectDetailPageContent() {
                           const assignees: AssigneeView[] =
                             fromAssignments.length ? fromAssignments : fromUsers;
                           return (
-                            <>
+                            <Fragment key={`task-${t.id}`}>
                               <tr key={`row-${t.id}`} className="hover:bg-neutral-50">
                                 <td className="px-3 py-2 border-t">{t.title}</td>
                                 <td className="px-3 py-2 border-t">{t.status}</td>
-                                <td className="px-3 py-2 border-t">{(t.percent_complete ?? 0)}%</td>
+                                <td className="px-3 py-2 border-t">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span>{displayPercent}%</span>
+                                    {taskAsOfDate && (
+                                      <span className="text-[11px] text-slate-500">
+                                        {latestProgress
+                                          ? `as of ${latestProgress.progress_date}`
+                                          : "belum ada update"}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-3 py-2 border-t space-x-2">
                                   <button
                                     type="button"
@@ -1516,6 +1623,10 @@ function ProjectDetailPageContent() {
                                               <span className="text-neutral-500">Budget:</span>{" "}
                                               <span className="text-neutral-900">{raw.budget_cost ?? "-"}</span>
                                             </div>
+                                            <div>
+                                              <span className="text-neutral-500">AC Cost:</span>{" "}
+                                              <span className="text-neutral-900">{formatIDR(actualCost)}</span>
+                                            </div>
                                           </div>
                                           <div className="text-[11px] text-neutral-700">
                                             {taskTotalHoursLoading[Number(t.id)] ? (
@@ -1533,13 +1644,112 @@ function ProjectDetailPageContent() {
                                               </span>
                                             )}
                                           </div>
+                                          <div className="border-t border-slate-100 pt-3">
+                                            <div className="mb-2 text-neutral-900 font-medium">
+                                              Progress Timeline
+                                            </div>
+                                            {progressEntries.length === 0 ? (
+                                              <div className="text-[11px] text-neutral-500">
+                                                Belum ada histori progress untuk task ini.
+                                              </div>
+                                            ) : (
+                                              <div className="space-y-2">
+                                                {progressEntries.map((entry, index) => {
+                                                  const highlighted =
+                                                    taskAsOfDate &&
+                                                    latestProgress &&
+                                                    Number(latestProgress.id) === Number(entry.id);
+
+                                                  return (
+                                                    <div
+                                                      key={entry.id ?? `${entry.progress_date}-${index}`}
+                                                      className={`flex items-center justify-between gap-3 rounded-lg border px-2 py-1.5 ${
+                                                        highlighted
+                                                          ? "border-[#00674F]/30 bg-[#00674F]/5"
+                                                          : "border-slate-100 bg-slate-50"
+                                                      }`}
+                                                    >
+                                                      <div>
+                                                        <div className="font-medium text-slate-800">
+                                                          {entry.progress_date ?? "-"}
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-500">
+                                                          {entry.changer?.name
+                                                            ? `Updated by ${entry.changer.name}`
+                                                            : "Progress update"}
+                                                        </div>
+                                                      </div>
+                                                      <div className="text-right">
+                                                        <div className="font-semibold text-slate-900">
+                                                          {entry.percent_complete ?? 0}%
+                                                        </div>
+                                                        {highlighted && (
+                                                          <div className="text-[11px] text-[#00674F]">
+                                                            dipakai as-of
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="border-t border-slate-100 pt-3">
+                                            <div className="mb-2 flex items-center justify-between gap-2">
+                                              <div className="text-neutral-900 font-medium">
+                                                Actual Cost Timeline
+                                              </div>
+                                              <div className="text-[11px] text-slate-500">
+                                                Total AC: {formatIDR(actualCost)}
+                                              </div>
+                                            </div>
+                                            {costEntries.length === 0 ? (
+                                              <div className="text-[11px] text-neutral-500">
+                                                Belum ada biaya aktual untuk task ini.
+                                              </div>
+                                            ) : (
+                                              <div className="space-y-2">
+                                                {costEntries.map((entry, index) => {
+                                                  const incurred = entry.incurred_on ? Date.parse(entry.incurred_on) : NaN;
+                                                  const selected =
+                                                    !taskAsOfDate ||
+                                                    (Number.isFinite(incurred) && incurred <= Date.parse(taskAsOfDate));
+
+                                                  return (
+                                                    <div
+                                                      key={entry.id ?? `${entry.incurred_on}-${index}`}
+                                                      className={`flex items-start justify-between gap-3 rounded-lg border px-2 py-1.5 ${
+                                                        selected
+                                                          ? "border-slate-100 bg-slate-50"
+                                                          : "border-slate-100 bg-white opacity-55"
+                                                      }`}
+                                                    >
+                                                      <div>
+                                                        <div className="font-medium text-slate-800">
+                                                          {entry.incurred_on ?? "-"}
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-500">
+                                                          {entry.category ?? "Actual Cost"}
+                                                          {entry.note ? ` - ${entry.note}` : ""}
+                                                        </div>
+                                                      </div>
+                                                      <div className="text-right font-semibold text-slate-900">
+                                                        {formatIDR(Number(entry.amount ?? 0))}
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
                                     </div>
                                   </td>
                                 </tr>
                               )}
-                            </>
+                            </Fragment>
                           );
                         })}
                       </tbody>

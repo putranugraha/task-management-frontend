@@ -34,10 +34,14 @@ export async function listByProject(projectId: number | string): Promise<Task[]>
   // Try to include assignees eagerly when backend supports it.
   const endpoints = [
     // Prefer fetching dependencies so Gantt can render connectors
+    `/api/projects/${id}/tasks?include=dependencies,milestone,assignments,progress_entries,cost_entries,users`,
+    `/api/projects/${id}/tasks?include=dependencies,milestone,assignments,progress_entries,cost_entries`,
     `/api/projects/${id}/tasks?include=dependencies,milestone,assignments,users`,
     `/api/projects/${id}/tasks?include=dependencies,milestone,assignments`,
     `/api/projects/${id}/tasks?include=dependencies,milestone,users`,
     `/api/projects/${id}/tasks?include=dependencies,milestone`,
+    `/api/tasks?project_id=${id}&include=dependencies,milestone,assignments,progress_entries,cost_entries,users`,
+    `/api/tasks?project_id=${id}&include=dependencies,milestone,assignments,progress_entries,cost_entries`,
     `/api/tasks?project_id=${id}&include=dependencies,milestone,assignments,users`,
     `/api/tasks?project_id=${id}&include=dependencies,milestone,assignments`,
     `/api/tasks?project_id=${id}&include=dependencies,milestone,users`,

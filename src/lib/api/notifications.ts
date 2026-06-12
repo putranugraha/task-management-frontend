@@ -6,6 +6,10 @@ export type NotificationEvent =
   | "attachment_approved"
   | "attachment_rejected"
   | "comment_added"
+  | "task_status_changed"
+  | "task_progress_updated"
+  | "task_due_soon"
+  | "task_overdue"
   | string;
 
 export type TaskNotification = {
@@ -14,12 +18,15 @@ export type TaskNotification = {
   message: string;
   task_id: number | null;
   task_title: string | null;
+  project_id: number | null;
+  project_name: string | null;
   entity_type: string | null;
   entity_id: number | null;
   attachment_id: number | null;
   comment_id: number | null;
   actor_id: number | null;
   actor_name: string | null;
+  due_date: string | null;
   read_at: string | null;
   created_at: string | null;
 };

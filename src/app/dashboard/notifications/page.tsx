@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
   BellDot,
   CheckCircle2,
+  Clock3,
   FileText,
   ListTodo,
   MessageCircle,
@@ -49,6 +51,14 @@ function getEventLabel(event: string): string {
       return "Attachment telah ditolak";
     case "comment_added":
       return "Komentar baru ditambahkan";
+    case "task_status_changed":
+      return "Status task berubah";
+    case "task_progress_updated":
+      return "Progress task diperbarui";
+    case "task_due_soon":
+      return "Task mendekati deadline";
+    case "task_overdue":
+      return "Task terlambat";
     default:
       return event || "Notifikasi";
   }
@@ -104,6 +114,26 @@ function EventIcon({ event, unread }: { event: string; unread: boolean }) {
         className={`${base} bg-amber-50 text-amber-600 ring-1 ring-amber-100`}
       >
         <MessageCircle className="h-5 w-5" />
+      </div>
+    );
+  }
+
+  if (event === "task_due_soon") {
+    return (
+      <div
+        className={`${base} bg-orange-50 text-orange-600 ring-1 ring-orange-100`}
+      >
+        <Clock3 className="h-5 w-5" />
+      </div>
+    );
+  }
+
+  if (event === "task_overdue") {
+    return (
+      <div
+        className={`${base} bg-rose-50 text-rose-600 ring-1 ring-rose-100`}
+      >
+        <AlertTriangle className="h-5 w-5" />
       </div>
     );
   }
@@ -250,7 +280,7 @@ export default function NotificationsPage() {
           Notifications Dashboard
         </h1>
         <p className="text-sm text-slate-500">
-          Ringkasan penugasan task, attachment, dan komentar terbaru yang
+          Ringkasan penugasan, deadline, attachment, dan komentar terbaru yang
           terkait dengan akun kamu.
         </p>
       </div>
@@ -263,8 +293,8 @@ export default function NotificationsPage() {
               <span>Notifications</span>
             </span>
             <p className="text-sm text-slate-500">
-              Ringkasan penugasan task, attachment, dan komentar terbaru yang
-              terkait dengan akun kamu.
+              Ringkasan penugasan, deadline, attachment, dan komentar terbaru
+              yang terkait dengan akun kamu.
             </p>
           </div>
 
@@ -332,7 +362,7 @@ export default function NotificationsPage() {
               Belum ada notifikasi
             </p>
             <p className="text-xs text-slate-500">
-              Kamu akan melihat update ketika ada penugasan task, upload
+              Kamu akan melihat update ketika ada penugasan task, deadline,
               attachment, atau komentar baru.
             </p>
           </div>
@@ -374,6 +404,16 @@ export default function NotificationsPage() {
                               {n.task_title && (
                                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
                                   {n.task_title}
+                                </span>
+                              )}
+                              {n.project_name && (
+                                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+                                  {n.project_name}
+                                </span>
+                              )}
+                              {n.due_date && (
+                                <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-semibold text-orange-700">
+                                  Deadline {n.due_date}
                                 </span>
                               )}
                               {n.entity_type && (

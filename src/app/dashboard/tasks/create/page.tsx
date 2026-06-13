@@ -26,7 +26,7 @@ type FormState = {
   end_planned: string;
   percent_complete: number;
   budget_cost: string;
-  assignments?: { user_id: number; role_on_task: string | null }[];
+  assignments?: { user_id: number; role_on_task: string | null; estimated_effort_hours?: number | "" | null }[];
   dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
 
@@ -153,6 +153,10 @@ function CreateTaskPageContent() {
         payload.assignments = form.assignments.map(a => ({
           user_id: a.user_id,
           role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+          estimated_effort_hours:
+            a.estimated_effort_hours === "" || a.estimated_effort_hours == null
+              ? null
+              : Number(a.estimated_effort_hours),
         }));
       }
       if (typeof form.dependencies !== 'undefined') {
@@ -549,7 +553,8 @@ function CreateTaskPageContent() {
                   {users.map((u) => {
                     const checked = (form.assignments?.some(a => a.user_id === u.id)) ?? false;
                     return (
-                      <label key={u.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50">
+                      <div key={u.id}>
+                      <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50">
                         <span className="text-slate-700">{u.name}</span>
                         <input
                           type="checkbox"
@@ -560,7 +565,7 @@ function CreateTaskPageContent() {
                               const current = s.assignments ?? [];
                               if (e.target.checked) {
                                 if (!current.some(a => a.user_id === u.id)) {
-                                  return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null }] };
+                                  return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null, estimated_effort_hours: "" }] };
                                 }
                                 return s;
                               } else {
@@ -570,6 +575,44 @@ function CreateTaskPageContent() {
                           }}
                         />
                       </label>
+                      {checked && (
+                        <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                          <label className="mb-1 block text-xs font-medium text-slate-500">
+                            Estimated Effort (hours)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={10000}
+                            step={1}
+                            value={
+                              form.assignments?.find((a) => a.user_id === u.id)
+                                ?.estimated_effort_hours ?? ""
+                            }
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setForm((s) => ({
+                                ...s,
+                                assignments: (s.assignments ?? []).map((a) =>
+                                  a.user_id === u.id
+                                    ? {
+                                        ...a,
+                                        estimated_effort_hours:
+                                          raw === "" ? "" : Math.max(0, Number(raw) || 0),
+                                      }
+                                    : a
+                                ),
+                              }));
+                            }}
+                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                            placeholder="Kosong = durasi x 8 jam"
+                          />
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
+                          </p>
+                        </div>
+                      )}
+                      </div>
                     );
                   })}
                 </div>

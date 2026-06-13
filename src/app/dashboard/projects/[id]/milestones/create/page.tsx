@@ -77,6 +77,7 @@ function CreateProjectMilestonePageContent() {
     percent_complete: number;
     dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
     assigneeIds?: number[];
+    assigneeEfforts?: Record<number, string>;
   };
   const [taskForms, setTaskForms] = useState<TaskForm[]>([]);
   const [collapsedTaskKeys, setCollapsedTaskKeys] = useState<Record<number, boolean>>({});
@@ -92,6 +93,7 @@ function CreateProjectMilestonePageContent() {
     percent_complete: 0,
     dependencies: [],
     assigneeIds: [],
+    assigneeEfforts: {},
   }]));
   const removeTask = (idx: number) => setTaskForms((s) => s.filter((_, i) => i !== idx));
   const toggleTaskCollapsed = (key: number) => {
@@ -319,7 +321,16 @@ function CreateProjectMilestonePageContent() {
               }
             }
             if (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) {
-              dto.assignments = t.assigneeIds.map((id) => ({ user_id: id, role_on_task: 'Member' }));
+              dto.assignments = t.assigneeIds.map((id) => {
+                const rawEffort = t.assigneeEfforts?.[id] ?? '';
+                const effort = rawEffort === '' ? null : Number(rawEffort);
+
+                return {
+                  user_id: id,
+                  role_on_task: 'Member',
+                  estimated_effort_hours: Number.isFinite(effort) ? effort : null,
+                };
+              });
             }
             const dependencies = (t.dependencies || [])
               .map((dep) => {
@@ -505,7 +516,12 @@ function CreateProjectMilestonePageContent() {
                     (t.end_planned || "").trim().length > 0 ||
                     (t.budget_cost || "").trim().length > 0 ||
                     (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) ||
+                    Object.values(t.assigneeEfforts ?? {}).some((value) => String(value ?? "").trim().length > 0) ||
                     (Array.isArray(t.dependencies) && t.dependencies.length > 0);
+                  const totalEstimatedEffort = (t.assigneeIds ?? []).reduce((sum, userId) => {
+                    const value = Number(t.assigneeEfforts?.[userId] ?? 0);
+                    return sum + (Number.isFinite(value) ? value : 0);
+                  }, 0);
                   const collapsed = !!collapsedTaskKeys[t.tempKey];
                   return (
                   <div key={t.tempKey} className="relative overflow-hidden rounded-2xl border border-slate-200 p-4 grid gap-3 bg-white/95 ring-1 ring-slate-100 shadow-[0_12px_24px_rgba(15,23,42,0.06),0_10px_24px_rgba(0,103,79,0.12)] transition hover:shadow-[0_16px_32px_rgba(15,23,42,0.08),0_14px_32px_rgba(0,103,79,0.18)]">
@@ -547,6 +563,11 @@ function CreateProjectMilestonePageContent() {
                         {Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0 && (
                           <span className="text-[11px] text-slate-600">
                             {t.assigneeIds.length} assignee{t.assigneeIds.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {totalEstimatedEffort > 0 && (
+                          <span className="text-[11px] text-slate-600">
+                            Effort {totalEstimatedEffort} h
                           </span>
                         )}
                       </div>
@@ -626,7 +647,8 @@ function CreateProjectMilestonePageContent() {
                           {users.map((u) => {
                             const checked = (t.assigneeIds || []).includes(u.id);
                             return (
-                              <label key={u.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50">
+                              <div key={u.id}>
+                              <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50">
                                 <span className="text-slate-700">{u.name}</span>
                                 <input
                                   type="checkbox"
@@ -636,12 +658,54 @@ function CreateProjectMilestonePageContent() {
                                     setTaskForms((s) => s.map((x, i) => {
                                       if (i !== idx) return x;
                                       const set = new Set(x.assigneeIds || []);
-                                      if (e.target.checked) set.add(u.id); else set.delete(u.id);
-                                      return { ...x, assigneeIds: Array.from(set) };
+                                      const efforts = { ...(x.assigneeEfforts ?? {}) };
+                                      if (e.target.checked) {
+                                        set.add(u.id);
+                                        if (!(u.id in efforts)) efforts[u.id] = '';
+                                      } else {
+                                        set.delete(u.id);
+                                        delete efforts[u.id];
+                                      }
+                                      return { ...x, assigneeIds: Array.from(set), assigneeEfforts: efforts };
                                     }));
                                   }}
                                 />
                               </label>
+                              {checked && (
+                                <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                                    Estimated Effort (hours)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={10000}
+                                    step={1}
+                                    value={t.assigneeEfforts?.[u.id] ?? ''}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      setTaskForms((s) =>
+                                        s.map((x, i) => {
+                                          if (i !== idx) return x;
+                                          return {
+                                            ...x,
+                                            assigneeEfforts: {
+                                              ...(x.assigneeEfforts ?? {}),
+                                              [u.id]: raw === '' ? '' : String(Math.max(0, Number(raw) || 0)),
+                                            },
+                                          };
+                                        })
+                                      );
+                                    }}
+                                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                                    placeholder="Kosong = durasi x 8 jam"
+                                  />
+                                  <p className="mt-1 text-[11px] text-slate-500">
+                                    Diakumulasi dengan assignee lain sebagai planned effort task.
+                                  </p>
+                                </div>
+                              )}
+                              </div>
                             );
                           })}
                         </div>

@@ -124,6 +124,31 @@ function getTaskActualCost(task: Task, asOfDate?: string): number {
   }, 0);
 }
 
+function getTaskPlannedEffort(task: Task): { hours: number; source: "assignment" | "fallback" | "none" } {
+  const raw = task as any;
+  const assignments = Array.isArray(raw?.assignments) ? raw.assignments : [];
+  const assignmentHours = assignments.reduce((sum: number, assignment: any) => {
+    const hours = Number(assignment?.estimated_effort_hours ?? 0);
+    return sum + (Number.isFinite(hours) ? hours : 0);
+  }, 0);
+
+  if (assignmentHours > 0) {
+    return { hours: assignmentHours, source: "assignment" };
+  }
+
+  const duration = Number(raw?.duration_planned ?? 0);
+  if (Number.isFinite(duration) && duration > 0) {
+    return { hours: duration * 8, source: "fallback" };
+  }
+
+  return { hours: 0, source: "none" };
+}
+
+function formatHours(value: number): string {
+  if (!Number.isFinite(value)) return "0 h";
+  return `${value.toFixed(2).replace(/\.?0+$/, "")} h`;
+}
+
 function formatIDR(value: number): string {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -1475,6 +1500,7 @@ function ProjectDetailPageContent() {
                           const displayPercent = progressAsOf ?? Number(t.percent_complete ?? 0);
                           const latestProgress = taskAsOfDate ? getLatestTaskProgressAsOf(t, taskAsOfDate) : null;
                           const actualCost = getTaskActualCost(t, taskAsOfDate || undefined);
+                          const plannedEffort = getTaskPlannedEffort(t);
                           const toggle = async () => {
                             setOpenTaskIds(s => ({ ...s, [t.id]: !s[t.id as number] }));
                             const willOpen = !open;
@@ -1496,7 +1522,7 @@ function ProjectDetailPageContent() {
                             }
                           };
                           // Build assignees list from possible shapes
-                          type AssigneeView = { name: string; role: string };
+                          type AssigneeView = { name: string; role: string; effortHours?: number | null };
                           const raw: any = t as any;
                           const fromAssignments: AssigneeView[] = Array.isArray(raw?.assignments)
                             ? raw.assignments.map((a: any): AssigneeView => ({
@@ -1505,8 +1531,12 @@ function ProjectDetailPageContent() {
                                   a?.user_name ??
                                   a?.user?.full_name ??
                                   a?.user?.email ??
-                                  String(a?.user_id ?? ""),
+                                   String(a?.user_id ?? ""),
                                 role: a?.role_on_task ?? "Member",
+                                effortHours:
+                                  a?.estimated_effort_hours == null
+                                    ? null
+                                    : Number(a.estimated_effort_hours),
                               }))
                             : [];
                           const fromUsers: AssigneeView[] = Array.isArray(raw?.users)
@@ -1590,7 +1620,13 @@ function ProjectDetailPageContent() {
                                                   const role = (a.role ?? "").trim();
                                                   const showRole =
                                                     role && role.toLowerCase() !== "member";
-                                                  return showRole ? `${a.name} (${role})` : a.name;
+                                                  const effort =
+                                                    a.effortHours != null && Number.isFinite(a.effortHours)
+                                                      ? ` - ${formatHours(a.effortHours)}`
+                                                      : "";
+                                                  return showRole
+                                                    ? `${a.name} (${role}${effort})`
+                                                    : `${a.name}${effort}`;
                                                 })
                                                 .join(", ")}
                                             </span>
@@ -1610,6 +1646,17 @@ function ProjectDetailPageContent() {
                                             <div>
                                               <span className="text-neutral-500">Actual Duration:</span>{" "}
                                               <span className="text-neutral-900">{raw.duration_actual ?? "-"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-neutral-500">Planned Effort:</span>{" "}
+                                              <span className="text-neutral-900">
+                                                {formatHours(plannedEffort.hours)}
+                                                {plannedEffort.source === "fallback"
+                                                  ? " (durasi x 8)"
+                                                  : plannedEffort.source === "assignment"
+                                                    ? " (assignment)"
+                                                    : ""}
+                                              </span>
                                             </div>
                                             <div>
                                               <span className="text-neutral-500">Actual Start:</span>{" "}

@@ -59,7 +59,7 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
   const [hoursError, setHoursError] = React.useState<string | null>(null);
 
   // Load baselines to allow auto-select newest and show window hints
-  const { baselines, isLoading: blLoading } = useBaselines(projectId);
+  const { baselines, isLoading: blLoading, hasLoaded: baselinesLoaded } = useBaselines(projectId);
   const projectBaselines = React.useMemo(
     () => (Array.isArray(baselines)
       ? baselines.filter((baseline: any) => String(baseline?.project_id ?? "") === String(projectId))
@@ -88,11 +88,24 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
   // Auto-select latest baseline if none selected (uncontrolled only)
   React.useEffect(() => {
     if (isControlled) return;
+    if (!baselinesLoaded) return;
     if (internalBaselineId != null) return;
     if (projectBaselines.length > 0) {
       setInternalBaselineId(Number(projectBaselines[0].id));
     }
-  }, [isControlled, internalBaselineId, projectBaselines]);
+  }, [isControlled, baselinesLoaded, internalBaselineId, projectBaselines]);
+
+  const waitingForAutoBaseline =
+    showBaselineSelect &&
+    !isControlled &&
+    baselinesLoaded &&
+    internalBaselineId == null &&
+    projectBaselines.length > 0;
+
+  const canLoadScheduleEvm =
+    !showBaselineSelect ||
+    isControlled ||
+    (baselinesLoaded && !waitingForAutoBaseline);
 
   const loadScheduleMetrics = React.useCallback(async () => {
     if (!projectId) return;
@@ -113,8 +126,9 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
   }, [projectId, when, validBaselineId, reloadKey]);
 
   React.useEffect(() => {
+    if (!canLoadScheduleEvm) return;
     loadScheduleMetrics();
-  }, [loadScheduleMetrics]);
+  }, [loadScheduleMetrics, canLoadScheduleEvm]);
 
   const loadTimeEntryAggregates = React.useCallback(async () => {
     if (!projectId) return;
@@ -153,11 +167,12 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
   }, [loadTimeEntryAggregates]);
 
   const refreshAll = React.useCallback(async () => {
+    if (!canLoadScheduleEvm) return;
     await Promise.allSettled([
       loadScheduleMetrics(),
       loadTimeEntryAggregates(),
     ]);
-  }, [loadScheduleMetrics, loadTimeEntryAggregates]);
+  }, [canLoadScheduleEvm, loadScheduleMetrics, loadTimeEntryAggregates]);
 
   const handleBaselineChange = (id: number | null) => {
     if (isControlled) {
@@ -208,7 +223,7 @@ export function EvmWidget({ projectId, date, baselineId, onBaselineChange, showB
       </div>
 
       <div className="border rounded-lg p-4">
-        {loading ? (
+        {loading || !canLoadScheduleEvm ? (
           <div className="text-sm text-neutral-500">Loading schedule performance...</div>
         ) : error ? (
           <div className="text-sm text-red-600">{error}</div>

@@ -26,7 +26,7 @@ type TaskDetail = {
   end_planned: string | null;
   percent_complete: number;
   budget_cost?: number | string | null;
-  assignments?: { user_id: number; role_on_task: string | null }[];
+  assignments?: { user_id: number; role_on_task: string | null; estimated_effort_hours?: number | "" | null }[];
   dependencies?: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[];
 };
 
@@ -60,16 +60,30 @@ function EditTaskPageContent() {
         const t = Array.isArray(payload) ? payload[0] : payload;
         if (mounted && t) {
           // Normalize existing assignments from various shapes
-          const currentAssignments: { user_id: number; role_on_task: string | null }[] = [];
+          const currentAssignments: { user_id: number; role_on_task: string | null; estimated_effort_hours?: number | "" | null }[] = [];
           if (Array.isArray(t?.assignments)) {
             for (const a of t.assignments) {
               const uid = Number(a?.user_id ?? a?.user?.id ?? a?.id);
-              if (Number.isFinite(uid)) currentAssignments.push({ user_id: uid, role_on_task: a?.role_on_task ?? null });
+              if (Number.isFinite(uid)) {
+                const effort = a?.estimated_effort_hours;
+                currentAssignments.push({
+                  user_id: uid,
+                  role_on_task: a?.role_on_task ?? null,
+                  estimated_effort_hours: effort == null ? "" : Number(effort),
+                });
+              }
             }
           } else if (Array.isArray(t?.users)) {
             for (const u of t.users) {
               const uid = Number(u?.id);
-              if (Number.isFinite(uid)) currentAssignments.push({ user_id: uid, role_on_task: u?.pivot?.role_on_task ?? null });
+              if (Number.isFinite(uid)) {
+                const effort = u?.pivot?.estimated_effort_hours;
+                currentAssignments.push({
+                  user_id: uid,
+                  role_on_task: u?.pivot?.role_on_task ?? null,
+                  estimated_effort_hours: effort == null ? "" : Number(effort),
+                });
+              }
             }
           }
           const deps: { depends_on_task_id: number; type?: 'FS'|'SS'|'FF'|'SF'; lag_days?: number }[] = [];
@@ -332,6 +346,10 @@ function EditTaskPageContent() {
         payload.assignments = form.assignments.map((a) => ({
           user_id: a.user_id,
           role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+          estimated_effort_hours:
+            a.estimated_effort_hours === "" || a.estimated_effort_hours == null
+              ? null
+              : Number(a.estimated_effort_hours),
         }));
       }
       if (typeof form.dependencies !== 'undefined') {
@@ -702,11 +720,12 @@ function EditTaskPageContent() {
           ) : users.length === 0 ? (
             <div className="text-xs text-neutral-500">No users available.</div>
           ) : (
-            <div className="border rounded-md px-3 py-2 max-h-56 overflow-auto space-y-1">
+            <div className="border rounded-md px-3 py-2 max-h-72 overflow-auto space-y-1">
               {users.map((u) => {
                 const checked = !!form.assignments?.some(a => a.user_id === u.id);
                 return (
-                  <label key={u.id} className="flex items-center gap-2 text-sm">
+                  <div key={u.id}>
+                  <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       className="h-4 w-4"
@@ -716,7 +735,7 @@ function EditTaskPageContent() {
                           const current = s.assignments ?? [];
                           if (e.target.checked) {
                             if (!current.some(a => a.user_id === u.id)) {
-                              return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null }] };
+                              return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null, estimated_effort_hours: "" }] };
                             }
                             return s;
                           } else {
@@ -727,6 +746,48 @@ function EditTaskPageContent() {
                     />
                     <span>{u.name}</span>
                   </label>
+                  {checked && (
+                    <div className="mb-2 ml-6 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                      <label className="mb-1 block text-xs font-medium text-slate-500">
+                        Estimated Effort (hours)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10000}
+                        step={1}
+                        value={
+                          form.assignments?.find((a) => a.user_id === u.id)
+                            ?.estimated_effort_hours ?? ""
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setForm((s) =>
+                            s
+                              ? {
+                                  ...s,
+                                  assignments: (s.assignments ?? []).map((a) =>
+                                    a.user_id === u.id
+                                      ? {
+                                          ...a,
+                                          estimated_effort_hours:
+                                            raw === "" ? "" : Math.max(0, Number(raw) || 0),
+                                        }
+                                      : a
+                                  ),
+                                }
+                              : s
+                          );
+                        }}
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        placeholder="Kosong = durasi x 8 jam"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
+                      </p>
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </div>

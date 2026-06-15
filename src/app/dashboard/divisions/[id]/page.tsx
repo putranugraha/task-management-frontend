@@ -23,7 +23,7 @@ function DivisionDetailPageContent() {
   const params = useParams();
   const id = Number(params?.id);
   const { can } = useAuth();
-  const canUpdateProject = can("mengubah project");
+  const canUpdateDivision = can("mengubah divisions");
 
   const [data, setData] = useState<DivisionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ function DivisionDetailPageContent() {
           </p>
         </div>
         <div className="flex gap-2">
-          {canUpdateProject && (
+          {canUpdateDivision && (
             <a
               href={`/dashboard/divisions/${data.id}/edit`}
               className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -170,7 +170,7 @@ function DivisionDetailPageContent() {
 }
 
 export default function DivisionDetailPage() {
-  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+  const { loading, allowed } = usePermissionGuard(["melihat divisions"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

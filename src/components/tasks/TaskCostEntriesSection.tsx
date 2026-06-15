@@ -34,12 +34,16 @@ function formatIDR(value: number | string | null | undefined): string {
 
 export default function TaskCostEntriesSection({ taskId }: Props) {
   const { showToast } = useToast();
+  const { loading: viewPermLoading, allowed: viewAllowed } = usePermissionGuard([
+    "melihat biaya aktual",
+  ]);
   const { loading: createPermLoading, allowed: createAllowed } = usePermissionGuard([
-    "mengubah project",
+    "membuat biaya aktual",
   ]);
   const { loading: deletePermLoading, allowed: deleteAllowed } = usePermissionGuard([
-    "menghapus project",
+    "menghapus biaya aktual",
   ]);
+  const canView = !viewPermLoading && viewAllowed;
   const canCreate = !createPermLoading && createAllowed;
   const canDelete = !deletePermLoading && deleteAllowed;
 
@@ -74,7 +78,7 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
   }, [items]);
 
   async function fetchAll() {
-    if (!taskId) return;
+    if (!taskId || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -89,9 +93,14 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
   }
 
   useEffect(() => {
-    fetchAll();
+    if (canView) {
+      fetchAll();
+    } else {
+      setItems([]);
+      setError(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId]);
+  }, [taskId, canView]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -179,7 +188,16 @@ export default function TaskCostEntriesSection({ taskId }: Props) {
         </div>
       </div>
 
-      {loading ? (
+      {viewPermLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-full rounded-xl bg-neutral-200/60" />
+          <Skeleton className="h-9 w-full rounded-xl bg-neutral-200/60" />
+        </div>
+      ) : !canView ? (
+        <div className="text-sm text-neutral-500">
+          Anda tidak memiliki akses untuk melihat actual cost.
+        </div>
+      ) : loading ? (
         <div className="space-y-2">
           <Skeleton className="h-9 w-full rounded-xl bg-neutral-200/60" />
           <Skeleton className="h-9 w-full rounded-xl bg-neutral-200/60" />

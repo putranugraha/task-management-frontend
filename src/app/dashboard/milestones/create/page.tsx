@@ -347,7 +347,7 @@ function CreateMilestonePageContent() {
 }
 
 export default function CreateMilestonePage() {
-  const { loading, allowed } = usePermissionGuard(["membuat project"]);
+  const { loading, allowed } = usePermissionGuard(["membuat milestones"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

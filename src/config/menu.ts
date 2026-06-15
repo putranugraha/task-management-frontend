@@ -30,17 +30,17 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     label: "Milestones",
     path: "/dashboard/milestones",
-    permissions: ["melihat project"],
+    permissions: ["melihat milestones"],
   },
   {
     label: "Divisions",
     path: "/dashboard/divisions",
-    permissions: ["melihat project"],
+    permissions: ["melihat divisions"],
   },
   {
     label: "Reports",
     path: "/dashboard/reports",
-    permissions: ["melihat laporan pribadi", "mencetak laporan"],
+    permissions: ["melihat laporan pribadi", "melihat laporan project", "mencetak laporan"],
   },
   {
     label: "Users",

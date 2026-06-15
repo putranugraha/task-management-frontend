@@ -421,7 +421,7 @@ function EditMilestonePageContent() {
 }
 
 export default function EditMilestonePage() {
-  const { loading, allowed } = usePermissionGuard(["mengubah project"]);
+  const { loading, allowed } = usePermissionGuard(["mengubah milestones"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

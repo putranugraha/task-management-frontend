@@ -35,7 +35,7 @@ function formatDateTime(value?: string | null) {
 function MilestoneArchiveContent() {
   const { state, can } = useAuth();
   const authLoading = !state.isInitialized || state.isLoading;
-  const canAccessArchive = can("melihat project") && can("menghapus project");
+  const canAccessArchive = can("melihat milestones") && can("menghapus milestones");
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("project_id") || undefined;
   const [rows, setRows] = useState<MilestoneRow[]>([]);

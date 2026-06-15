@@ -14,6 +14,7 @@ import {
 } from "@/lib/reporting/as-of-periods";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
+import { useAuth } from "@/contexts/auth-context";
 
 type TaskStats = {
   total: number;
@@ -63,6 +64,9 @@ function toISODate(d: Date): string {
 }
 
 function ReportsPageContent() {
+  const { can } = useAuth();
+  const canPrintReport = can("mencetak laporan");
+
   const { showToast } = useToast();
 
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -470,15 +474,17 @@ function ReportsPageContent() {
               />
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] print:hidden"
-            >
-              Cetak laporan
-            </button>
-          </div>
+          {canPrintReport && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F] print:hidden"
+              >
+                Cetak laporan
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -765,6 +771,7 @@ function ReportsPageContent() {
 export default function ReportsPage() {
   const { loading, allowed } = usePermissionGuard([
     "melihat laporan pribadi",
+    "melihat laporan project",
     "mencetak laporan",
   ]);
 

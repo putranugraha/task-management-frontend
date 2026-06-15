@@ -324,7 +324,7 @@ function EditDivisionPageContent() {
 }
 
 export default function EditDivisionPage() {
-  const { loading, allowed } = usePermissionGuard(["mengubah project"]);
+  const { loading, allowed } = usePermissionGuard(["mengubah divisions"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

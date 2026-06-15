@@ -99,7 +99,7 @@ function EditProjectPageContent() {
     (async () => {
       setOwnersLoading(true);
       try {
-        const rs = await apiRequest<any>("GET", "/api/users");
+        const rs = await apiRequest<any>("GET", "/api/users/options?status=1&limit=200");
         const list = Array.isArray(rs) ? rs : (rs?.data ?? []);
         const normalized: SimpleUser[] = list.map((u: any) => ({ id: Number(u.id), name: u.name ?? u.full_name ?? u.email }));
         if (mounted) setOwners(normalized);

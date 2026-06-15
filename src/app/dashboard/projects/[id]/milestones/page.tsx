@@ -20,9 +20,9 @@ function ProjectMilestonesPageContent() {
   const params = useParams();
   const projectId = params?.id as string;
   const { can } = useAuth();
-  const canCreateProject = can("membuat project");
-  const canUpdateProject = can("mengubah project");
-  const canDeleteProject = can("menghapus project");
+  const canCreateMilestone = can("membuat milestones");
+  const canUpdateMilestone = can("mengubah milestones");
+  const canDeleteMilestone = can("menghapus milestones");
   const canCreateTasks = can("membuat tugas");
   const { showToast } = useToast();
 
@@ -203,8 +203,8 @@ function ProjectMilestonesPageContent() {
   const columns = useMilestoneColumns({
     onDelete: handleArchive,
     onComplete: handleComplete,
-    canEdit: canUpdateProject,
-    canDelete: canDeleteProject,
+    canEdit: canUpdateMilestone,
+    canDelete: canDeleteMilestone,
   });
 
   const activeTasksCountForTarget =
@@ -244,9 +244,9 @@ function ProjectMilestonesPageContent() {
             Kelola milestones dan tasks yang terkait dalam project ini.
           </p>
         </div>
-        {(canCreateProject || canDeleteProject) && (
+        {(canCreateMilestone || canDeleteMilestone) && (
           <div className="flex flex-wrap items-center gap-2">
-            {canDeleteProject && (
+            {canDeleteMilestone && (
               <Link
                 href={`/dashboard/milestones/archive?project_id=${projectId}`}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-[#00674F] hover:text-[#00674F]"
@@ -254,7 +254,7 @@ function ProjectMilestonesPageContent() {
                 Archive
               </Link>
             )}
-            {canCreateProject && (
+            {canCreateMilestone && (
               <Link
                 href={`/dashboard/projects/${projectId}/milestones/create`}
                 className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -404,7 +404,7 @@ function ProjectMilestonesPageContent() {
 }
 
 export default function ProjectMilestonesPage() {
-  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+  const { loading, allowed } = usePermissionGuard(["melihat milestones"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

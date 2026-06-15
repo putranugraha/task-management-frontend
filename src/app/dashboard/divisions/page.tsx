@@ -26,9 +26,9 @@ type MaybePaginated<T> =
 
 function DivisionsPageContent() {
   const { can } = useAuth();
-  const canCreateProject = can("membuat project");
-  const canUpdateProject = can("mengubah project");
-  const canDeleteProject = can("menghapus project");
+  const canCreateDivision = can("membuat divisions");
+  const canUpdateDivision = can("mengubah divisions");
+  const canDeleteDivision = can("menghapus divisions");
 
   const [rows, setRows] = useState<DivisionRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -158,8 +158,8 @@ function DivisionsPageContent() {
     onDetail: openDetail,
     onActivate: handleActivate,
     activatingId: activateLoadingId,
-    canEdit: canUpdateProject,
-    canDelete: canDeleteProject,
+    canEdit: canUpdateDivision,
+    canDelete: canDeleteDivision,
   }) as unknown as Column<DivisionRow>[];
 
   // Column visibility (mirrors Users page)
@@ -382,7 +382,7 @@ function DivisionsPageContent() {
               </div>
             )}
           </div>
-          {canCreateProject && (
+          {canCreateDivision && (
             <Link
               href="/dashboard/divisions/create"
               className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -556,7 +556,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function DivisionsPage() {
-  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+  const { loading, allowed } = usePermissionGuard(["melihat divisions"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

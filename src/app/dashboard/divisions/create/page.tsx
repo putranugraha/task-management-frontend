@@ -257,7 +257,7 @@ function CreateDivisionPageContent() {
 }
 
 export default function CreateDivisionPage() {
-  const { loading, allowed } = usePermissionGuard(["membuat project"]);
+  const { loading, allowed } = usePermissionGuard(["membuat divisions"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

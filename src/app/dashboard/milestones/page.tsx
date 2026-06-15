@@ -36,9 +36,9 @@ type PaginatedResponse<T> = {
 
 function MilestonesPageContent() {
   const { can } = useAuth();
-  const canCreateProject = can("membuat project");
-  const canUpdateProject = can("mengubah project");
-  const canDeleteProject = can("menghapus project");
+  const canCreateMilestone = can("membuat milestones");
+  const canUpdateMilestone = can("mengubah milestones");
+  const canDeleteMilestone = can("menghapus milestones");
 
   const [rows, setRows] = useState<MilestoneRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -191,8 +191,8 @@ function MilestonesPageContent() {
   const columns = useMilestoneColumns({
     onDelete: handleArchive,
     onDetail: openDetail,
-    canEdit: canUpdateProject,
-    canDelete: canDeleteProject,
+    canEdit: canUpdateMilestone,
+    canDelete: canDeleteMilestone,
   });
 
   // Lock body scroll when modal is open
@@ -409,7 +409,7 @@ function MilestonesPageContent() {
                 </div>
               )}
             </div>
-            {canDeleteProject && (
+            {canDeleteMilestone && (
               <Link
                 href="/dashboard/milestones/archive"
                 className="group inline-flex h-12 items-center gap-2 rounded-xl border border-slate-200 px-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition hover:border-[#00674F] hover:text-[#00674F]"
@@ -421,7 +421,7 @@ function MilestonesPageContent() {
                 Archive
               </Link>
             )}
-            {canCreateProject && (
+            {canCreateMilestone && (
               <Link
                 href="/dashboard/milestones/create"
                 className="inline-flex items-center gap-2 rounded-full bg-[#00674F] px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:bg-[#008061]"
@@ -601,7 +601,7 @@ function MilestonesPageContent() {
 }
 
 export default function MilestonesPage() {
-  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+  const { loading, allowed } = usePermissionGuard(["melihat milestones"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

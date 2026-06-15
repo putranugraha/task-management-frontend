@@ -518,7 +518,7 @@ function MilestoneDetailPageContent() {
 }
 
 export default function MilestoneDetailPage() {
-  const { loading, allowed } = usePermissionGuard(["melihat project"]);
+  const { loading, allowed } = usePermissionGuard(["melihat milestones"]);
 
   if (!loading && !allowed) {
     return <Forbidden />;

@@ -1410,7 +1410,7 @@ function ProjectDetailPageContent() {
       <DetailSectionCard className="w-full mt-2">
         <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-slate-700">Milestone Tasks</h3>
+            <h3 className="text-sm font-semibold text-slate-700">Project Tasks</h3>
             <p className="mt-0.5 text-xs text-slate-500">
               {taskAsOfDate
                 ? `Progress task ditampilkan berdasarkan histori sampai ${taskAsOfDate}.`
@@ -1451,38 +1451,63 @@ function ProjectDetailPageContent() {
         ) : tasksError ? (
           <div className="p-3 text-sm text-red-600">{tasksError}</div>
         ) : (() => {
-          // Build map milestone_id -> tasks[] (only tasks that belong to a milestone)
+          // Build task groups: milestone tasks plus project tasks without milestone.
           const map: Record<number, Task[]> = {};
+          const standaloneTasks: Task[] = [];
           for (const t of tasks) {
             const mid = (t.milestone?.id ?? t.milestone_id) as number | undefined;
-            if (!mid) continue;
+            if (!mid) {
+              standaloneTasks.push(t);
+              continue;
+            }
             if (!map[mid]) map[mid] = [];
             map[mid].push(t);
           }
 
-          // Sort milestones (already sorted in state), take top 5 and only those with tasks
-          const topWithTasks = milestones.filter(m => map[m.id] && map[m.id].length > 0).slice(0, 5);
+          const taskGroups = [
+            ...milestones
+              .filter(m => map[m.id] && map[m.id].length > 0)
+              .map((m) => ({
+                key: `milestone-${m.id}`,
+                name: m.name,
+                status: m.status,
+                due: m.due_planned ?? "-",
+                tasks: map[m.id] || [],
+                href: `/dashboard/milestones/${m.id}`,
+              })),
+            ...(standaloneTasks.length > 0
+              ? [{
+                  key: "standalone-tasks",
+                  name: "Tasks tanpa milestone",
+                  status: "Project-level",
+                  due: "-",
+                  tasks: standaloneTasks,
+                  href: null,
+                }]
+              : []),
+          ];
 
-          if (topWithTasks.length === 0) {
-            return <div className="p-3 text-sm text-neutral-500">No tasks from milestones</div>;
+          if (taskGroups.length === 0) {
+            return <div className="p-3 text-sm text-neutral-500">No tasks for this project</div>;
           }
-
-          return (
+return (
             <div className="space-y-4 p-3">
-              {topWithTasks.map((m) => {
-                const list = map[m.id] || [];
-                const topTasks = list; // show all tasks for the milestone (was limited to 3)
+              {taskGroups.map((group) => {
+                const topTasks = group.tasks;
                 return (
-                  <div key={m.id} className="overflow-hidden rounded-2xl border border-slate-100 bg-white/80">
+                  <div key={group.key} className="overflow-hidden rounded-2xl border border-slate-100 bg-white/80">
                     <div className="flex items-center justify-between px-3 py-2 border-b bg-neutral-50/80">
                       <div className="text-sm font-semibold text-slate-800">
-                        <a className="hover:underline" href={`/dashboard/milestones/${m.id}`}>{m.name}</a>
+                        {group.href ? (
+                          <a className="hover:underline" href={group.href}>{group.name}</a>
+                        ) : (
+                          <span>{group.name}</span>
+                        )}
                       </div>
                       <div className="text-xs text-neutral-600">
-                        {m.status} • Due: {m.due_planned ?? "-"}
+                        {group.status} - Due: {group.due}
                       </div>
-                    </div>
-                    <table className="min-w-full text-sm">
+                    </div><table className="min-w-full text-sm">
                       <thead className="bg-neutral-50 text-neutral-700">
                         <tr>
                           <th className="text-left font-medium px-3 py-2 border-b">Title</th>

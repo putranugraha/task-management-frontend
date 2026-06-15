@@ -17,6 +17,13 @@ import {
 
 type Zoom = "day" | "week";
 
+const DEPENDENCY_META: Record<string, { label: string; short: string; color: string }> = {
+  FS: { label: "Finish to Start", short: "Finish -> Start", color: "#2563eb" },
+  SS: { label: "Start to Start", short: "Start -> Start", color: "#059669" },
+  FF: { label: "Finish to Finish", short: "Finish -> Finish", color: "#d97706" },
+  SF: { label: "Start to Finish", short: "Start -> Finish", color: "#dc2626" },
+};
+
 export default function GanttChart({
   tasks,
   milestones,
@@ -234,6 +241,19 @@ export default function GanttChart({
           </DropdownMenu>
         </div>
       </div>
+
+      {showDeps && (
+        <div className="flex flex-wrap items-center gap-2 border-b bg-background px-4 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Dependencies:</span>
+          {Object.entries(DEPENDENCY_META).map(([type, meta]) => (
+            <span key={type} className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: meta.color }} />
+              <span className="font-semibold text-foreground">{type}</span>
+              <span>{meta.short}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex">
         {/* Sidebar */}
@@ -632,12 +652,16 @@ function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { mode
     yAcc += rowHeights[rIdx];
   });
 
-  const paths: Array<{ d: string; type: string; labelX: number; labelY: number }> = [];
+  const totalHeight = rowHeights.reduce((a, b) => a + b, 0);
+  const paths: Array<{ d: string; type: string; lag: number; color: string; labelX: number; labelY: number; title: string }> = [];
+  const laneByAnchor = new Map<string, number>();
   model.rows.forEach((row) => {
     row.items.forEach((it) => {
       const deps = Array.isArray(it.deps) ? it.deps : [];
       deps.forEach((d: any) => {
         const type = String(d?.type || 'FS').toUpperCase();
+        const meta = DEPENDENCY_META[type] || DEPENDENCY_META.FS;
+        const lag = Number(d?.lag_days ?? d?.lag ?? 0) || 0;
         const predId = Number(d?.depends_on?.id ?? d?.depends_on_task_id ?? d?.id);
         if (!predId) return;
         const pred = pos.get(predId);
@@ -650,31 +674,65 @@ function DependenciesOverlay({ model, gridDays, pxPerDay, headerOffset }: { mode
         const x2 = endsAtFinish ? succ.x + succ.w : succ.x;
         const y2 = succ.cy;
         const direction = x2 >= x1 ? 1 : -1;
-        const midX = x1 + direction * 8;
-        const dAttr = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
-        paths.push({ d: dAttr, type, labelX: midX + direction * 2, labelY: (y1 + y2) / 2 - 2 });
+        const anchorKey = `${Math.round(x1)}:${Math.round(y1)}:${direction}`;
+        const lane = laneByAnchor.get(anchorKey) ?? 0;
+        laneByAnchor.set(anchorKey, lane + 1);
+        const laneOffset = 12 + lane * 14;
+        const elbowX = x1 + direction * laneOffset;
+        const startX = x1 + direction * 2;
+        const endX = x2 - direction * 2;
+        const dAttr = `M ${startX} ${y1} L ${elbowX} ${y1} L ${elbowX} ${y2} L ${endX} ${y2}`;
+        const labelY = Math.min(Math.max((y1 + y2) / 2 - 4, 8), totalHeight - 14);
+        const labelX = elbowX + direction * 4;
+        const predTitle = d?.depends_on?.title ? String(d.depends_on.title) : `Task #${predId}`;
+        const title = `${type} (${meta.label})${lag ? ` + ${lag}d lag` : ''}: ${predTitle} -> ${it.title}`;
+        paths.push({ d: dAttr, type, lag, color: meta.color, labelX, labelY, title });
       });
     });
   });
 
-  const totalHeight = rowHeights.reduce((a, b) => a + b, 0);
   return (
     <svg className="pointer-events-none absolute left-0" style={{ top: headerOffset }} width={gridDays * pxPerDay} height={totalHeight}>
       <defs>
-        <marker id="arrow-grey" markerWidth="6" markerHeight="6" refX="6" refY="3" orient="auto">
-          <path d="M0,0 L6,3 L0,6 Z" fill="currentColor" />
-        </marker>
+        {Object.entries(DEPENDENCY_META).map(([type, meta]) => (
+          <marker key={type} id={`arrow-${type}`} markerWidth="7" markerHeight="7" refX="7" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill={meta.color} />
+          </marker>
+        ))}
       </defs>
-      <g strokeWidth={1.25} fill="none" strokeOpacity={0.7} color="var(--muted-foreground)" stroke="currentColor">
-        {paths.map((p, i) => (
-          <path key={i} d={p.d} markerEnd="url(#arrow-grey)" />
-        ))}
-      </g>
-      <g className="select-none" fill="var(--muted-foreground)" fontSize="9" fontWeight="600">
-        {paths.map((p, i) => (
-          <text key={`label-${i}`} x={p.labelX} y={p.labelY}>{p.type}</text>
-        ))}
-      </g>
+      {paths.map((p, i) => {
+        const label = p.lag ? `${p.type}+${p.lag}d` : p.type;
+        const labelWidth = Math.max(22, label.length * 6 + 8);
+        return (
+          <g key={i}>
+            <path
+              d={p.d}
+              stroke={p.color}
+              strokeWidth={1.6}
+              strokeOpacity={0.82}
+              fill="none"
+              markerEnd={`url(#arrow-${DEPENDENCY_META[p.type] ? p.type : 'FS'})`}
+            >
+              <title>{p.title}</title>
+            </path>
+            <g className="select-none">
+              <rect
+                x={p.labelX - 2}
+                y={p.labelY - 9}
+                width={labelWidth}
+                height={14}
+                rx={4}
+                fill="var(--background)"
+                stroke={p.color}
+                strokeOpacity={0.75}
+              />
+              <text x={p.labelX + 2} y={p.labelY + 1} fill={p.color} fontSize="9" fontWeight="700">
+                {label}
+              </text>
+            </g>
+          </g>
+        );
+      })}
     </svg>
   );
 }

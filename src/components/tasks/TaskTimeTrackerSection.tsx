@@ -175,7 +175,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
     };
   }, [timerStart]);
 
-  async function ensureInProgress(force = false) {
+  async function ensureInProgress(force = false): Promise<boolean> {
     const current = String(taskStatus ?? "").toLowerCase().trim();
     const isOngoing =
       current.includes("progress") ||
@@ -184,12 +184,13 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
       current.includes("selesai") ||
       current.includes("cancel") ||
       current.includes("hold");
-    if (!force && (isOngoing || current === "in progress")) return;
+    if (!force && (isOngoing || current === "in progress")) return true;
     try {
       const updated = await updateTaskStatus(taskId, "In Progress");
       const next = updated.status ?? "In Progress";
       setTaskStatus(next);
       onStatusChange?.(next);
+      return true;
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
@@ -201,6 +202,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
         title: "Status task tidak terbarui",
         description: msg,
       });
+      return false;
     }
   }
 
@@ -302,12 +304,21 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
   async function handleStart(skipStatusCheck = false) {
     if (!skipStatusCheck) {
-      await ensureInProgress();
+      const statusReady = await ensureInProgress();
+      if (!statusReady) return;
     }
     const now = Date.now();
     setTimerStart(now);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(storageKey, String(now));
+    }
+  }
+
+  function clearLocalTimer() {
+    setTimerStart(null);
+    setNowTs(null);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(storageKey);
     }
   }
 
@@ -322,19 +333,21 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
       return;
     }
     if (!allowed || permLoading) {
+      clearLocalTimer();
       showToast({
         variant: "error",
         title: "Tidak memiliki izin",
-        description: "Kamu tidak diizinkan menyimpan entri waktu untuk task ini.",
+        description: "Timer dihentikan, tetapi durasi tidak disimpan karena kamu tidak memiliki izin entri waktu.",
       });
       setStopConfirmOpen(false);
       return;
     }
     if (!currentUserId) {
+      clearLocalTimer();
       showToast({
         variant: "error",
         title: "User tidak valid",
-        description: "User yang aktif tidak dikenali, entri waktu tidak dapat disimpan.",
+        description: "Timer dihentikan, tetapi durasi tidak disimpan karena user aktif tidak dikenali.",
       });
       setStopConfirmOpen(false);
       return;
@@ -379,10 +392,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
     try {
       await upsert(payload);
-      setTimerStart(null);
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(storageKey);
-      }
+      clearLocalTimer();
       await fetchAll();
       setStopConfirmOpen(false);
     } catch (e: any) {
@@ -520,7 +530,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
           )}
         </div>
 
-        {allowed && !permLoading && currentUserId > 0 && (
+        {((allowed && !permLoading && currentUserId > 0) || timerStart) && (
           <div className="space-x-2">
             {!timerStart ? (
               <button
@@ -570,14 +580,31 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
                 Start Timer
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => setStopConfirmOpen(true)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-500/80 bg-amber-500/10 px-4 py-1.5 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-500/20"
-              >
-                <Square className="h-4 w-4" />
-                Stop &amp; Save
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStopConfirmOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-500/80 bg-amber-500/10 px-4 py-1.5 text-sm font-semibold text-amber-700 shadow-sm transition hover:bg-amber-500/20"
+                >
+                  <Square className="h-4 w-4" />
+                  Stop &amp; Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearLocalTimer();
+                    setStopConfirmOpen(false);
+                    showToast({
+                      variant: "warning",
+                      title: "Timer dibatalkan",
+                      description: "Timer lokal dihentikan tanpa menyimpan entri waktu.",
+                    });
+                  }}
+                  className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                >
+                  Cancel Timer
+                </button>
+              </>
             )}
           </div>
         )}
@@ -604,8 +631,10 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
         onConfirm={async () => {
           setStartConfirmOpen(false);
           if (canOverrideClosedStatus && (isOnHold || isClosed)) {
-            await ensureInProgress(true);
-            await handleStart(true);
+            const statusReady = await ensureInProgress(true);
+            if (statusReady) {
+              await handleStart(true);
+            }
           } else {
             await handleStart();
           }

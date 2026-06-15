@@ -136,6 +136,18 @@ function CreateTaskPageContent() {
         }
       }
 
+      if (!form.project_id) {
+        const msg = "Project wajib dipilih sebelum membuat task";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Project belum dipilih",
+          description: msg,
+        });
+        setSubmitting(false);
+        return;
+      }
+
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
         milestone_id: milestoneId || null,
@@ -326,7 +338,7 @@ function CreateTaskPageContent() {
       { key: "title", label: "Isi judul task", completed: Boolean(form.title.trim()) },
       { key: "plan", label: "Atur tanggal rencana", completed: planCompleted },
       { key: "progress", label: "Set progress 0-100", completed: form.percent_complete >= 0 && form.percent_complete <= 100 },
-      { key: "project", label: "Opsional: pilih project/milestone", completed: Boolean(form.project_id || milestoneId) },
+      { key: "project", label: "Pilih project", completed: Boolean(form.project_id) },
     ];
   }, [form.title, form.start_planned, form.end_planned, form.percent_complete, form.project_id, milestoneId]);
 
@@ -396,21 +408,17 @@ function CreateTaskPageContent() {
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-500">Project</label>
+              <label className="text-sm font-semibold text-slate-500">Project <span className="text-rose-500">*</span></label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
                     <span className={selectedProject ? 'text-slate-700' : 'text-slate-400'}>
-                      {selectedProject?.name ?? 'Pilih project (opsional)'}
+                      {selectedProject?.name ?? 'Pilih project'}
                     </span>
                     <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
-                  <DropdownMenuItem onSelect={() => setForm((s) => ({ ...s, project_id: "" }))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
-                    <span>Tanpa project</span>
-                    {!form.project_id && <Check className="h-4 w-4 text-emerald-500" />}
-                  </DropdownMenuItem>
                   {projects.map((p) => (
                     <DropdownMenuItem key={p.id} onSelect={() => setForm((s) => ({ ...s, project_id: Number(p.id) }))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
                       <span>{p.name}</span>

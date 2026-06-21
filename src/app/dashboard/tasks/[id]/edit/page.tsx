@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
+import type { Milestone } from "@/types/milestone";
 import { fetchProjectsList } from "@/lib/lookups";
+import { listByProject as listMilestonesByProject } from "@/lib/api/milestones";
 import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import Forbidden from "@/components/auth/Forbidden";
 import { DetailMainCard } from "@/components/layout/DetailCards";
@@ -18,6 +20,7 @@ import TaskDependencyEditor from "@/components/tasks/TaskDependencyEditor";
 type TaskDetail = {
   id: number;
   project_id: number | "";
+  milestone_id?: number | "";
   title: string;
   description: string | null;
   priority: string;
@@ -33,6 +36,89 @@ type TaskDetail = {
 const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
+type AssignmentUser = {
+  id: number;
+  name: string;
+  role: string | null;
+  roles: string[];
+  division: { id: number; name: string; code?: string | null } | null;
+};
+
+type AssignmentUserGroup = {
+  key: string;
+  name: string;
+  users: AssignmentUser[];
+};
+
+type RawAssignmentDivision = {
+  id?: unknown;
+  division_id?: unknown;
+  name?: unknown;
+  division_name?: unknown;
+  title?: unknown;
+  code?: unknown;
+};
+
+type RawAssignmentRole = string | { name?: unknown };
+
+type RawAssignmentUser = {
+  id?: unknown;
+  user_id?: unknown;
+  value?: unknown;
+  key?: unknown;
+  name?: unknown;
+  full_name?: unknown;
+  username?: unknown;
+  email?: unknown;
+  role?: unknown;
+  roles?: RawAssignmentRole[];
+  division?: RawAssignmentDivision | null;
+  department?: RawAssignmentDivision | null;
+};
+
+function normalizeUserRole(user: Pick<RawAssignmentUser, "role" | "roles">): string | null {
+  if (typeof user?.role === "string" && user.role.trim()) return user.role.trim();
+  if (Array.isArray(user?.roles) && user.roles.length > 0) {
+    const first = user.roles[0];
+    const role = typeof first === "string" ? first : first?.name;
+    return typeof role === "string" && role.trim() ? role.trim() : null;
+  }
+  return null;
+}
+
+function groupAssignmentUsers(users: AssignmentUser[]): AssignmentUserGroup[] {
+  const groups = new Map<string, AssignmentUserGroup>();
+
+  users.forEach((user) => {
+    const divisionName = user.division?.name?.trim() || (user.role?.toLowerCase().includes("admin") ? "Admin" : "Tanpa Divisi");
+    const key = user.division?.id ? `division-${user.division.id}` : `no-division-${divisionName.toLowerCase()}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { key, name: divisionName, users: [] });
+    }
+    groups.get(key)?.users.push(user);
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      users: group.users.sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => {
+      if (a.name === "Tanpa Divisi") return 1;
+      if (b.name === "Tanpa Divisi") return -1;
+      if (a.name === "Admin") return -1;
+      if (b.name === "Admin") return 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function minDateString(...dates: Array<string | undefined | null>) {
+  const validDates = dates.filter((date): date is string => Boolean(date));
+  if (!validDates.length) return undefined;
+  return validDates.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+}
+
 function EditTaskPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -40,10 +126,11 @@ function EditTaskPageContent() {
 
   const [form, setForm] = useState<TaskDetail | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [users, setUsers] = useState<AssignmentUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string; status?: string }>>([]);
   const [depsLoading, setDepsLoading] = useState(false);
@@ -98,6 +185,7 @@ function EditTaskPageContent() {
           setForm({
             id: t.id,
             project_id: (t.project?.id as number) ?? (t.project_id ?? ""),
+            milestone_id: (t.milestone?.id as number) ?? (t.milestone_id ?? ""),
             title: t.title,
             description: t.description ?? "",
             priority: t.priority ?? 'Medium',
@@ -148,7 +236,7 @@ function EditTaskPageContent() {
           '/api/users?status=Aktif',
           '/api/users',
         ];
-        let mapped: Array<{ id: number; name: string }> = [];
+        let mapped: AssignmentUser[] = [];
         for (const path of tryPaths) {
           try {
             const rs = await apiRequest<any>('GET', path);
@@ -158,7 +246,26 @@ function EditTaskPageContent() {
             else if (Array.isArray(rs?.data?.data)) arr = rs.data.data;
             else if (Array.isArray(rs?.items)) arr = rs.items;
             else if (Array.isArray(rs?.users)) arr = rs.users;
-            mapped = (arr || []).map((u: any) => ({ id: Number(u.id), name: u.name ?? u.full_name ?? u.email ?? String(u.id) }));
+            mapped = (arr || []).map((u: RawAssignmentUser) => {
+              const division = u.division ?? u.department ?? null;
+              return {
+                id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
+                name: String(u.name ?? u.full_name ?? u.username ?? u.email ?? u.id ?? u.user_id ?? ""),
+                role: normalizeUserRole(u),
+                roles: Array.isArray(u.roles)
+                  ? u.roles
+                      .map((role) => (typeof role === "string" ? role : role?.name))
+                      .filter((role): role is string => typeof role === "string" && role.trim().length > 0)
+                  : [],
+                division: division
+                  ? {
+                      id: Number(division.id ?? division.division_id),
+                      name: String(division.name ?? division.division_name ?? division.title ?? "Tanpa Divisi"),
+                      code: typeof division.code === "string" ? division.code : null,
+                    }
+                  : null,
+              };
+            }).filter((u)=> Number.isFinite(u.id));
             if (mapped.length) break;
           } catch {}
         }
@@ -171,10 +278,33 @@ function EditTaskPageContent() {
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      if (!form?.project_id) { setMilestones([]); return; }
+      try {
+        const ms = await listMilestonesByProject(form.project_id as number);
+        setMilestones(ms);
+      } catch {
+        setMilestones([]);
+      }
+    })();
+  }, [form?.project_id]);
+
+  const assignmentUserGroups = useMemo(() => groupAssignmentUsers(users), [users]);
+
+  const resolveAssignmentRole = (assignment: NonNullable<TaskDetail["assignments"]>[number]) => {
+    const knownRoles = new Set(users.flatMap((user) => [user.role, ...user.roles].filter((role): role is string => !!role)));
+    const currentRole = assignment.role_on_task?.trim();
+    if (currentRole && knownRoles.has(currentRole)) return currentRole;
+
+    const user = users.find((item) => item.id === assignment.user_id);
+    return user?.role || user?.roles[0] || "Member";
+  };
+
   // Load dependency candidate tasks based on task's milestone if available, otherwise by project
   useEffect(() => {
     (async () => {
-      const milestoneId = (form as any)?.milestone_id || (form as any)?.milestone?.id || null;
+      const milestoneId = form?.milestone_id || null;
       const projectId = form?.project_id || null;
       if (!milestoneId && !projectId) { setDepOptions([]); return; }
       setDepsLoading(true);
@@ -195,7 +325,7 @@ function EditTaskPageContent() {
         setDepsLoading(false);
       }
     })();
-  }, [form?.project_id]);
+  }, [form?.project_id, form?.milestone_id]);
 
   const applyFieldUpdate = (name: string, value: string | number) => {
     const val = value;
@@ -220,7 +350,7 @@ function EditTaskPageContent() {
         return { ...s, status } as any;
       }
       if (name === 'project_id') {
-        return { ...s, project_id: val ? Number(val) : "" } as any;
+        return { ...s, project_id: val ? Number(val) : "", milestone_id: "" } as any;
       }
       return { ...s, [name]: val } as any;
     });
@@ -237,6 +367,22 @@ function EditTaskPageContent() {
     const p = projects.find((x) => Number(x.id) === Number(pid));
     return p?.name ?? null;
   }, [projects, form?.project_id]);
+
+  const selectedProject = useMemo(() => {
+    const pid = form?.project_id;
+    if (!pid) return null;
+    return projects.find((x) => Number(x.id) === Number(pid)) ?? null;
+  }, [projects, form?.project_id]);
+
+  const selectedMilestone = useMemo(() => {
+    const milestoneId = form?.milestone_id;
+    if (!milestoneId) return null;
+    return milestones.find((m) => Number(m.id) === Number(milestoneId)) ?? null;
+  }, [milestones, form?.milestone_id]);
+
+  const milestoneDueMax = selectedMilestone?.due_planned || undefined;
+  const projectPlannedEnd = selectedProject?.end_planned || undefined;
+  const taskDateMax = minDateString(milestoneDueMax, projectPlannedEnd);
 
   const assigneeNames = useMemo(() => {
     if (!form?.assignments || form.assignments.length === 0) return [] as string[];
@@ -280,7 +426,7 @@ function EditTaskPageContent() {
         completed: Boolean(form?.project_id),
       },
     ];
-  }, [form?.title, form?.start_planned, form?.end_planned, form?.percent_complete, form?.project_id]);
+  }, [form?.title, form?.start_planned, form?.end_planned, form?.percent_complete, form?.project_id, projectPlannedEnd, milestoneDueMax]);
 
   const checklistProgress = useMemo(() => {
     const total = checklistItems.length;
@@ -330,8 +476,78 @@ function EditTaskPageContent() {
           return;
         }
       }
+
+      if (form.start_planned && form.end_planned) {
+        const startTs = Date.parse(form.start_planned);
+        const endTs = Date.parse(form.end_planned);
+        if (Number.isFinite(startTs) && Number.isFinite(endTs) && startTs > endTs) {
+          const msg = "Start Planned tidak boleh setelah End Planned";
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSaving(false);
+          return;
+        }
+      }
+
+      if (milestoneDueMax) {
+        const due = String(milestoneDueMax);
+        if (form.start_planned && form.start_planned > due) {
+          const msg = `Start Planned tidak boleh setelah Due Planned milestone (${due}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSaving(false);
+          return;
+        }
+        if (form.end_planned && form.end_planned > due) {
+          const msg = `End Planned tidak boleh setelah Due Planned milestone (${due}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSaving(false);
+          return;
+        }
+      }
+
+      if (projectPlannedEnd) {
+        const projectEnd = String(projectPlannedEnd);
+        if (form.start_planned && form.start_planned > projectEnd) {
+          const msg = `Start Planned tidak boleh setelah Project Planned End (${projectEnd}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSaving(false);
+          return;
+        }
+        if (form.end_planned && form.end_planned > projectEnd) {
+          const msg = `End Planned tidak boleh setelah Project Planned End (${projectEnd}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSaving(false);
+          return;
+        }
+      }
+
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
+        milestone_id: form.milestone_id || null,
         title: form.title,
         description: form.description || null,
         priority: form.priority,
@@ -342,10 +558,9 @@ function EditTaskPageContent() {
         budget_cost: form.budget_cost === "" ? 0 : Number(form.budget_cost ?? 0),
       };
       if (form.assignments && form.assignments.length > 0) {
-        // Backend requires non-null role_on_task; default to 'Member' if null/empty
         payload.assignments = form.assignments.map((a) => ({
           user_id: a.user_id,
-          role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+          role_on_task: resolveAssignmentRole(a),
           estimated_effort_hours:
             a.estimated_effort_hours === "" || a.estimated_effort_hours == null
               ? null
@@ -611,6 +826,48 @@ function EditTaskPageContent() {
             <label htmlFor="title" className="text-sm font-semibold text-slate-500">Title</label>
             <input id="title" name="title" value={form.title} onChange={onChange} required className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
           </div>
+          {form.project_id ? (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-500">Milestone</label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  >
+                    <span className={selectedMilestone ? "text-slate-700" : "text-slate-400"}>
+                      {selectedMilestone?.name ?? "Pilih milestone (opsional)"}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]"
+                >
+                  <DropdownMenuItem
+                    onSelect={() => applyFieldUpdate("milestone_id", "")}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                  >
+                    <span>Tanpa milestone</span>
+                    {!form.milestone_id && <Check className="h-4 w-4 text-emerald-500" />}
+                  </DropdownMenuItem>
+                  {milestones.map((m) => (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onSelect={() => applyFieldUpdate("milestone_id", m.id)}
+                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700"
+                    >
+                      <span>{m.name}</span>
+                      {Number(form.milestone_id) === Number(m.id) && (
+                        <Check className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-500">Priority</label>
             <DropdownMenu>
@@ -720,87 +977,104 @@ function EditTaskPageContent() {
           ) : users.length === 0 ? (
             <div className="text-xs text-neutral-500">No users available.</div>
           ) : (
-            <div className="border rounded-md px-3 py-2 max-h-72 overflow-auto space-y-1">
-              {users.map((u) => {
-                const checked = !!form.assignments?.some(a => a.user_id === u.id);
-                return (
-                  <div key={u.id}>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={checked}
-                      onChange={(e) => {
-                        setForm((s) => s ? (() => {
-                          const current = s.assignments ?? [];
-                          if (e.target.checked) {
-                            if (!current.some(a => a.user_id === u.id)) {
-                              return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null, estimated_effort_hours: "" }] };
-                            }
-                            return s;
-                          } else {
-                            return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
-                          }
-                        })() : s);
-                      }}
-                    />
-                    <span>{u.name}</span>
-                  </label>
-                  {checked && (
-                    <div className="mb-2 ml-6 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
-                      <label className="mb-1 block text-xs font-medium text-slate-500">
-                        Estimated Effort (hours)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={10000}
-                        step={1}
-                        value={
-                          form.assignments?.find((a) => a.user_id === u.id)
-                            ?.estimated_effort_hours ?? ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          setForm((s) =>
-                            s
-                              ? {
-                                  ...s,
-                                  assignments: (s.assignments ?? []).map((a) =>
-                                    a.user_id === u.id
-                                      ? {
-                                          ...a,
-                                          estimated_effort_hours:
-                                            raw === "" ? "" : Math.max(0, Number(raw) || 0),
-                                        }
-                                      : a
-                                  ),
-                                }
-                              : s
-                          );
-                        }}
-                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-                        placeholder="Kosong = durasi x 8 jam"
-                      />
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
-                      </p>
+            <div className="max-h-72 overflow-auto rounded-md border px-3 py-2">
+              <div className="grid grid-cols-1 gap-3">
+                {assignmentUserGroups.map((group) => (
+                  <div key={group.key} className="space-y-1">
+                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-2 py-2 backdrop-blur">
+                      <span className="text-xs font-semibold uppercase text-slate-500">{group.name}</span>
+                      <span className="text-[11px] font-medium text-slate-400">{group.users.length} user</span>
                     </div>
-                  )}
+                    {group.users.map((u) => {
+                      const checked = !!form.assignments?.some(a => a.user_id === u.id);
+                      return (
+                        <div key={u.id}>
+                          <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-slate-700">{u.name}</span>
+                              {u.role ? (
+                                <span className="shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                                  {u.role}
+                                </span>
+                              ) : null}
+                            </span>
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                              checked={checked}
+                              onChange={(e) => {
+                                setForm((s) => s ? (() => {
+                                  const current = s.assignments ?? [];
+                                  if (e.target.checked) {
+                                    if (!current.some(a => a.user_id === u.id)) {
+                                      return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null, estimated_effort_hours: "" }] };
+                                    }
+                                    return s;
+                                  } else {
+                                    return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
+                                  }
+                                })() : s);
+                              }}
+                            />
+                          </label>
+                          {checked && (
+                            <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                              <label className="mb-1 block text-xs font-medium text-slate-500">
+                                Estimated Effort (hours)
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={10000}
+                                step={1}
+                                value={
+                                  form.assignments?.find((a) => a.user_id === u.id)
+                                    ?.estimated_effort_hours ?? ""
+                                }
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  setForm((s) =>
+                                    s
+                                      ? {
+                                          ...s,
+                                          assignments: (s.assignments ?? []).map((a) =>
+                                            a.user_id === u.id
+                                              ? {
+                                                  ...a,
+                                                  estimated_effort_hours:
+                                                    raw === "" ? "" : Math.max(0, Number(raw) || 0),
+                                                }
+                                              : a
+                                          ),
+                                        }
+                                      : s
+                                  );
+                                }}
+                                className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                                placeholder="Kosong = durasi x 8 jam"
+                              />
+                              <p className="mt-1 text-[11px] text-slate-500">
+                                Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm mb-1">Start Planned</label>
-            <input type="date" name="start_planned" value={form.start_planned ?? ''} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
+            <input type="date" name="start_planned" value={form.start_planned ?? ''} onChange={onChange} max={taskDateMax} className="w-full border rounded-md px-3 py-2" />
           </div>
           <div>
             <label className="block text-sm mb-1">End Planned</label>
-            <input type="date" name="end_planned" value={form.end_planned ?? ''} onChange={onChange} className="w-full border rounded-md px-3 py-2" />
+            <input type="date" name="end_planned" value={form.end_planned ?? ''} onChange={onChange} max={taskDateMax} className="w-full border rounded-md px-3 py-2" />
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

@@ -33,6 +33,89 @@ type FormState = {
 const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 const STATUS_OPTIONS = ["To Do", "In Progress", "Done", "On Hold", "Cancelled"];
 
+type AssignmentUser = {
+  id: number;
+  name: string;
+  role: string | null;
+  roles: string[];
+  division: { id: number; name: string; code?: string | null } | null;
+};
+
+type AssignmentUserGroup = {
+  key: string;
+  name: string;
+  users: AssignmentUser[];
+};
+
+type RawAssignmentDivision = {
+  id?: unknown;
+  division_id?: unknown;
+  name?: unknown;
+  division_name?: unknown;
+  title?: unknown;
+  code?: unknown;
+};
+
+type RawAssignmentRole = string | { name?: unknown };
+
+type RawAssignmentUser = {
+  id?: unknown;
+  user_id?: unknown;
+  value?: unknown;
+  key?: unknown;
+  name?: unknown;
+  full_name?: unknown;
+  username?: unknown;
+  email?: unknown;
+  role?: unknown;
+  roles?: RawAssignmentRole[];
+  division?: RawAssignmentDivision | null;
+  department?: RawAssignmentDivision | null;
+};
+
+function normalizeUserRole(user: Pick<RawAssignmentUser, "role" | "roles">): string | null {
+  if (typeof user?.role === "string" && user.role.trim()) return user.role.trim();
+  if (Array.isArray(user?.roles) && user.roles.length > 0) {
+    const first = user.roles[0];
+    const role = typeof first === "string" ? first : first?.name;
+    return typeof role === "string" && role.trim() ? role.trim() : null;
+  }
+  return null;
+}
+
+function groupAssignmentUsers(users: AssignmentUser[]): AssignmentUserGroup[] {
+  const groups = new Map<string, AssignmentUserGroup>();
+
+  users.forEach((user) => {
+    const divisionName = user.division?.name?.trim() || (user.role?.toLowerCase().includes("admin") ? "Admin" : "Tanpa Divisi");
+    const key = user.division?.id ? `division-${user.division.id}` : `no-division-${divisionName.toLowerCase()}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { key, name: divisionName, users: [] });
+    }
+    groups.get(key)?.users.push(user);
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      users: group.users.sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => {
+      if (a.name === "Tanpa Divisi") return 1;
+      if (b.name === "Tanpa Divisi") return -1;
+      if (a.name === "Admin") return -1;
+      if (b.name === "Admin") return 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function minDateString(...dates: Array<string | undefined | null>) {
+  const validDates = dates.filter((date): date is string => Boolean(date));
+  if (!validDates.length) return undefined;
+  return validDates.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+}
+
 function CreateTaskPageContent() {
   const router = useRouter();
   const search = useSearchParams();
@@ -61,7 +144,7 @@ function CreateTaskPageContent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [users, setUsers] = useState<AssignmentUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [depOptions, setDepOptions] = useState<Array<{ id: number; title: string }>>([]);
   const [depsLoading, setDepsLoading] = useState(false);
@@ -72,6 +155,17 @@ function CreateTaskPageContent() {
     const m = milestones.find((x) => Number(x.id) === Number(milestoneId));
     return (m?.due_planned as any) || undefined;
   }, [milestones, milestoneId]);
+
+  const projectPlannedEnd = useMemo(() => {
+    if (!form.project_id) return undefined;
+    const project = projects.find((p) => Number(p.id) === Number(form.project_id));
+    return project?.end_planned || undefined;
+  }, [form.project_id, projects]);
+
+  const taskDateMax = useMemo(
+    () => minDateString(milestoneDueMax, projectPlannedEnd),
+    [milestoneDueMax, projectPlannedEnd]
+  );
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as any;
@@ -136,6 +230,32 @@ function CreateTaskPageContent() {
         }
       }
 
+      if (projectPlannedEnd) {
+        const projectEnd = String(projectPlannedEnd);
+        if (form.start_planned && form.start_planned > projectEnd) {
+          const msg = `Start Planned tidak boleh setelah Project Planned End (${projectEnd}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSubmitting(false);
+          return;
+        }
+        if (form.end_planned && form.end_planned > projectEnd) {
+          const msg = `End Planned tidak boleh setelah Project Planned End (${projectEnd}).`;
+          setError(msg);
+          showToast({
+            variant: "error",
+            title: "Tanggal task tidak valid",
+            description: msg,
+          });
+          setSubmitting(false);
+          return;
+        }
+      }
+
       if (!form.project_id) {
         const msg = "Project wajib dipilih sebelum membuat task";
         setError(msg);
@@ -161,10 +281,9 @@ function CreateTaskPageContent() {
         budget_cost: form.budget_cost === "" ? 0 : Number(form.budget_cost ?? 0),
       };
       if (form.assignments && form.assignments.length > 0) {
-        // Backend requires non-null role_on_task; default to 'Member' if null/empty
         payload.assignments = form.assignments.map(a => ({
           user_id: a.user_id,
-          role_on_task: (a.role_on_task && a.role_on_task.trim()) ? a.role_on_task : 'Member',
+          role_on_task: resolveAssignmentRole(a),
           estimated_effort_hours:
             a.estimated_effort_hours === "" || a.estimated_effort_hours == null
               ? null
@@ -269,7 +388,7 @@ function CreateTaskPageContent() {
           "/api/users?status=Aktif",
           "/api/users",
         ];
-        let mapped: Array<{ id: number; name: string }> = [];
+        let mapped: AssignmentUser[] = [];
         for (const path of tryPaths) {
           try {
             const rs = await apiRequest<any>("GET", path);
@@ -279,10 +398,26 @@ function CreateTaskPageContent() {
             else if (Array.isArray(rs?.data?.data)) arr = rs.data.data;
             else if (Array.isArray(rs?.items)) arr = rs.items;
             else if (Array.isArray(rs?.users)) arr = rs.users;
-            mapped = (arr || []).map((u: any) => ({
-              id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
-              name: u.name ?? u.full_name ?? u.username ?? u.email ?? String(u.id ?? u.user_id ?? '')
-            })).filter((u:any)=> Number.isFinite(u.id));
+            mapped = (arr || []).map((u: RawAssignmentUser) => {
+              const division = u.division ?? u.department ?? null;
+              return {
+                id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
+                name: String(u.name ?? u.full_name ?? u.username ?? u.email ?? u.id ?? u.user_id ?? ""),
+                role: normalizeUserRole(u),
+                roles: Array.isArray(u.roles)
+                  ? u.roles
+                      .map((role) => (typeof role === "string" ? role : role?.name))
+                      .filter((role): role is string => typeof role === "string" && role.trim().length > 0)
+                  : [],
+                division: division
+                  ? {
+                      id: Number(division.id ?? division.division_id),
+                      name: String(division.name ?? division.division_name ?? division.title ?? "Tanpa Divisi"),
+                      code: typeof division.code === "string" ? division.code : null,
+                    }
+                  : null,
+              };
+            }).filter((u)=> Number.isFinite(u.id));
             const seen = new Set<number>();
             mapped = mapped.filter((u)=> (seen.has(u.id) ? false : (seen.add(u.id), true)));
             if (mapped.length) break;
@@ -296,6 +431,17 @@ function CreateTaskPageContent() {
       }
     })();
   }, []);
+
+  const assignmentUserGroups = useMemo(() => groupAssignmentUsers(users), [users]);
+
+  const resolveAssignmentRole = (assignment: NonNullable<FormState["assignments"]>[number]) => {
+    const knownRoles = new Set(users.flatMap((user) => [user.role, ...user.roles].filter((role): role is string => !!role)));
+    const currentRole = assignment.role_on_task?.trim();
+    if (currentRole && knownRoles.has(currentRole)) return currentRole;
+
+    const user = users.find((item) => item.id === assignment.user_id);
+    return user?.role || user?.roles[0] || "Member";
+  };
 
   // Load dependency candidate tasks after milestone is chosen
   useEffect(() => {
@@ -340,7 +486,7 @@ function CreateTaskPageContent() {
       { key: "progress", label: "Set progress 0-100", completed: form.percent_complete >= 0 && form.percent_complete <= 100 },
       { key: "project", label: "Pilih project", completed: Boolean(form.project_id) },
     ];
-  }, [form.title, form.start_planned, form.end_planned, form.percent_complete, form.project_id, milestoneId]);
+  }, [form.title, form.start_planned, form.end_planned, form.percent_complete, form.project_id, milestoneId, projectPlannedEnd]);
 
   const checklistProgress = useMemo(() => {
     const total = checklistItems.length;
@@ -420,7 +566,10 @@ function CreateTaskPageContent() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[260px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
                   {projects.map((p) => (
-                    <DropdownMenuItem key={p.id} onSelect={() => setForm((s) => ({ ...s, project_id: Number(p.id) }))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                    <DropdownMenuItem key={p.id} onSelect={() => {
+                      setForm((s) => ({ ...s, project_id: Number(p.id) }));
+                      setMilestoneId("");
+                    }} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
                       <span>{p.name}</span>
                       {Number(form.project_id) === Number(p.id) && <Check className="h-4 w-4 text-emerald-500" />}
                     </DropdownMenuItem>
@@ -531,7 +680,7 @@ function CreateTaskPageContent() {
                   value={form.start_planned}
                   onChange={onChange}
                   min={todayLocal}
-                  max={milestoneDueMax}
+                  max={taskDateMax}
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />
               </div>
@@ -543,7 +692,7 @@ function CreateTaskPageContent() {
                   value={form.end_planned}
                   onChange={onChange}
                   min={todayLocal}
-                  max={milestoneDueMax}
+                  max={taskDateMax}
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />
               </div>
@@ -557,72 +706,87 @@ function CreateTaskPageContent() {
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">No users available.</div>
             ) : (
               <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-inner">
-                <div className="grid max-h-56 grid-cols-1 gap-1 overflow-auto">
-                  {users.map((u) => {
-                    const checked = (form.assignments?.some(a => a.user_id === u.id)) ?? false;
-                    return (
-                      <div key={u.id}>
-                      <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50">
-                        <span className="text-slate-700">{u.name}</span>
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
-                          checked={checked}
-                          onChange={(e) => {
-                            setForm((s) => {
-                              const current = s.assignments ?? [];
-                              if (e.target.checked) {
-                                if (!current.some(a => a.user_id === u.id)) {
-                                  return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null, estimated_effort_hours: "" }] };
-                                }
-                                return s;
-                              } else {
-                                return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
-                              }
-                            });
-                          }}
-                        />
-                      </label>
-                      {checked && (
-                        <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
-                          <label className="mb-1 block text-xs font-medium text-slate-500">
-                            Estimated Effort (hours)
-                          </label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={10000}
-                            step={1}
-                            value={
-                              form.assignments?.find((a) => a.user_id === u.id)
-                                ?.estimated_effort_hours ?? ""
-                            }
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              setForm((s) => ({
-                                ...s,
-                                assignments: (s.assignments ?? []).map((a) =>
-                                  a.user_id === u.id
-                                    ? {
-                                        ...a,
-                                        estimated_effort_hours:
-                                          raw === "" ? "" : Math.max(0, Number(raw) || 0),
-                                      }
-                                    : a
-                                ),
-                              }));
-                            }}
-                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-                            placeholder="Kosong = durasi x 8 jam"
-                          />
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
-                          </p>
-                        </div>
-                      )}
+                <div className="grid max-h-72 grid-cols-1 gap-3 overflow-auto">
+                  {assignmentUserGroups.map((group) => (
+                    <div key={group.key} className="space-y-1">
+                      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-2 py-2 backdrop-blur">
+                        <span className="text-xs font-semibold uppercase text-slate-500">{group.name}</span>
+                        <span className="text-[11px] font-medium text-slate-400">{group.users.length} user</span>
                       </div>
-                    );
-                  })}
+                      {group.users.map((u) => {
+                        const checked = (form.assignments?.some(a => a.user_id === u.id)) ?? false;
+                        return (
+                          <div key={u.id}>
+                            <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50">
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate text-slate-700">{u.name}</span>
+                                {u.role ? (
+                                  <span className="shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                                    {u.role}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                                checked={checked}
+                                onChange={(e) => {
+                                  setForm((s) => {
+                                    const current = s.assignments ?? [];
+                                    if (e.target.checked) {
+                                      if (!current.some(a => a.user_id === u.id)) {
+                                        return { ...s, assignments: [...current, { user_id: u.id, role_on_task: null, estimated_effort_hours: "" }] };
+                                      }
+                                      return s;
+                                    } else {
+                                      return { ...s, assignments: current.filter(a => a.user_id !== u.id) };
+                                    }
+                                  });
+                                }}
+                              />
+                            </label>
+                            {checked && (
+                              <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                                <label className="mb-1 block text-xs font-medium text-slate-500">
+                                  Estimated Effort (hours)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={10000}
+                                  step={1}
+                                  value={
+                                    form.assignments?.find((a) => a.user_id === u.id)
+                                      ?.estimated_effort_hours ?? ""
+                                  }
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    setForm((s) => ({
+                                      ...s,
+                                      assignments: (s.assignments ?? []).map((a) =>
+                                        a.user_id === u.id
+                                          ? {
+                                              ...a,
+                                              estimated_effort_hours:
+                                                raw === "" ? "" : Math.max(0, Number(raw) || 0),
+                                            }
+                                          : a
+                                      ),
+                                    }));
+                                  }}
+                                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                                  placeholder="Kosong = durasi x 8 jam"
+                                />
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

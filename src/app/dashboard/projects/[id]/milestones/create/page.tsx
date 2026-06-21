@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createForProject, MILESTONE_STATUS_OPTIONS, type CreateMilestoneDto, listByProject as listMilestonesByProject } from "@/lib/api/milestones";
 import { createForMilestone as createTaskForMilestone } from "@/lib/api/tasks";
@@ -39,6 +39,96 @@ type FormState = {
 
 type FieldErrors = Partial<Record<keyof CreateMilestoneDto, string>> & { [k: string]: string };
 
+type AssignmentUser = {
+  id: number;
+  name: string;
+  role: string | null;
+  roles: string[];
+  division: { id: number; name: string; code?: string | null } | null;
+};
+
+type AssignmentUserGroup = {
+  key: string;
+  name: string;
+  users: AssignmentUser[];
+};
+
+type RawAssignmentDivision = {
+  id?: unknown;
+  division_id?: unknown;
+  name?: unknown;
+  division_name?: unknown;
+  title?: unknown;
+  code?: unknown;
+};
+
+type RawAssignmentRole = string | { name?: unknown };
+
+type RawAssignmentUser = {
+  id?: unknown;
+  user_id?: unknown;
+  value?: unknown;
+  key?: unknown;
+  name?: unknown;
+  full_name?: unknown;
+  username?: unknown;
+  email?: unknown;
+  role?: unknown;
+  roles?: RawAssignmentRole[];
+  division?: RawAssignmentDivision | null;
+  department?: RawAssignmentDivision | null;
+};
+
+function normalizeUserRole(user: Pick<RawAssignmentUser, "role" | "roles">): string | null {
+  if (typeof user?.role === "string" && user.role.trim()) return user.role.trim();
+  if (Array.isArray(user?.roles) && user.roles.length > 0) {
+    const first = user.roles[0];
+    const role = typeof first === "string" ? first : first?.name;
+    return typeof role === "string" && role.trim() ? role.trim() : null;
+  }
+  return null;
+}
+
+function groupAssignmentUsers(users: AssignmentUser[]): AssignmentUserGroup[] {
+  const groups = new Map<string, AssignmentUserGroup>();
+
+  users.forEach((user) => {
+    const divisionName = user.division?.name?.trim() || (user.role?.toLowerCase().includes("admin") ? "Admin" : "Tanpa Divisi");
+    const key = user.division?.id ? `division-${user.division.id}` : `no-division-${divisionName.toLowerCase()}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, { key, name: divisionName, users: [] });
+    }
+    groups.get(key)?.users.push(user);
+  });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      users: group.users.sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => {
+      if (a.name === "Tanpa Divisi") return 1;
+      if (b.name === "Tanpa Divisi") return -1;
+      if (a.name === "Admin") return -1;
+      if (b.name === "Admin") return 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function toDateOnly(value: unknown) {
+  if (!value) return "";
+  const text = String(value);
+  const match = text.match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
+}
+
+function minDateString(...dates: Array<string | undefined | null>) {
+  const validDates = dates.map(toDateOnly).filter((date): date is string => Boolean(date));
+  if (!validDates.length) return undefined;
+  return validDates.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+}
+
 function CreateProjectMilestonePageContent() {
   const router = useRouter();
   const params = useParams();
@@ -57,18 +147,20 @@ function CreateProjectMilestonePageContent() {
     due_planned: "",
     due_actual: "",
   });
-  const milestoneDueMax = form.due_planned || undefined;
+  const [projectPlannedEnd, setProjectPlannedEnd] = useState<string>("");
+  const milestoneDueMax = minDateString(form.due_planned, projectPlannedEnd);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   // Users for task assignments
-  const [users, setUsers] = useState<Array<{ id: number; name: string }>>([]);
+  const [users, setUsers] = useState<AssignmentUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
   // Optional: create initial tasks together with milestone
   type TaskForm = {
     tempKey: number;
     title: string;
+    description: string;
     status: string;
     priority: string;
     start_planned: string;
@@ -85,6 +177,7 @@ function CreateProjectMilestonePageContent() {
   const addEmptyTask = () => setTaskForms((s) => ([...s, {
     tempKey: nextKeyRef.current++,
     title: "",
+    description: "",
     status: "To Do",
     priority: "Medium",
     start_planned: "",
@@ -107,6 +200,20 @@ function CreateProjectMilestonePageContent() {
     setFieldErrors((errs) => ({ ...errs, [name]: '' }));
   };
 
+  useEffect(() => {
+    if (!projectId) return;
+    (async () => {
+      try {
+        const res = await apiRequest<any>("GET", `/api/projects/${projectId}`);
+        const project = res && typeof res === "object" && "data" in res ? res.data : res;
+        const endPlanned = toDateOnly(project?.end_planned);
+        setProjectPlannedEnd(endPlanned);
+      } catch {
+        setProjectPlannedEnd("");
+      }
+    })();
+  }, [projectId]);
+
   // Load users for assignment options (robust across API shapes)
   useEffect(() => {
     (async () => {
@@ -127,17 +234,33 @@ function CreateProjectMilestonePageContent() {
           '/api/users?status=Aktif',
           '/api/users',
         ];
-        let mapped: Array<{ id: number; name: string }>=[];
+        let mapped: AssignmentUser[]=[];
         for (const path of tryPaths) {
           try {
             const rs:any = await apiRequest('GET', path);
             let arr:any[]=[];
             if (Array.isArray(rs)) arr=rs; else if (Array.isArray(rs?.data)) arr=rs.data; else if (Array.isArray(rs?.data?.data)) arr=rs.data.data; else if (Array.isArray(rs?.items)) arr=rs.items; else if (Array.isArray(rs?.users)) arr=rs.users;
             // Tolerate various id/name shapes
-            mapped = (arr||[]).map((u:any)=>({
-              id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
-              name: u.name ?? u.full_name ?? u.username ?? u.email ?? String(u.id ?? u.user_id ?? '')
-            })).filter((u:any)=> Number.isFinite(u.id));
+            mapped = (arr||[]).map((u: RawAssignmentUser) => {
+              const division = u.division ?? u.department ?? null;
+              return {
+                id: Number(u.id ?? u.user_id ?? u.value ?? u.key),
+                name: String(u.name ?? u.full_name ?? u.username ?? u.email ?? u.id ?? u.user_id ?? ''),
+                role: normalizeUserRole(u),
+                roles: Array.isArray(u.roles)
+                  ? u.roles
+                      .map((role) => (typeof role === "string" ? role : role?.name))
+                      .filter((role): role is string => typeof role === "string" && role.trim().length > 0)
+                  : [],
+                division: division
+                  ? {
+                      id: Number(division.id ?? division.division_id),
+                      name: String(division.name ?? division.division_name ?? division.title ?? "Tanpa Divisi"),
+                      code: typeof division.code === "string" ? division.code : null,
+                    }
+                  : null,
+              };
+            }).filter((u)=> Number.isFinite(u.id));
             // Deduplicate by id
             const seen = new Set<number>();
             mapped = mapped.filter((u)=> (seen.has(u.id) ? false : (seen.add(u.id), true)));
@@ -149,6 +272,13 @@ function CreateProjectMilestonePageContent() {
       finally { setUsersLoading(false); }
     })();
   }, []);
+
+  const assignmentUserGroups = useMemo(() => groupAssignmentUsers(users), [users]);
+
+  const resolveAssignmentRole = (userId: number) => {
+    const user = users.find((item) => item.id === userId);
+    return user?.role || user?.roles[0] || "Member";
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,6 +308,17 @@ function CreateProjectMilestonePageContent() {
         setSubmitting(false);
         return;
       }
+      const formDuePlanned = toDateOnly(form.due_planned);
+      if (projectPlannedEnd && formDuePlanned && formDuePlanned > projectPlannedEnd) {
+        setFieldErrors((e) => ({ ...e, due_planned: `Due Planned tidak boleh melewati Project Planned End (${projectPlannedEnd})` }));
+        showToast({
+          variant: "error",
+          title: "Tanggal milestone tidak valid",
+          description: `Due Planned milestone tidak boleh melewati Project Planned End (${projectPlannedEnd}).`,
+        });
+        setSubmitting(false);
+        return;
+      }
       // Validate each task row: title required, start <= end, percent 0..100
       for (let i = 0; i < taskForms.length; i++) {
         const t = taskForms[i];
@@ -203,10 +344,30 @@ function CreateProjectMilestonePageContent() {
             return;
           }
         }
+        if (projectPlannedEnd) {
+          if (t.start_planned && t.start_planned > projectPlannedEnd) {
+            showToast({
+              variant: "error",
+              title: "Tanggal task tidak valid",
+              description: `Task #${i + 1} memiliki Start Planned setelah Project Planned End (${projectPlannedEnd}).`,
+            });
+            setSubmitting(false);
+            return;
+          }
+          if (t.end_planned && t.end_planned > projectPlannedEnd) {
+            showToast({
+              variant: "error",
+              title: "Tanggal task tidak valid",
+              description: `Task #${i + 1} memiliki End Planned setelah Project Planned End (${projectPlannedEnd}).`,
+            });
+            setSubmitting(false);
+            return;
+          }
+        }
         // If milestone due_planned is set, task planned dates must not exceed it.
         // Use lexicographical compare because inputs are YYYY-MM-DD.
-        if (form.due_planned) {
-          const due = form.due_planned;
+        if (formDuePlanned) {
+          const due = formDuePlanned;
           if (t.start_planned && t.start_planned > due) {
             showToast({
               variant: "error",
@@ -239,22 +400,25 @@ function CreateProjectMilestonePageContent() {
       }
 
       // Soft warning A: sequence vs existing milestones in this project
-      let duePlanned = form.due_planned || '';
-      const dueTs = duePlanned ? Date.parse(duePlanned) : NaN;
+      let duePlanned = formDuePlanned;
+      let dueTs = duePlanned ? Date.parse(duePlanned) : NaN;
       if (projectId && duePlanned && Number.isFinite(dueTs)) {
         try {
           const existing = await listMilestonesByProject(projectId);
-          const existDue = (existing || []).map((m: any) => m?.due_planned).filter(Boolean) as string[];
+          const existDue = (existing || []).map((m: any) => toDateOnly(m?.due_planned)).filter(Boolean) as string[];
           if (existDue.length) {
             const latest = existDue.sort((a,b) => Date.parse(b) - Date.parse(a))[0];
             if (Date.parse(duePlanned) < Date.parse(latest)) {
-              const adjustMsg = `Due Planned (${duePlanned}) lebih awal dari milestone lain (terakhir ${latest}).\n\nRekomendasi: sesuaikan Due Planned menjadi ${latest}.\n\nKlik OK untuk menyesuaikan, Cancel untuk pilihan lain.`;
-              const okAdj = confirm(adjustMsg);
-              if (okAdj) {
-                duePlanned = latest;
-              } else {
-                const proceed = confirm(`Lanjutkan tanpa menyesuaikan Due Planned (tetap ${duePlanned})?\n\nKlik OK untuk lanjut simpan, Cancel untuk batalkan dan ubah data.`);
-                if (!proceed) { setSubmitting(false); return; }
+              if (!projectPlannedEnd || latest <= projectPlannedEnd) {
+                const adjustMsg = `Due Planned (${duePlanned}) lebih awal dari milestone lain (terakhir ${latest}).\n\nRekomendasi: sesuaikan Due Planned menjadi ${latest}.\n\nKlik OK untuk menyesuaikan, Cancel untuk pilihan lain.`;
+                const okAdj = confirm(adjustMsg);
+                if (okAdj) {
+                  duePlanned = latest;
+                  dueTs = Date.parse(duePlanned);
+                } else {
+                  const proceed = confirm(`Lanjutkan tanpa menyesuaikan Due Planned (tetap ${duePlanned})?\n\nKlik OK untuk lanjut simpan, Cancel untuk batalkan dan ubah data.`);
+                  if (!proceed) { setSubmitting(false); return; }
+                }
               }
             }
           }
@@ -265,10 +429,19 @@ function CreateProjectMilestonePageContent() {
       if (duePlanned && Number.isFinite(dueTs)) {
         // find max end_planned among provided tasks
         const endDates = taskForms
-          .map(t => t.end_planned)
+          .map(t => toDateOnly(t.end_planned))
           .filter(Boolean) as string[];
         const maxEnd = endDates.length ? endDates.sort((a,b) => Date.parse(b)-Date.parse(a))[0] : '';
         if (maxEnd && Date.parse(maxEnd) > dueTs) {
+          if (projectPlannedEnd && maxEnd > projectPlannedEnd) {
+            showToast({
+              variant: "error",
+              title: "Tanggal task tidak valid",
+              description: `Tanggal akhir task (${maxEnd}) melewati Project Planned End (${projectPlannedEnd}).`,
+            });
+            setSubmitting(false);
+            return;
+          }
           // First prompt: adjust due to max end
           const okAdjust = confirm(`Ada ${endDates.length} task dengan tanggal akhir melebihi Due Planned (${duePlanned}).\n\nRekomendasi: sesuaikan Due Planned menjadi ${maxEnd}.\n\nKlik OK untuk menyesuaikan Due Planned. Klik Cancel untuk pilihan lain.`);
           if (okAdjust) {
@@ -301,10 +474,11 @@ function CreateProjectMilestonePageContent() {
         const failures: Array<{ title: string; error: unknown }> = [];
         for (const t of rows) {
           try {
-            const pctVal = 0;
+            const pctVal = Math.max(0, Math.min(100, Number(t.percent_complete ?? 0) || 0));
             const effectiveStatus = t.status || "To Do";
             const dto: any = {
               title: t.title,
+              description: t.description || null,
               status: effectiveStatus,
               priority: t.priority || 'Medium',
               start_planned: t.start_planned || null,
@@ -327,7 +501,7 @@ function CreateProjectMilestonePageContent() {
 
                 return {
                   user_id: id,
-                  role_on_task: 'Member',
+                  role_on_task: resolveAssignmentRole(id),
                   estimated_effort_hours: Number.isFinite(effort) ? effort : null,
                 };
               });
@@ -481,7 +655,7 @@ function CreateProjectMilestonePageContent() {
             {/* Status hidden: default "Planned" used server-side */}
             <div>
               <label className="block text-sm mb-1">Due Planned</label>
-              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={todayLocal} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={todayLocal} max={projectPlannedEnd || undefined} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
               {fieldErrors.due_planned && <p className="text-xs text-red-600 mt-1">{fieldErrors.due_planned}</p>}
             </div>
             <div>
@@ -583,6 +757,17 @@ function CreateProjectMilestonePageContent() {
                       />
                     </div>
                     <div>
+                      <label className="block text-sm mb-1">Description</label>
+                      <textarea
+                        value={t.description}
+                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))}
+                        rows={4}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        placeholder="Context, goals, acceptance criteria..."
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
                         <label className="block text-sm mb-1">Priority</label>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -601,6 +786,26 @@ function CreateProjectMilestonePageContent() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+                      <div>
+                        <label className="block text-sm mb-1">Status</label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="group flex h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 shadow-inner transition-all duration-300 ease-out hover:border-emerald-400 focus:border-emerald-500 focus:shadow-[0_18px_36px_rgba(16,185,129,0.16)] focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                              <span className={t.status ? 'text-slate-700' : 'text-slate-400'}>{t.status || 'Pilih status'}</span>
+                              <ChevronsUpDown className="h-4 w-4 text-emerald-400 transition group-hover:text-emerald-500" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="min-w-[200px] rounded-xl border border-emerald-100 bg-white/95 p-1 shadow-[0_18px_36px_rgba(15,23,42,0.12)]">
+                            {TASK_STATUS_OPTIONS.map((sopt) => (
+                              <DropdownMenuItem key={sopt} onSelect={() => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, status: sopt } : x))} className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 focus:bg-emerald-100/60 focus:text-emerald-700">
+                                <span>{sopt}</span>
+                                {t.status === sopt && <Check className="h-4 w-4 text-emerald-500" />}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-sm mb-1">Start Planned</label>
@@ -637,77 +842,106 @@ function CreateProjectMilestonePageContent() {
                       />
                     </div>
                     <div>
+                      <label className="block text-sm mb-1">Percent Complete</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={t.percent_complete}
+                        onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, percent_complete: Number(e.target.value) } : x))}
+                        className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                        placeholder="0-100"
+                      />
+                    </div>
+                    <div>
                       <label className="block text-sm mb-1">Assignments</label>
                       {usersLoading ? (
                         <Skeleton className="h-20 w-full rounded-xl bg-neutral-200/50" />
                       ) : users.length === 0 ? (
                         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">No users available.</div>
                       ) : (
-                        <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-inner max-h-40 overflow-auto text-sm">
-                          {users.map((u) => {
-                            const checked = (t.assigneeIds || []).includes(u.id);
-                            return (
-                              <div key={u.id}>
-                              <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50">
-                                <span className="text-slate-700">{u.name}</span>
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    setTaskForms((s) => s.map((x, i) => {
-                                      if (i !== idx) return x;
-                                      const set = new Set(x.assigneeIds || []);
-                                      const efforts = { ...(x.assigneeEfforts ?? {}) };
-                                      if (e.target.checked) {
-                                        set.add(u.id);
-                                        if (!(u.id in efforts)) efforts[u.id] = '';
-                                      } else {
-                                        set.delete(u.id);
-                                        delete efforts[u.id];
-                                      }
-                                      return { ...x, assigneeIds: Array.from(set), assigneeEfforts: efforts };
-                                    }));
-                                  }}
-                                />
-                              </label>
-                              {checked && (
-                                <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
-                                  <label className="mb-1 block text-xs font-medium text-slate-500">
-                                    Estimated Effort (hours)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={10000}
-                                    step={1}
-                                    value={t.assigneeEfforts?.[u.id] ?? ''}
-                                    onChange={(e) => {
-                                      const raw = e.target.value;
-                                      setTaskForms((s) =>
-                                        s.map((x, i) => {
-                                          if (i !== idx) return x;
-                                          return {
-                                            ...x,
-                                            assigneeEfforts: {
-                                              ...(x.assigneeEfforts ?? {}),
-                                              [u.id]: raw === '' ? '' : String(Math.max(0, Number(raw) || 0)),
-                                            },
-                                          };
-                                        })
-                                      );
-                                    }}
-                                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-                                    placeholder="Kosong = durasi x 8 jam"
-                                  />
-                                  <p className="mt-1 text-[11px] text-slate-500">
-                                    Diakumulasi dengan assignee lain sebagai planned effort task.
-                                  </p>
+                        <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-inner max-h-56 overflow-auto text-sm">
+                          <div className="grid grid-cols-1 gap-3">
+                            {assignmentUserGroups.map((group) => (
+                              <div key={group.key} className="space-y-1">
+                                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-2 py-2 backdrop-blur">
+                                  <span className="text-xs font-semibold uppercase text-slate-500">{group.name}</span>
+                                  <span className="text-[11px] font-medium text-slate-400">{group.users.length} user</span>
                                 </div>
-                              )}
+                                {group.users.map((u) => {
+                                  const checked = (t.assigneeIds || []).includes(u.id);
+                                  return (
+                                    <div key={u.id}>
+                                      <label className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+                                        <span className="flex min-w-0 items-center gap-2">
+                                          <span className="truncate text-slate-700">{u.name}</span>
+                                          {u.role ? (
+                                            <span className="shrink-0 rounded border border-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                                              {u.role}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                        <input
+                                          type="checkbox"
+                                          className="h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-500 focus:ring-emerald-300"
+                                          checked={checked}
+                                          onChange={(e) => {
+                                            setTaskForms((s) => s.map((x, i) => {
+                                              if (i !== idx) return x;
+                                              const set = new Set(x.assigneeIds || []);
+                                              const efforts = { ...(x.assigneeEfforts ?? {}) };
+                                              if (e.target.checked) {
+                                                set.add(u.id);
+                                                if (!(u.id in efforts)) efforts[u.id] = '';
+                                              } else {
+                                                set.delete(u.id);
+                                                delete efforts[u.id];
+                                              }
+                                              return { ...x, assigneeIds: Array.from(set), assigneeEfforts: efforts };
+                                            }));
+                                          }}
+                                        />
+                                      </label>
+                                      {checked && (
+                                        <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
+                                          <label className="mb-1 block text-xs font-medium text-slate-500">
+                                            Estimated Effort (hours)
+                                          </label>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={10000}
+                                            step={1}
+                                            value={t.assigneeEfforts?.[u.id] ?? ''}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              setTaskForms((s) =>
+                                                s.map((x, i) => {
+                                                  if (i !== idx) return x;
+                                                  return {
+                                                    ...x,
+                                                    assigneeEfforts: {
+                                                      ...(x.assigneeEfforts ?? {}),
+                                                      [u.id]: raw === '' ? '' : String(Math.max(0, Number(raw) || 0)),
+                                                    },
+                                                  };
+                                                })
+                                              );
+                                            }}
+                                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
+                                            placeholder="Kosong = durasi x 8 jam"
+                                          />
+                                          <p className="mt-1 text-[11px] text-slate-500">
+                                            Diakumulasi dengan assignee lain sebagai planned effort task.
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            );
-                          })}
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

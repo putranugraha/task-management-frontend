@@ -91,6 +91,30 @@ export function NotificationProvider({
     };
   }, [state?.isInitialized, refreshUnreadCount, isAuthenticated]);
 
+  useEffect(() => {
+    if (!state?.isInitialized || !isAuthenticated) return;
+    if (typeof window === "undefined") return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refreshUnreadCount().catch(() => {});
+      }
+    }, 1_000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshUnreadCount().catch(() => {});
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [state?.isInitialized, isAuthenticated, refreshUnreadCount]);
+
   return (
     <NotificationContext.Provider value={value}>
       {children}

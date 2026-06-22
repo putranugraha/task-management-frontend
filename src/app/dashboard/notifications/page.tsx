@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -166,13 +166,12 @@ export default function NotificationsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [onlyUnread, setOnlyUnread] = useState(true);
 
-  useEffect(() => {
-    if (!state?.isInitialized) return;
-
-    let cancelled = false;
-
-    async function run() {
-      setLoading(true);
+  const loadNotifications = useCallback(
+    async (options?: { background?: boolean }) => {
+      if (!state?.isInitialized) return;
+      if (!options?.background) {
+        setLoading(true);
+      }
       setError(null);
       try {
         const res = await listMyNotifications({
@@ -180,12 +179,11 @@ export default function NotificationsPage() {
           per_page: rowsPerPage,
           only_unread: onlyUnread,
         });
-        if (!cancelled) {
-          setItems(res.data);
-          setMeta(res.meta);
-        }
+        setItems(res.data);
+        setMeta(res.meta);
+        await refreshUnreadCount();
       } catch (e: any) {
-        if (!cancelled) {
+        if (!options?.background) {
           const msg = e?.message ?? "Gagal memuat notifikasi";
           setError(msg);
           showToast({
@@ -195,10 +193,29 @@ export default function NotificationsPage() {
           });
         }
       } finally {
-        if (!cancelled) {
+        if (!options?.background) {
           setLoading(false);
         }
       }
+    },
+    [
+      state?.isInitialized,
+      page,
+      rowsPerPage,
+      onlyUnread,
+      refreshUnreadCount,
+      showToast,
+    ]
+  );
+
+  useEffect(() => {
+    if (!state?.isInitialized) return;
+
+    let cancelled = false;
+
+    async function run() {
+      await loadNotifications();
+      if (cancelled) return;
     }
 
     run();
@@ -206,7 +223,31 @@ export default function NotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [state?.isInitialized, page, rowsPerPage, onlyUnread, showToast]);
+  }, [state?.isInitialized, loadNotifications]);
+
+  useEffect(() => {
+    if (!state?.isInitialized) return;
+    if (typeof window === "undefined") return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadNotifications({ background: true }).catch(() => {});
+      }
+    }, 1_000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadNotifications({ background: true }).catch(() => {});
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [state?.isInitialized, loadNotifications]);
 
   const total = meta?.total ?? items.length;
   const currentPage = meta?.current_page ?? page;

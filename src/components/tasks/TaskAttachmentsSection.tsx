@@ -104,11 +104,19 @@ export default function TaskAttachmentsSection({
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
+    const filename = file.name;
     setUploading(true);
     try {
       await uploadForTask(taskId, file);
       setFile(null);
       await fetchAttachments();
+      showToast({
+        variant: "success",
+        title: "Lampiran berhasil diupload",
+        description: filename
+          ? `${filename} berhasil ditambahkan dan menunggu review.`
+          : "Lampiran berhasil ditambahkan dan menunggu review.",
+      });
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||

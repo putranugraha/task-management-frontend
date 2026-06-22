@@ -412,8 +412,8 @@ function ReportsPageContent() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between print:block">
+    <div className="report-print-root space-y-6">
+      <div className="report-print-header flex flex-col gap-4 md:flex-row md:items-end md:justify-between print:block">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             Reports
@@ -422,8 +422,18 @@ function ReportsPageContent() {
             Ringkasan performa proyek, KPI snapshot, dan EVM. Gunakan filter
             project di bawah ini lalu cetak laporan.
           </p>
+          <div className="report-print-meta hidden">
+            <div>
+              <span>Project</span>
+              <strong>{selectedProject?.name ?? "-"}</strong>
+            </div>
+            <div>
+              <span>Periode</span>
+              <strong>{dateFrom || "-"} s/d {dateTo || "-"}</strong>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="report-controls flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="space-y-1">
             <label className="block text-xs font-medium text-slate-600">
               Project
@@ -489,8 +499,8 @@ function ReportsPageContent() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="report-summary-grid grid gap-4 md:grid-cols-2">
+        <div className="report-section rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">
@@ -538,7 +548,7 @@ function ReportsPageContent() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="report-section rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-semibold text-slate-800">
@@ -588,7 +598,7 @@ function ReportsPageContent() {
       </div>
 
       {/* KPI snapshot section */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="report-section rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">
@@ -611,7 +621,7 @@ function ReportsPageContent() {
         </div>
 
         {selectedProject && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+          <div className="report-controls mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-semibold">Tampilan:</span>
             <select
               className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
@@ -651,7 +661,7 @@ function ReportsPageContent() {
           ) : (
             <>
               {latestKpi && (
-                <div className="mb-4 grid gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700 md:grid-cols-3">
+                <div className="report-highlight-grid mb-4 grid gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700 md:grid-cols-3">
                   <div>
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       Snapshot Terbaru
@@ -689,8 +699,8 @@ function ReportsPageContent() {
                 </div>
               )}
 
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-y-1 text-sm">
+              <div className="report-table-wrap overflow-x-auto">
+                <table className="report-table min-w-full border-separate border-spacing-y-1 text-sm">
                   <thead>
                     <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       <th className="px-3 py-2">Periode</th>
@@ -734,7 +744,7 @@ function ReportsPageContent() {
       </div>
 
       {/* EVM section */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="report-section report-evm-section rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">EVM</h2>

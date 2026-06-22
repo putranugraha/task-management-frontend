@@ -16,8 +16,8 @@ const DASHBOARD_STATS_CACHE_KEY = "dashboard:overview:stats";
 const DASHBOARD_ACTIVITY_CACHE_KEY = "dashboard:overview:activity";
 
 export default function DashboardPage() {
-  const { hasRole } = useAuth();
-  const canViewActivityLog = hasRole("Admin");
+  const { can } = useAuth();
+  const canViewActivityLog = can("melihat activity log");
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -310,7 +310,7 @@ export default function DashboardPage() {
               </div>
             ) : !canViewActivityLog ? (
               <p className="text-xs text-slate-400">
-                Aktivitas terbaru hanya tersedia untuk Admin.
+                Aktivitas terbaru hanya tersedia untuk user yang memiliki izin melihat activity log.
               </p>
             ) : activityLogs.length === 0 ? (
               <p className="text-xs text-slate-400">

@@ -9,6 +9,7 @@ import Forbidden from "@/components/auth/Forbidden";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RowsPerPageControl } from "@/components/dashboard/RowsPerPageControl";
 import { listActivityLogs, type ActivityLog } from "@/lib/api/activity-logs";
+import { usePermissionGuard } from "@/hooks/usePermissionGuard";
 import DataTable from "../users/data-table";
 import type { Column } from "../users/columns";
 
@@ -70,7 +71,10 @@ const BASE_COLUMNS: Column<ActivityLogRow>[] = [
 ];
 
 export default function ActivityLogPage() {
-  const { state, hasRole } = useAuth();
+  const { state } = useAuth();
+  const { loading: permissionLoading, allowed } = usePermissionGuard([
+    "melihat activity log",
+  ]);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +92,8 @@ export default function ActivityLogPage() {
   }, []);
 
   useEffect(() => {
-    if (!hydrated || !state?.isInitialized) return;
-    if (!hasRole("Admin")) return;
+    if (!hydrated || !state?.isInitialized || permissionLoading) return;
+    if (!allowed) return;
 
     let cancelled = false;
     async function run() {
@@ -114,7 +118,7 @@ export default function ActivityLogPage() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, state, hasRole]);
+  }, [hydrated, state, permissionLoading, allowed]);
 
   const openRaw = (row: ActivityLogRow) => {
     setSelectedLog(row);
@@ -184,7 +188,7 @@ export default function ActivityLogPage() {
     []
   );
 
-  if (!hydrated || !state || !state.isInitialized) {
+  if (!hydrated || !state || !state.isInitialized || permissionLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-6 w-40 rounded-md" />
@@ -194,7 +198,7 @@ export default function ActivityLogPage() {
     );
   }
 
-  if (!hasRole("Admin")) {
+  if (!allowed) {
     return <Forbidden />;
   }
 

@@ -55,6 +55,6 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     label: "Activity Log",
     path: "/dashboard/activity-log",
-    roles: ["Admin"],
+    permissions: ["melihat activity log"],
   },
 ];

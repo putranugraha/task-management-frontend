@@ -303,7 +303,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
   }, [storageKey]);
 
   async function handleStart(skipStatusCheck = false) {
-    if (!skipStatusCheck) {
+    if (!skipStatusCheck && canOverrideClosedStatus) {
       const statusReady = await ensureInProgress();
       if (!statusReady) return;
     }

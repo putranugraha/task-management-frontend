@@ -392,6 +392,10 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
 
     try {
       await upsert(payload);
+      if (!isClosed && !isOnHold) {
+        setTaskStatus("In Progress");
+        onStatusChange?.("In Progress");
+      }
       clearLocalTimer();
       await fetchAll();
       setStopConfirmOpen(false);

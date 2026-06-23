@@ -103,7 +103,14 @@ export default function TaskAttachmentsSection({
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
+    if (!file) {
+    showToast({
+      variant: "error",
+      title: "File belum dipilih",
+      description: "Pilih file terlebih dahulu sebelum mengunggah lampiran.",
+    });
+    return;
+  }
     const filename = file.name;
     setUploading(true);
     try {
@@ -394,7 +401,7 @@ export default function TaskAttachmentsSection({
             </p>
             <button
               type="submit"
-              disabled={!file || uploading}
+              disabled={uploading}
               className="inline-flex items-center justify-center rounded-full border border-[#00674F] bg-[#00674F] px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#005341] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <UploadCloud className="mr-1.5 h-4 w-4" />

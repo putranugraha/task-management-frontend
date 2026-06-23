@@ -42,6 +42,15 @@ export async function upsert(payload: TimeEntryPayload) {
   throw lastErr || new Error("Failed to save time entry");
 }
 
+export async function startTaskTimer(taskId: number | string) {
+  return apiRequest<{
+    message?: string;
+    task_id?: number;
+    status?: string;
+    start_actual?: string | null;
+  }>("POST", `/api/tasks/${encodeURIComponent(String(taskId))}/time-entries/start`, {});
+}
+
 export async function listByTask(taskId: number | string) {
   const res = await apiRequest<any[] | { data: any[] }>("GET", `/api/tasks/${taskId}/time-entries`);
   return Array.isArray(res) ? res : (res as any)?.data ?? [];

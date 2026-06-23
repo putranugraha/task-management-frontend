@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   listByTask,
+  startTaskTimer,
   totalByTask,
   upsert,
   type TimeEntryPayload,
@@ -307,10 +308,28 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
       const statusReady = await ensureInProgress();
       if (!statusReady) return;
     }
-    const now = Date.now();
-    setTimerStart(now);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(storageKey, String(now));
+    try {
+      const result = await startTaskTimer(taskId);
+      const nextStatus = result?.status || "In Progress";
+      setTaskStatus(nextStatus);
+      onStatusChange?.(nextStatus);
+
+      const now = Date.now();
+      setTimerStart(now);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(storageKey, String(now));
+      }
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Gagal memulai timer";
+      showToast({
+        variant: "error",
+        title: "Gagal memulai timer",
+        description: msg,
+      });
     }
   }
 

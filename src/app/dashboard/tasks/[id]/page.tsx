@@ -411,9 +411,9 @@ function TaskDetailPageContent() {
   const priority = data?.priority ?? (isLoading ? "Loading…" : "Medium");
   const percentComplete = Number(data?.percent_complete ?? 0);
 
-  const ass: Assignment[] = Array.isArray(data?.assignments) ? data.assignments : [];
+  const ass: Assignment[] = Array.isArray(data?.assignments) ? data.assignments : []; const isCurrentUserAssigned = ass.some( (assignment) => Number(assignment.user?.id ?? assignment.user_id ?? 0) === currentUserId );
+  
   const deps: Dependency[] = Array.isArray(data?.dependencies) ? data.dependencies : [];
-
   const canEditTask = can("mengubah tugas");
   const canCreateTaskBaseline = can("membuat project");
 
@@ -814,13 +814,7 @@ function TaskDetailPageContent() {
             </DetailSectionCard>
 
             <DetailSectionCard>
-              <TaskTimeTrackerSection
-                taskId={id}
-                initialStatus={data.status}
-                onStatusChange={(status) =>
-                  setData((prev: any | null) => (prev ? { ...prev, status } : prev))
-                }
-              />
+              <TaskTimeTrackerSection taskId={id} initialStatus={data.status} isAssigned={isCurrentUserAssigned} onStatusChange={(status) => setData((prev: any | null) => prev ? { ...prev, status } : prev ) } />
             </DetailSectionCard>
           </DetailTwoColumnGrid>
 

@@ -16,11 +16,7 @@ import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timer, Square } from "lucide-react";
 
-type Props = {
-  taskId: number;
-  initialStatus?: string;
-  onStatusChange?: (status: string) => void;
-};
+type Props = { taskId: number; initialStatus?: string; onStatusChange?: (status: string) => void; isAssigned?: boolean; };
 
 type TimeEntry = {
   id: number;
@@ -72,7 +68,7 @@ function formatRunningDuration(hours: number | string | null | undefined): strin
   return parts.join(" ");
 }
 
-export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange }: Props) {
+export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatusChange, isAssigned = false, }: Props) {
   const { state, can } = useAuth();
   const currentUserId = useMemo(
     () => Number(state.user?.id ?? (state.user as any)?.user_id ?? 0),
@@ -119,6 +115,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
   const isBlockedByHold = isOnHold && !canOverrideClosedStatus;
   const isBlockedByClosed = isClosed && !canOverrideClosedStatus;
   const isStartBlocked = isBlockedByHold || isBlockedByClosed;
+  const canTrackThisTask = allowed && !permLoading && currentUserId > 0 && isAssigned;
 
   async function fetchAll() {
     setLoading(true);
@@ -304,6 +301,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
   }, [storageKey]);
 
   async function handleStart(skipStatusCheck = false) {
+    if (!isAssigned) { showToast({ variant: "error", title: "Bukan assignee task", description: "Kamu tidak ditugaskan pada task ini, sehingga tidak dapat memulai timer.", }); return; }
     if (!skipStatusCheck && canOverrideClosedStatus) {
       const statusReady = await ensureInProgress();
       if (!statusReady) return;
@@ -553,7 +551,7 @@ export default function TaskTimeTrackerSection({ taskId, initialStatus, onStatus
           )}
         </div>
 
-        {((allowed && !permLoading && currentUserId > 0) || timerStart) && (
+        {(canTrackThisTask || timerStart) && (
           <div className="space-x-2">
             {!timerStart ? (
               <button

@@ -35,6 +35,8 @@ export function NotificationProvider({
     if (!state?.isInitialized || !isAuthenticated) return;
 
     try {
+      console.log("[NOTIF] provider refresh", new Date().toLocaleTimeString());
+      console.log("[NOTIF] page load", new Date().toLocaleTimeString());
       const res = await listMyNotifications({
         only_unread: true,
         page: 1,
@@ -99,7 +101,7 @@ export function NotificationProvider({
       if (document.visibilityState === "visible") {
         refreshUnreadCount().catch(() => {});
       }
-    }, 1_000);
+    }, 15000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {

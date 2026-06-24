@@ -155,7 +155,7 @@ export default function NotificationsPage() {
   const { state } = useAuth();
   const router = useRouter();
   const { showToast } = useToast();
-  const { refreshUnreadCount, decrementUnreadCount } = useNotifications();
+  const { decrementUnreadCount } = useNotifications();
 
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [meta, setMeta] = useState<NotificationsMeta | null>(null);
@@ -166,88 +166,42 @@ export default function NotificationsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [onlyUnread, setOnlyUnread] = useState(true);
 
-  const loadNotifications = useCallback(
-    async (options?: { background?: boolean }) => {
-      if (!state?.isInitialized) return;
-      if (!options?.background) {
-        setLoading(true);
-      }
-      setError(null);
-      try {
-        const res = await listMyNotifications({
-          page,
-          per_page: rowsPerPage,
-          only_unread: onlyUnread,
-        });
-        setItems(res.data);
-        setMeta(res.meta);
-        await refreshUnreadCount();
-      } catch (e: any) {
-        if (!options?.background) {
-          const msg = e?.message ?? "Gagal memuat notifikasi";
-          setError(msg);
-          showToast({
-            variant: "error",
-            title: "Gagal memuat notifikasi",
-            description: msg,
-          });
-        }
-      } finally {
-        if (!options?.background) {
-          setLoading(false);
-        }
-      }
-    },
-    [
-      state?.isInitialized,
-      page,
-      rowsPerPage,
-      onlyUnread,
-      refreshUnreadCount,
-      showToast,
-    ]
-  );
-
-  useEffect(() => {
+const loadNotifications = useCallback(
+  async (options?: { background?: boolean }) => {
     if (!state?.isInitialized) return;
 
-    let cancelled = false;
-
-    async function run() {
-      await loadNotifications();
-      if (cancelled) return;
+    if (!options?.background) {
+      setLoading(true);
     }
 
-    run();
+    setError(null);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [state?.isInitialized, loadNotifications]);
+    try {
+      const res = await listMyNotifications({
+        page,
+        per_page: rowsPerPage,
+        only_unread: onlyUnread,
+      });
 
-  useEffect(() => {
-    if (!state?.isInitialized) return;
-    if (typeof window === "undefined") return;
-
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadNotifications({ background: true }).catch(() => {});
+      setItems(res.data);
+      setMeta(res.meta);
+    } catch (e: any) {
+      if (!options?.background) {
+        setError(e?.message ?? "Gagal memuat notifikasi");
       }
-    }, 15_000);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        loadNotifications({ background: true }).catch(() => {});
+    } finally {
+      if (!options?.background) {
+        setLoading(false);
       }
-    };
+    }
+  },
+  [state?.isInitialized, page, rowsPerPage, onlyUnread]
+);
 
-    document.addEventListener("visibilitychange", handleVisibility);
+useEffect(() => { if (!state?.isInitialized) return; loadNotifications(); }, [state?.isInitialized, loadNotifications]); useEffect(() => { if (!state?.isInitialized) return; if (typeof window === "undefined") return; const handleVisibility = () => { if (document.visibilityState === "visible") { loadNotifications({ background: true }).catch(() => {}); } }; document.addEventListener("visibilitychange", handleVisibility); return () => { document.removeEventListener("visibilitychange", handleVisibility); }; }, [state?.isInitialized, loadNotifications]); 
 
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [state?.isInitialized, loadNotifications]);
+
+
 
   const total = meta?.total ?? items.length;
   const currentPage = meta?.current_page ?? page;
@@ -299,7 +253,6 @@ export default function NotificationsPage() {
           )
         );
         decrementUnreadCount();
-        await refreshUnreadCount();
       }
       router.push(target);
     } catch (e: any) {

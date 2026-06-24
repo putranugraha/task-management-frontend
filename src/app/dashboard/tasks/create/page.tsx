@@ -120,13 +120,6 @@ function CreateTaskPageContent() {
   const router = useRouter();
   const search = useSearchParams();
   const initialProjectId = search?.get('project_id');
-  const todayLocal = (() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  })();
   const [form, setForm] = useState<FormState>({
     project_id: initialProjectId ? Number(initialProjectId) : "",
     title: "",
@@ -155,6 +148,16 @@ function CreateTaskPageContent() {
     const m = milestones.find((x) => Number(x.id) === Number(milestoneId));
     return (m?.due_planned as any) || undefined;
   }, [milestones, milestoneId]);
+
+  const projectPlannedStart = useMemo(() => {
+  if (!form.project_id) return undefined;
+
+  const project = projects.find(
+    (p) => Number(p.id) === Number(form.project_id)
+  );
+
+  return project?.start_planned || undefined;
+}, [form.project_id, projects]);
 
   const projectPlannedEnd = useMemo(() => {
     if (!form.project_id) return undefined;
@@ -679,7 +682,7 @@ function CreateTaskPageContent() {
                   name="start_planned"
                   value={form.start_planned}
                   onChange={onChange}
-                  min={todayLocal}
+                  min={projectPlannedStart}
                   max={taskDateMax}
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />
@@ -691,7 +694,7 @@ function CreateTaskPageContent() {
                   name="end_planned"
                   value={form.end_planned}
                   onChange={onChange}
-                  min={todayLocal}
+                  min={form.start_planned || projectPlannedStart}
                   max={taskDateMax}
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />

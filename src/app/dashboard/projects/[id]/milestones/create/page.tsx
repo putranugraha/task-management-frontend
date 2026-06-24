@@ -133,13 +133,6 @@ function CreateProjectMilestonePageContent() {
   const router = useRouter();
   const params = useParams();
   const projectId = params?.id as string;
-  const todayLocal = (() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  })();
 
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -147,6 +140,7 @@ function CreateProjectMilestonePageContent() {
     due_planned: "",
     due_actual: "",
   });
+  const [projectPlannedStart, setProjectPlannedStart] = useState<string>("");
   const [projectPlannedEnd, setProjectPlannedEnd] = useState<string>("");
   const milestoneDueMax = minDateString(form.due_planned, projectPlannedEnd);
   const [submitting, setSubmitting] = useState(false);
@@ -202,13 +196,17 @@ function CreateProjectMilestonePageContent() {
 
   useEffect(() => {
     if (!projectId) return;
+
     (async () => {
       try {
         const res = await apiRequest<any>("GET", `/api/projects/${projectId}`);
-        const project = res && typeof res === "object" && "data" in res ? res.data : res;
-        const endPlanned = toDateOnly(project?.end_planned);
-        setProjectPlannedEnd(endPlanned);
+        const project =
+          res && typeof res === "object" && "data" in res ? res.data : res;
+
+        setProjectPlannedStart(toDateOnly(project?.start_planned));
+        setProjectPlannedEnd(toDateOnly(project?.end_planned));
       } catch {
+        setProjectPlannedStart("");
         setProjectPlannedEnd("");
       }
     })();
@@ -655,7 +653,7 @@ function CreateProjectMilestonePageContent() {
             {/* Status hidden: default "Planned" used server-side */}
             <div>
               <label className="block text-sm mb-1">Due Planned</label>
-              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={todayLocal} max={projectPlannedEnd || undefined} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={projectPlannedStart || undefined} max={projectPlannedEnd || undefined} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
               {fieldErrors.due_planned && <p className="text-xs text-red-600 mt-1">{fieldErrors.due_planned}</p>}
             </div>
             <div>
@@ -811,7 +809,7 @@ function CreateProjectMilestonePageContent() {
                         <label className="block text-sm mb-1">Start Planned</label>
                         <input type="date" value={t.start_planned}
                           onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, start_planned: e.target.value } : x))}
-                          min={todayLocal}
+                          min={projectPlannedStart || undefined}
                           max={milestoneDueMax}
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>
@@ -819,7 +817,7 @@ function CreateProjectMilestonePageContent() {
                         <label className="block text-sm mb-1">End Planned</label>
                         <input type="date" value={t.end_planned}
                           onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, end_planned: e.target.value } : x))}
-                          min={todayLocal}
+                          min={t.start_planned || projectPlannedStart || undefined}
                           max={milestoneDueMax}
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>

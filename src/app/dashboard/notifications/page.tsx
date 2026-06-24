@@ -233,7 +233,7 @@ export default function NotificationsPage() {
       if (document.visibilityState === "visible") {
         loadNotifications({ background: true }).catch(() => {});
       }
-    }, 1_000);
+    }, 15_000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {

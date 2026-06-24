@@ -188,6 +188,7 @@ function CreateTaskPageContent() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    
     setError(null);
     try {
       // Validate planned dates (consistent with project task create flow)
@@ -269,6 +270,19 @@ function CreateTaskPageContent() {
         });
         setSubmitting(false);
         return;
+      }
+    if (!form.assignments || form.assignments.length === 0) {
+      const msg = "Assignment wajib dipilih minimal 1 user sebelum membuat task";
+
+      setError(msg);
+      showToast({
+        variant: "error",
+        title: "Assignment belum dipilih",
+        description: msg,
+      });
+
+      setSubmitting(false);
+      return;
       }
 
       const payload: Record<string, any> = {

@@ -329,6 +329,15 @@ function CreateProjectMilestonePageContent() {
           setSubmitting(false);
           return;
         }
+            if (!t.assigneeIds || t.assigneeIds.length === 0) {
+        showToast({
+          variant: "error",
+          title: "Assignment belum dipilih",
+          description: `Task #${i + 1} wajib memiliki minimal 1 assignee.`,
+        });
+        setSubmitting(false);
+        return;
+      }
         if (t.start_planned && t.end_planned) {
           const s = Date.parse(t.start_planned);
           const en = Date.parse(t.end_planned);
@@ -852,7 +861,7 @@ function CreateProjectMilestonePageContent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1">Assignments</label>
+                      <label className="block text-sm mb-1"> Assignments <span className="text-rose-500">*</span></label>
                       {usersLoading ? (
                         <Skeleton className="h-20 w-full rounded-xl bg-neutral-200/50" />
                       ) : users.length === 0 ? (

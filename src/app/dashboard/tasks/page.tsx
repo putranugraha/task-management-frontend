@@ -156,6 +156,7 @@ function TasksPageContent() {
         dedupedMap.set(row.id, row);
       }
       const deduped = Array.from(dedupedMap.values());
+      console.log("[TASKS PAGINATION DEBUG]", { requestedPage: pageParam, requestedPerPage: perPageParam, meta, rawCount: list.length, uniqueCount: deduped.length, rawIds: list.map((task: any) => task.id), uniqueIds: deduped.map((task) => task.id), titles: deduped.map((task) => task.title), });
       setRows(deduped);
       setPaginationMeta(meta);
       const cacheEntry: TasksListCacheEntry = {

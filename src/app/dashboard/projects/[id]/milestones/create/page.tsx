@@ -321,23 +321,54 @@ function CreateProjectMilestonePageContent() {
       for (let i = 0; i < taskForms.length; i++) {
         const t = taskForms[i];
         if (!t.title || t.title.trim().length === 0) {
-          showToast({
-            variant: "error",
-            title: "Task tidak valid",
-            description: `Task #${i + 1} wajib memiliki judul.`,
-          });
-          setSubmitting(false);
-          return;
-        }
-            if (!t.assigneeIds || t.assigneeIds.length === 0) {
-        showToast({
-          variant: "error",
-          title: "Assignment belum dipilih",
-          description: `Task #${i + 1} wajib memiliki minimal 1 assignee.`,
-        });
-        setSubmitting(false);
-        return;
-      }
+  showToast({
+    variant: "error",
+    title: "Task tidak valid",
+    description: `Task #${i + 1} wajib memiliki judul.`,
+  });
+
+  setSubmitting(false);
+  return;
+}
+
+
+if (!t.assigneeIds || t.assigneeIds.length === 0) {
+  showToast({
+    variant: "error",
+    title: "Assignment belum dipilih",
+    description: `Task #${i + 1} wajib memiliki minimal 1 assignee.`,
+  });
+
+  setSubmitting(false);
+  return;
+}
+
+const invalidEffortUserId = t.assigneeIds.find((userId) => {
+  const rawEffort = t.assigneeEfforts?.[userId] ?? "";
+
+  return (
+    rawEffort === "" ||
+    !Number.isFinite(Number(rawEffort)) ||
+    Number(rawEffort) <= 0
+  );
+});
+
+if (invalidEffortUserId !== undefined) {
+  const user = users.find((item) => item.id === invalidEffortUserId);
+
+  showToast({
+    variant: "error",
+    title: "Estimated Effort belum diisi",
+    description: `Task #${i + 1}: Estimated Effort untuk ${
+      user?.name ?? "assignee"
+    } wajib diisi lebih dari 0 jam.`,
+  });
+
+  setSubmitting(false);
+  return;
+}
+
+
         if (t.start_planned && t.end_planned) {
           const s = Date.parse(t.start_planned);
           const en = Date.parse(t.end_planned);
@@ -861,7 +892,13 @@ function CreateProjectMilestonePageContent() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm mb-1"> Assignments <span className="text-rose-500">*</span></label>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">
+                          Assignee(s) <span className="text-rose-500">*</span>
+                        </label>
+
+                        <p className="mb-2 text-xs text-slate-500">
+                          Pilih minimal satu assignee dan isi estimated effort masing-masing.
+                        </p>
                       {usersLoading ? (
                         <Skeleton className="h-20 w-full rounded-xl bg-neutral-200/50" />
                       ) : users.length === 0 ? (
@@ -912,11 +949,11 @@ function CreateProjectMilestonePageContent() {
                                       {checked && (
                                         <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
                                           <label className="mb-1 block text-xs font-medium text-slate-500">
-                                            Estimated Effort (hours)
+                                            Estimated Effort (hours)<span className="text-rose-500">*</span>
                                           </label>
                                           <input
                                             type="number"
-                                            min={0}
+                                            min={1}
                                             max={10000}
                                             step={1}
                                             value={t.assigneeEfforts?.[u.id] ?? ''}
@@ -936,10 +973,10 @@ function CreateProjectMilestonePageContent() {
                                               );
                                             }}
                                             className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-                                            placeholder="Kosong = durasi x 8 jam"
+                                            placeholder="Contoh: 24"
                                           />
                                           <p className="mt-1 text-[11px] text-slate-500">
-                                            Diakumulasi dengan assignee lain sebagai planned effort task.
+                                            Wajib diisi sebagai estimasi jam kerja assignee untuk perhitungan EVM.
                                           </p>
                                         </div>
                                       )}

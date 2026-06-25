@@ -272,18 +272,49 @@ function CreateTaskPageContent() {
         return;
       }
     if (!form.assignments || form.assignments.length === 0) {
-      const msg = "Assignment wajib dipilih minimal 1 user sebelum membuat task";
+  const msg = "Assignment wajib dipilih minimal 1 user sebelum membuat task.";
 
-      setError(msg);
-      showToast({
-        variant: "error",
-        title: "Assignment belum dipilih",
-        description: msg,
-      });
+  setError(msg);
+  showToast({
+    variant: "error",
+    title: "Assignment belum dipilih",
+    description: msg,
+  });
 
-      setSubmitting(false);
-      return;
-      }
+  setSubmitting(false);
+  return;
+}
+
+const invalidEffortAssignment = form.assignments.find((assignment) => {
+  const effort = Number(assignment.estimated_effort_hours);
+
+  return (
+    assignment.estimated_effort_hours === "" ||
+    assignment.estimated_effort_hours == null ||
+    !Number.isFinite(effort) ||
+    effort <= 0
+  );
+});
+
+if (invalidEffortAssignment) {
+  const assignedUser = users.find(
+    (user) => user.id === invalidEffortAssignment.user_id
+  );
+
+  const msg = `Estimated Effort untuk ${
+    assignedUser?.name ?? "assignee"
+  } wajib diisi lebih dari 0 jam.`;
+
+  setError(msg);
+  showToast({
+    variant: "error",
+    title: "Estimated Effort belum diisi",
+    description: msg,
+  });
+
+  setSubmitting(false);
+  return;
+}
 
       const payload: Record<string, any> = {
         project_id: form.project_id || null,
@@ -716,7 +747,13 @@ function CreateTaskPageContent() {
             </div>
           </div>
           <div>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Assignments</h2>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+  Assignments <span className="text-rose-500">*</span>
+</h2>
+
+<p className="mb-2 text-xs text-slate-500">
+  Pilih minimal satu assignee dan isi estimated effort masing-masing.
+</p>
             {usersLoading ? (
               <Skeleton className="h-24 w-full rounded-xl bg-neutral-200/50" />
             ) : users.length === 0 ? (
@@ -765,11 +802,11 @@ function CreateTaskPageContent() {
                             {checked && (
                               <div className="mb-2 ml-2 mr-2 rounded-lg border border-slate-100 bg-slate-50 px-2 py-2">
                                 <label className="mb-1 block text-xs font-medium text-slate-500">
-                                  Estimated Effort (hours)
+                                  Estimated Effort (hours)  <span className="text-rose-500">*</span>
                                 </label>
                                 <input
                                   type="number"
-                                  min={0}
+                                  min={1}
                                   max={10000}
                                   step={1}
                                   value={
@@ -785,17 +822,17 @@ function CreateTaskPageContent() {
                                           ? {
                                               ...a,
                                               estimated_effort_hours:
-                                                raw === "" ? "" : Math.max(0, Number(raw) || 0),
+                                                raw === "" ? "" : Number(raw)
                                             }
                                           : a
                                       ),
                                     }));
                                   }}
                                   className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
-                                  placeholder="Kosong = durasi x 8 jam"
+                                  placeholder="Contoh: 24"
                                 />
                                 <p className="mt-1 text-[11px] text-slate-500">
-                                  Dipakai untuk PV/EV effort. Kosongkan untuk fallback durasi x 8 jam.
+                                  Wajib diisi sebagai estimasi jam kerja assignee untuk perhitungan EVM.
                                 </p>
                               </div>
                             )}

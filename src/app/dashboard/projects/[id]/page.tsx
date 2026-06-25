@@ -1052,14 +1052,6 @@ function ProjectDetailPageContent() {
                     ))}
                   </select>
                 </label>
-                {avgCycleTime != null && (
-                  <span className="text-xs text-neutral-600">
-                    Rata-rata cycle time proyek:{" "}
-                    <span className="font-semibold">
-                      {avgCycleTime.toFixed(2)} hari
-                    </span>
-                  </span>
-                )}
               </div>
             )}
           </div>

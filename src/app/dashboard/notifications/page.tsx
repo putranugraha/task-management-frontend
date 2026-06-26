@@ -240,6 +240,10 @@ useEffect(() => { if (!state?.isInitialized) return; loadNotifications(); }, [st
       target = `/dashboard/tasks/${n.task_id}`;
     } else if (n.entity_type === "Task" && n.entity_id != null) {
       target = `/dashboard/tasks/${n.entity_id}`;
+    } else if (n.project_id != null) {
+      target = `/dashboard/projects/${n.project_id}`;
+    } else if (n.entity_type === "Project" && n.entity_id != null) {
+      target = `/dashboard/projects/${n.entity_id}`;
     }
 
     try {

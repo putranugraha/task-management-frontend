@@ -8,7 +8,6 @@ import {
   LogOut,
   Sparkles,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import {
   Avatar,
@@ -43,7 +42,6 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const { logout } = useAuth();
-  const router = useRouter();
 
   const handleLogout = async () => {
     try {
@@ -51,7 +49,9 @@ export function NavUser({
     } catch {
       // ignore logout errors; state clearing is handled in context
     } finally {
-      router.push("/auth/login");
+      if (typeof window !== "undefined") {
+        window.location.replace("/auth/login");
+      }
     }
   };
 

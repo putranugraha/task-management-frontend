@@ -327,13 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore logout errors
     } finally {
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("access_token");
-        window.localStorage.removeItem("token_type");
-        window.localStorage.removeItem("user");
-        window.localStorage.removeItem("auth_meta");
-        clearAuthCookies();
-      }
+      clearStoredAuth();
 
       setState((prev) => ({
         ...initialAuthState,
@@ -341,7 +335,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
       }));
     }
-  }, []);
+  }, [clearStoredAuth]);
 
   const hasRole = useCallback(
     (role: Exclude<PrimaryRole, null>) => {

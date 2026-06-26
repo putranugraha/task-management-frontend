@@ -227,11 +227,12 @@ function UserProfileCard({ collapsed }: { collapsed?: boolean }) {
         localStorage.removeItem("access_token");
         localStorage.removeItem("token_type");
         localStorage.removeItem("user");
+        localStorage.removeItem("auth_meta");
         // Clear presence cookie used by middleware guard
         document.cookie = "app_has_token=; Max-Age=0; path=/";
         document.cookie = "app_access_token=; Max-Age=0; path=/";
         document.cookie = "app_token_type=; Max-Age=0; path=/";
-        window.location.href = "/auth/login";
+        window.location.replace("/auth/login");
       }
     }
   };

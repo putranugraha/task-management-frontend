@@ -192,6 +192,18 @@ function CreateTaskPageContent() {
     setError(null);
     try {
       // Validate planned dates (consistent with project task create flow)
+      if (!form.start_planned || !form.end_planned) {
+        const msg = "Start Planned dan End Planned wajib diisi sebelum membuat task.";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Tanggal task wajib diisi",
+          description: msg,
+        });
+        setSubmitting(false);
+        return;
+      }
+
       if (form.start_planned && form.end_planned) {
         const startTs = Date.parse(form.start_planned);
         const endTs = Date.parse(form.end_planned);
@@ -729,6 +741,7 @@ if (invalidEffortAssignment) {
                   onChange={onChange}
                   min={projectPlannedStart}
                   max={taskDateMax}
+                  required
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />
               </div>
@@ -741,6 +754,7 @@ if (invalidEffortAssignment) {
                   onChange={onChange}
                   min={form.start_planned || projectPlannedStart}
                   max={taskDateMax}
+                  required
                   className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300"
                 />
               </div>

@@ -1065,7 +1065,14 @@ export default function CreateProjectMilestonePage() {
   }
 
   if (loading) {
-    return null;
+    return (
+      <div className="flex min-h-[55vh] items-center justify-center">
+        <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-600 shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-[#00674F]" />
+          Memuat halaman create milestone...
+        </div>
+      </div>
+    );
   }
 
   return <CreateProjectMilestonePageContent />;

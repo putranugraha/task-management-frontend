@@ -469,12 +469,24 @@ function EditTaskPageContent() {
             }
           }
         }
-        if (unmet.length > 0) {
+      if (unmet.length > 0) {
           const msg = 'Tidak bisa menyimpan status karena masih menunggu: ' + unmet.map(u => `${u.title} (${u.type}: ${u.reason})`).join(', ');
           setError(msg);
           setSaving(false);
           return;
         }
+      }
+
+      if (!form.start_planned || !form.end_planned) {
+        const msg = "Start Planned dan End Planned wajib diisi sebelum menyimpan task.";
+        setError(msg);
+        showToast({
+          variant: "error",
+          title: "Tanggal task wajib diisi",
+          description: msg,
+        });
+        setSaving(false);
+        return;
       }
 
       if (form.start_planned && form.end_planned) {
@@ -1070,11 +1082,11 @@ function EditTaskPageContent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm mb-1">Start Planned</label>
-            <input type="date" name="start_planned" value={form.start_planned ?? ''} onChange={onChange} max={taskDateMax} className="w-full border rounded-md px-3 py-2" />
+            <input type="date" name="start_planned" value={form.start_planned ?? ''} onChange={onChange} max={taskDateMax} required className="w-full border rounded-md px-3 py-2" />
           </div>
           <div>
             <label className="block text-sm mb-1">End Planned</label>
-            <input type="date" name="end_planned" value={form.end_planned ?? ''} onChange={onChange} max={taskDateMax} className="w-full border rounded-md px-3 py-2" />
+            <input type="date" name="end_planned" value={form.end_planned ?? ''} onChange={onChange} max={taskDateMax} required className="w-full border rounded-md px-3 py-2" />
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

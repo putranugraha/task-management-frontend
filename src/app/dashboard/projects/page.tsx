@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import type { Project } from "@/types/project";
 import DataTable from "../users/data-table";
@@ -71,6 +72,8 @@ function writeSessionCache<T>(key: string, value: T) {
 }
 
 function ProjectsPageContent() {
+  const searchParams = useSearchParams();
+  const refreshToken = searchParams?.get("refresh") ?? "";
   const { can } = useAuth();
   const canCreateProject = can("membuat project");
   const canUpdateProject = can("mengubah project");
@@ -90,6 +93,23 @@ function ProjectsPageContent() {
   const [page, setPage] = useState(1);
   const [stats, setStats] = useState<{ total: number; active: number; completed: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!refreshToken) return;
+    projectsListMemoryCache.clear();
+    projectsStatsMemoryCache.clear();
+    projectsListInFlight.clear();
+    projectsStatsInFlight.clear();
+    if (typeof window !== "undefined") {
+      Object.keys(window.sessionStorage)
+        .filter(
+          (key) =>
+            key.startsWith(PROJECTS_LIST_CACHE_KEY) ||
+            key.startsWith(PROJECTS_STATS_CACHE_KEY)
+        )
+        .forEach((key) => window.sessionStorage.removeItem(key));
+    }
+  }, [refreshToken]);
 
   const fetchProjects = async (opts?: { page?: number; perPage?: number; search?: string; force?: boolean }) => {
     const pageParam = opts?.page ?? page ?? 1;
@@ -346,8 +366,8 @@ function ProjectsPageContent() {
 
   // Server-side pagination + search
   useEffect(() => {
-    fetchProjects({ page, perPage: rowsPerPage, search: debouncedSearch });
-  }, [page, rowsPerPage, debouncedSearch]);
+    fetchProjects({ page, perPage: rowsPerPage, search: debouncedSearch, force: Boolean(refreshToken) });
+  }, [page, rowsPerPage, debouncedSearch, refreshToken]);
 
   const totalPages = paginationMeta && typeof paginationMeta.last_page === "number" && paginationMeta.last_page > 0
     ? paginationMeta.last_page

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { apiRequest } from "@/lib/api";
@@ -91,6 +92,8 @@ type MaybePaginated<T> = T[] | PaginatedResponse<T>;
 const DEFAULT_PER_PAGE = 10;
 
 function TasksPageContent() {
+  const searchParams = useSearchParams();
+  const refreshToken = searchParams?.get("refresh") ?? "";
   const { can } = useAuth();
   const canCreateTasks = can("membuat tugas");
   const canUpdateTasks = can("mengubah tugas");
@@ -104,6 +107,21 @@ function TasksPageContent() {
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [stats, setStats] = useState<{ total: number; completed: number; in_progress: number } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!refreshToken) return;
+    tasksCache = null;
+    tasksListMemoryCache.clear();
+    tasksStatsMemoryCache = null;
+    if (typeof window !== "undefined") {
+      Object.keys(window.sessionStorage)
+        .filter(
+          (key) =>
+            key.startsWith(TASKS_LIST_CACHE_KEY) || key === TASKS_STATS_CACHE_KEY
+        )
+        .forEach((key) => window.sessionStorage.removeItem(key));
+    }
+  }, [refreshToken]);
 
   const fetchTasks = async (opts?: { page?: number; perPage?: number; showLoading?: boolean; force?: boolean }) => {
     const showLoading = opts?.showLoading ?? true;
@@ -231,13 +249,14 @@ function TasksPageContent() {
   };
 
   useEffect(() => {
+    if (refreshToken) return;
     if (tasksCache) {
       const age = Date.now() - tasksCache.fetchedAt;
       if (age >= 0 && age <= TASKS_CACHE_TTL_MS) {
         setRows(tasksCache.rows);
       }
     }
-  }, []);
+  }, [refreshToken]);
 
   const handleArchive = (row: TaskRow) => {
     setArchiveTarget(row);
@@ -420,8 +439,8 @@ function TasksPageContent() {
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    fetchTasks({ page, perPage: rowsPerPage });
-  }, [page, rowsPerPage]);
+    fetchTasks({ page, perPage: rowsPerPage, force: Boolean(refreshToken) });
+  }, [page, rowsPerPage, refreshToken]);
 
   // Initial stats load (sekali saat mount, tidak ikut search/pagination)
   useEffect(() => {

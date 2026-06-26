@@ -72,7 +72,7 @@ function CreateProjectPageContent() {
         status: form.status,
       };
       await apiRequest("POST", "/api/projects", payload);
-      setTimeout(() => router.push("/dashboard/projects"), 700);
+      setTimeout(() => router.push("/dashboard/projects?refresh=1"), 700);
     } catch (e: any) {
       setError(e?.message ?? "Gagal membuat project");
     } finally {

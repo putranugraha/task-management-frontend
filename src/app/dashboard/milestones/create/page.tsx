@@ -85,7 +85,7 @@ function CreateMilestonePageContent() {
         title: "Milestone dibuat",
         description: `Milestone "${form.name}" berhasil ditambahkan.`,
       });
-      setTimeout(() => router.push("/dashboard/milestones"), 900);
+      setTimeout(() => router.push("/dashboard/milestones?refresh=1"), 900);
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||

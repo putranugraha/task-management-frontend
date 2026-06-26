@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { Archive, SlidersHorizontal, X, Plus } from "lucide-react";
@@ -35,6 +36,8 @@ type PaginatedResponse<T> = {
 };
 
 function MilestonesPageContent() {
+  const searchParams = useSearchParams();
+  const refreshToken = searchParams?.get("refresh") ?? "";
   const { can } = useAuth();
   const canCreateMilestone = can("membuat milestones");
   const canUpdateMilestone = can("mengubah milestones");
@@ -121,7 +124,7 @@ function MilestonesPageContent() {
   useEffect(() => {
     fetchMilestones({ page: 1, perPage: rowsPerPage, search });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshToken]);
 
   const handleArchive = (row: MilestoneRow) => {
     setArchiveTarget(row);
@@ -280,7 +283,7 @@ function MilestonesPageContent() {
   // Server-side pagination + search
   useEffect(() => {
     fetchMilestones({ page, perPage: rowsPerPage, search });
-  }, [page, rowsPerPage, search]);
+  }, [page, rowsPerPage, search, refreshToken]);
 
   // Initial stats load (sekali saat mount, tidak ikut search)
   useEffect(() => {

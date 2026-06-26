@@ -392,7 +392,7 @@ if (invalidEffortAssignment) {
         title: "Task dibuat",
         description: `Task "${form.title}" berhasil dibuat.`,
       });
-      setTimeout(() => router.push("/dashboard/tasks"), 900);
+      setTimeout(() => router.push("/dashboard/tasks?refresh=1"), 900);
     } catch (e: any) {
       const status = e?.response?.status;
       const msg = e?.response?.data?.message || e?.message;

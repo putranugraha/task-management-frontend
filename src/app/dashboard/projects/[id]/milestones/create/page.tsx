@@ -307,6 +307,17 @@ function CreateProjectMilestonePageContent() {
         return;
       }
       const formDuePlanned = toDateOnly(form.due_planned);
+      if (!formDuePlanned) {
+        setFieldErrors((e) => ({ ...e, due_planned: "Due Planned wajib diisi" }));
+        showToast({
+          variant: "error",
+          title: "Tanggal milestone wajib diisi",
+          description: "Due Planned milestone wajib diisi sebelum membuat milestone.",
+        });
+        setSubmitting(false);
+        return;
+      }
+
       if (projectPlannedEnd && formDuePlanned && formDuePlanned > projectPlannedEnd) {
         setFieldErrors((e) => ({ ...e, due_planned: `Due Planned tidak boleh melewati Project Planned End (${projectPlannedEnd})` }));
         showToast({
@@ -368,6 +379,17 @@ if (invalidEffortUserId !== undefined) {
   return;
 }
 
+
+        if (!t.start_planned || !t.end_planned) {
+          showToast({
+            variant: "error",
+            title: "Tanggal task wajib diisi",
+            description: `Task #${i + 1} wajib memiliki Start Planned dan End Planned.`,
+          });
+
+          setSubmitting(false);
+          return;
+        }
 
         if (t.start_planned && t.end_planned) {
           const s = Date.parse(t.start_planned);
@@ -692,8 +714,8 @@ if (invalidEffortUserId !== undefined) {
             </div>
             {/* Status hidden: default "Planned" used server-side */}
             <div>
-              <label className="block text-sm mb-1">Due Planned</label>
-              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={projectPlannedStart || undefined} max={projectPlannedEnd || undefined} className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
+              <label className="block text-sm mb-1">Due Planned <span className="text-rose-500">*</span></label>
+              <input type="date" name="due_planned" value={form.due_planned} onChange={onChange} min={projectPlannedStart || undefined} max={projectPlannedEnd || undefined} required className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner focus:border-emerald-500 focus:ring-2 focus:ring-emerald-300" />
               {fieldErrors.due_planned && <p className="text-xs text-red-600 mt-1">{fieldErrors.due_planned}</p>}
             </div>
             <div>
@@ -846,19 +868,21 @@ if (invalidEffortUserId !== undefined) {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm mb-1">Start Planned</label>
+                        <label className="block text-sm mb-1">Start Planned <span className="text-rose-500">*</span></label>
                         <input type="date" value={t.start_planned}
                           onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, start_planned: e.target.value } : x))}
                           min={projectPlannedStart || undefined}
                           max={milestoneDueMax}
+                          required
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>
                       <div>
-                        <label className="block text-sm mb-1">End Planned</label>
+                        <label className="block text-sm mb-1">End Planned <span className="text-rose-500">*</span></label>
                         <input type="date" value={t.end_planned}
                           onChange={(e) => setTaskForms((s) => s.map((x, i) => i === idx ? { ...x, end_planned: e.target.value } : x))}
                           min={t.start_planned || projectPlannedStart || undefined}
                           max={milestoneDueMax}
+                          required
                           className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 shadow-inner" />
                       </div>
                     </div>

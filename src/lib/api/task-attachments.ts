@@ -26,7 +26,9 @@ export async function listByTask(taskId: number | string): Promise<TaskAttachmen
 export async function uploadForTask(taskId: number | string, file: File) {
   const form = new FormData();
   form.append("file", file);
-  return await apiRequest<any>("POST", `/api/tasks/${taskId}/attachments`, form);
+  return await apiRequest<any>("POST", `/api/tasks/${taskId}/attachments`, form, {
+    timeout: 120000,
+  });
 }
 
 export async function approveAttachment(id: number | string) {

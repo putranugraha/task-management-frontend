@@ -15,6 +15,15 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Paperclip, UploadCloud } from "lucide-react";
 
+const MAX_ATTACHMENT_SIZE_MB = 20;
+const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 KB";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.ceil(bytes / 1024)} KB`;
+}
+
 type Props = {
   taskId: number;
   initialPercent?: number;
@@ -104,19 +113,28 @@ export default function TaskAttachmentsSection({
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     if (!file) {
-    showToast({
-      variant: "error",
-      title: "File belum dipilih",
-      description: "Pilih file terlebih dahulu sebelum mengunggah lampiran.",
-    });
-    return;
-  }
+      showToast({
+        variant: "error",
+        title: "File belum dipilih",
+        description: "Pilih file terlebih dahulu sebelum mengunggah lampiran.",
+      });
+      return;
+    }
+
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      showToast({
+        variant: "error",
+        title: "Ukuran file terlalu besar",
+        description: `Maksimal ukuran attachment adalah ${MAX_ATTACHMENT_SIZE_MB} MB. File ini ${formatFileSize(file.size)}.`,
+      });
+      return;
+    }
+
     const filename = file.name;
     setUploading(true);
     try {
       await uploadForTask(taskId, file);
       setFile(null);
-      await fetchAttachments();
       showToast({
         variant: "success",
         title: "Lampiran berhasil diupload",
@@ -124,6 +142,7 @@ export default function TaskAttachmentsSection({
           ? `${filename} berhasil ditambahkan dan menunggu review.`
           : "Lampiran berhasil ditambahkan dan menunggu review.",
       });
+      await fetchAttachments();
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
@@ -390,14 +409,14 @@ export default function TaskAttachmentsSection({
               <span>Pilih file</span>
             </label>
             {file && (
-              <span className="max-w-[260px] truncate text-xs text-slate-600">
-                {file.name}
+              <span className="max-w-[320px] truncate text-xs text-slate-600">
+                {file.name} ({formatFileSize(file.size)})
               </span>
             )}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[11px] text-neutral-500">
-              Upload lampiran yang relevan (dokumen, gambar, atau file pendukung lainnya).
+              Upload lampiran yang relevan. Maksimal {MAX_ATTACHMENT_SIZE_MB} MB per file.
             </p>
             <button
               type="submit"
@@ -411,7 +430,20 @@ export default function TaskAttachmentsSection({
           <input
             id="task-attachment-file"
             type="file"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const selected = e.target.files?.[0] ?? null;
+              if (selected && selected.size > MAX_ATTACHMENT_SIZE_BYTES) {
+                showToast({
+                  variant: "error",
+                  title: "Ukuran file terlalu besar",
+                  description: `Maksimal ukuran attachment adalah ${MAX_ATTACHMENT_SIZE_MB} MB. File ini ${formatFileSize(selected.size)}.`,
+                });
+                e.currentTarget.value = "";
+                setFile(null);
+                return;
+              }
+              setFile(selected);
+            }}
             className="sr-only"
           />
         </form>

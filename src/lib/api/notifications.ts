@@ -27,6 +27,9 @@ export type TaskNotification = {
   actor_id: number | null;
   actor_name: string | null;
   due_date: string | null;
+  target_type?: string | null;
+  target_id?: number | null;
+  target_archived?: boolean;
   read_at: string | null;
   created_at: string | null;
 };

@@ -236,7 +236,28 @@ useEffect(() => { if (!state?.isInitialized) return; loadNotifications(); }, [st
   const handleOpenNotification = async (n: NotificationRow) => {
     let target = "/dashboard/tasks";
 
-    if (n.task_id != null) {
+    if (n.target_archived && n.target_type === "Task") {
+      showToast({
+        variant: "warning",
+        title: "Task sudah diarsipkan",
+        description: "Task pada notifikasi ini sudah masuk archive. Kamu diarahkan ke halaman archived tasks.",
+      });
+      target = "/dashboard/tasks/archive";
+    } else if (n.target_archived && n.target_type === "Project") {
+      showToast({
+        variant: "warning",
+        title: "Project sudah diarsipkan",
+        description: "Project pada notifikasi ini sudah masuk archive. Kamu diarahkan ke halaman archived projects.",
+      });
+      target = "/dashboard/projects/archive";
+    } else if (n.target_archived && n.target_type === "Milestone") {
+      showToast({
+        variant: "warning",
+        title: "Milestone sudah diarsipkan",
+        description: "Milestone pada notifikasi ini sudah masuk archive. Kamu diarahkan ke halaman archived milestones.",
+      });
+      target = "/dashboard/milestones/archive";
+    } else if (n.task_id != null) {
       target = `/dashboard/tasks/${n.task_id}`;
     } else if (n.entity_type === "Task" && n.entity_id != null) {
       target = `/dashboard/tasks/${n.entity_id}`;

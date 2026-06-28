@@ -222,6 +222,10 @@ export default function TaskAttachmentsSection({
             onPercentChange?.(
               Number.isFinite(latest) ? latest : pct
             );
+            const status = (updated as any)?.status;
+            if (status) {
+              onStatusChange?.(String(status));
+            }
           } catch (e: any) {
             const msg =
               e?.response?.data?.message ||

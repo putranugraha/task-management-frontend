@@ -29,6 +29,12 @@ export type ArchivedTaskPage = {
   };
 };
 
+function unwrapTask(response: Task | { data: Task }): Task {
+  return response && typeof response === "object" && "data" in response
+    ? response.data
+    : response;
+}
+
 export async function listByProject(projectId: number | string): Promise<Task[]> {
   const id = encodeURIComponent(String(projectId));
   // Try to include assignees eagerly when backend supports it.
@@ -132,15 +138,17 @@ export async function saveProgress(
   opts?: { progress_date?: string }
 ): Promise<Task> {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
-  return await apiRequest<Task>('PATCH', `/api/tasks/${id}/progress`, {
+  const response = await apiRequest<Task | { data: Task }>('PATCH', `/api/tasks/${id}/progress`, {
     percent: p,
     percent_complete: p,
     ...(opts?.progress_date ? { progress_date: String(opts.progress_date) } : {}),
   } as any);
+  return unwrapTask(response);
 }
 
 export async function complete(id: number | string): Promise<Task> {
-  return await apiRequest<Task>('PATCH', `/api/tasks/${id}/complete`);
+  const response = await apiRequest<Task | { data: Task }>('PATCH', `/api/tasks/${id}/complete`);
+  return unwrapTask(response);
 }
 
 export async function completeWithDate(
